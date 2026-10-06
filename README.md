@@ -46,4 +46,62 @@ User Dashboard
 * Temperature Monitoring
 * Tamper Alerts
 * Event History
-* I
+* Image Evidence (Future Enhancement)
+
+## Repository Structure
+
+```text
+ESP32_Firmware/
+Gateway/
+Dashboard/
+Documentation/
+```
+
+## Current Features
+
+* Simulated sensor data
+* BLE packet framework
+* Alert processing
+* Event database
+* Dashboard prototype
+
+## Planned Features
+
+* Real sensor integration
+* BLE communication between ESP32-C3 and Raspberry Pi
+* Temperature threshold alerts
+* Tamper detection alerts
+* Vibration event monitoring
+* Camera activation upon tamper detection
+* Image storage and dashboard integration
+
+## Technologies
+
+### Firmware
+
+* C++
+* ESP32-C3
+* Arduino Framework / PlatformIO
+
+### Gateway
+
+* Python
+* SQLite
+
+### Dashboard
+
+* Flask
+* HTML
+* CSS
+* JavaScript
+
+## Project Status
+
+In Development
+
+Current focus:
+
+* Software architecture
+* Dashboard implementation
+* BLE communication design
+* Hardware procurement and integration
