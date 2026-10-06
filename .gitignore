@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+smartseal.db
+
+.vscode/
+
+.env
+
+images/
+
+*.jpg
+*.png
