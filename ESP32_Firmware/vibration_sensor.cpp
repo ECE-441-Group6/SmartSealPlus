@@ -1,0 +1,1 @@
+/* Reads the piezoelectric sensor and determines whether a significant vibration or impact occurred. */

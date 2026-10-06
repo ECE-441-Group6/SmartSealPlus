@@ -1,0 +1,1 @@
+/* Declares functions for checking POF tamper status. */

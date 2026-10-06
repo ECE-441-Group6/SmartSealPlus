@@ -1,0 +1,1 @@
+/* Declares vibration-sensing functions. */
