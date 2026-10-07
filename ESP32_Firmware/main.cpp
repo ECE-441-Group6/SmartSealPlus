@@ -5,6 +5,7 @@
 
 void setup()
 {
+    // Start serial logging and initialize each hardware subsystem once.
     Serial.begin(115200);
 
     initSensors();
@@ -16,11 +17,13 @@ void setup()
 
 void loop()
 {
+    // Read the sensors, publish the current state, then run local alerts.
     SensorData data = readSensors();
 
     updateBLEAdvertisement(data);
 
     processAlerts(data);
 
+    // Limit broadcasts and sensor checks to approximately once per second.
     delay(1000);
 }

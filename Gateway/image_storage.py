@@ -1,16 +1,11 @@
-# Handles naming, saving, and retrieving captured tamper-event images.
-import os
+# Handles naming and storing captured tamper-event images.
+from pathlib import Path
 
-IMAGE_FOLDER = "images"
+IMAGE_FOLDER = Path(__file__).resolve().parent / "images"
+# Ensure the destination exists before the camera or simulator saves a file.
+IMAGE_FOLDER.mkdir(exist_ok=True)
 
-os.makedirs(IMAGE_FOLDER, exist_ok=True)
 
-
-def save_image(name):
-
-    path = os.path.join(
-        IMAGE_FOLDER,
-        name
-    )
-
-    return path
+def image_path(name):
+    # Keep filename construction in one place for the gateway and dashboard.
+    return IMAGE_FOLDER / name

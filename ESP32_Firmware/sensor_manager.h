@@ -1,4 +1,4 @@
-/* Declares the functions used to access all SmartSeal sensors. */
+/* Defines the shared sensor snapshot and declares the sensor manager API. */
 #ifndef SENSOR_MANAGER_H
 #define SENSOR_MANAGER_H
 

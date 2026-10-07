@@ -4,11 +4,12 @@
 
 void initAlerts()
 {
-    // setup buzzer / LEDs
+    // TODO: configure the GPIO pins for the buzzer and status LEDs.
 }
 
 void processAlerts(SensorData data)
 {
+    // TODO: drive the physical outputs in addition to writing serial logs.
     if(data.tamper)
     {
         Serial.println("TAMPER ALERT");

@@ -1,4 +1,4 @@
-/* Declares BLE advertising functions. */
+/* Declares BLE setup and payload-update functions used by main.cpp. */
 #ifndef BLE_ADVERTISING_H
 #define BLE_ADVERTISING_H
 

@@ -3,6 +3,7 @@ TEMP_HIGH = 8
 TEMP_LOW = 2
 
 def process_alerts(packet):
+    # Return every applicable alert instead of stopping at the first one.
     alerts = []
 
     if packet["tamper"]:

@@ -3,17 +3,19 @@
 
 void initSensors()
 {
-    // initialize sensors here
+    // TODO: configure the DS18B20, POF detector, and vibration sensor pins.
 }
 
 SensorData readSensors()
 {
     SensorData data;
 
-    // Dummy values for testing
+    // Simulation values keep the firmware structure testable before hardware
+    // drivers are connected.
     data.temperature = 4.5;
     data.tamper = false;
     data.vibration = false;
 
+    // TODO: replace these assignments with real sensor reads and filtering.
     return data;
 }

@@ -105,3 +105,17 @@ Current focus:
 * Dashboard implementation
 * BLE communication design
 * Hardware procurement and integration
+
+## Run the simulation
+
+Install the dashboard dependency, then open two terminals from the repository root:
+
+```text
+python -m pip install -r requirements.txt
+python Gateway/gateway_main.py
+python Dashboard/dashboard.py
+```
+
+Open `http://127.0.0.1:5000`. The gateway simulates an ESP32 advertisement every five seconds, stores it in `Gateway/smartseal.db`, and the dashboard refreshes the readings automatically.
+
+When `tamper` or `vibration` is true, the gateway captures an image and shows a `View` link plus an analysis in the dashboard. On a Raspberry Pi with `picamera2`, the image comes from the camera. On a development computer, Pillow creates a simulated camera frame. Without `OPENAI_API_KEY`, the AI result uses the sensor evidence as a local fallback; set `OPENAI_API_KEY` to enable vision analysis through the configured `OPENAI_VISION_MODEL` (default `gpt-4o-mini`).

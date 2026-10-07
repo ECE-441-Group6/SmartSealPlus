@@ -1,6 +1,8 @@
-/* Controls the appearance of the dashboard. */
+/* Controls the appearance of the dashboard. This is currently a minimal
+   prototype stylesheet; production UI styling can be added here. */
 body
 {
+    /* Keep the prototype readable without requiring a CSS framework. */
     font-family: Arial;
     margin: 20px;
 }

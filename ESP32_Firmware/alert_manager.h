@@ -1,4 +1,4 @@
-/* Declares local alert functions. */
+/* Declares local alert functions for the buzzer, LEDs, and event logging. */
 #ifndef ALERT_MANAGER_H
 #define ALERT_MANAGER_H
 

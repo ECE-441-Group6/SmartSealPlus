@@ -1,21 +1,4 @@
-<!-- Main dashboard webpage showing SmartSeal status, temperature, alerts, and possibly captured images. -->
-
-<!--DOCTYPE html>
-<html>
-<head>
-    <title>SmartSeal Dashboard</title>
-</head>
-<body>
-
-<h1>SmartSeal Dashboard</h1>
-
-<p>Seal ID: {{ data.seal_id }}</p>
-<p>Temperature: {{ data.temperature }}</p>
-<p>Tamper: {{ data.tamper }}</p>
-<p>Vibration: {{ data.vibration }}</p>
-
-</body>
-</html-->
+<!-- Main dashboard webpage showing SmartSeal status, temperature, alerts, and captured images. -->
 
 <!DOCTYPE html>
 <html>
@@ -24,28 +7,32 @@
 </head>
 <body>
 
+<!-- Flask supplies the initial event list; dashboard.js refreshes it later. -->
 <h1>SmartSeal Dashboard</h1>
 
 <table border="1">
-<tr>
+<thead><tr>
     <th>Time</th>
     <th>Seal ID</th>
     <th>Temp</th>
     <th>Tamper</th>
     <th>Vibration</th>
-</tr>
+    <th>Image</th>
+    <th>AI analysis</th>
+</tr></thead>
 
-{% for event in events %}
-<tr>
-    <td>{{ event[1] }}</td>
-    <td>{{ event[2] }}</td>
-    <td>{{ event[3] }}</td>
-    <td>{{ event[4] }}</td>
-    <td>{{ event[5] }}</td>
-</tr>
-{% endfor %}
+<!-- Event rows use SQLite column positions supplied by the Flask route. -->
+<tbody id="events">
+{% for event in events %}<tr>
+    <td>{{ event[1] }}</td><td>{{ event[2] }}</td><td>{{ event[3] }}</td>
+    <td>{{ event[4] }}</td><td>{{ event[5] }}</td>
+    <td>{% if event[6] %}<a href="{{ url_for('images', filename=event[6]) }}" target="_blank">View</a>{% endif %}</td>
+    <td>{{ event[7] or '' }}</td>
+</tr>{% endfor %}
+</tbody>
 
 </table>
 
+<script src="{{ url_for('static', filename='dashboard.js') }}"></script>
 </body>
 </html>

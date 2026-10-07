@@ -4,11 +4,13 @@
 
 void initBLE()
 {
+    // TODO: initialize the ESP32 BLE stack, service, and advertising payload.
     Serial.println("BLE Initialized");
 }
 
 void updateBLEAdvertisement(SensorData data)
 {
+    // This output is a placeholder for a real BLE advertisement update.
     Serial.print("Advertising: ");
 
     Serial.print(data.temperature);
@@ -19,5 +21,5 @@ void updateBLEAdvertisement(SensorData data)
 
     Serial.println(data.vibration);
 
-    // actual BLE code goes here later
+    // TODO: encode seal ID and sensor values, then start/restart advertising.
 }
