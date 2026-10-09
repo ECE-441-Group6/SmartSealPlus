@@ -8,6 +8,7 @@ smartseal.db
 .env
 
 images/
+camera_test/
 
 *.jpg
 *.png
