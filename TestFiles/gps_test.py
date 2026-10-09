@@ -1,5 +1,10 @@
 #cd ~/SmartSealPlus/TestFiles
 #python3 gps_test.py
+#GPS to Pi Pins
+#3.3V to Pin 1
+#Tx to Pin 10
+#Rx to Pin 8
+#GND to Pin 6
 import serial
 from datetime import datetime
 
