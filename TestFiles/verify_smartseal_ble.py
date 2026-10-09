@@ -1,7 +1,7 @@
 #The purpose of this file is to verify the BLE advertising of the SmartSeal+ device by scanning for it and displaying its information.
 #Run the following command to execute this script:
 #cd ~/SmartSealPlus/TestFiles
-#~/ble-venv/bin/python verify_smartseal_ble.py
+#python3 verify_smartseal_ble.py
 
 import asyncio
 from bleak import BleakScanner

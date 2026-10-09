@@ -1,7 +1,7 @@
 #The purpose of this file is to scan for the SmartSeal+ BLE device and display its information.
 #Run the following command to execute this script:
 #cd ~/SmartSealPlus/TestFiles
-#~/ble-venv/bin/python scan_smartseal.py
+#python3 scan_smartseal.py
 
 import asyncio
 from bleak import BleakScanner
