@@ -15,7 +15,7 @@ Confirm that the board prints SmartSeal+ ESP32 Hardware Test, ESP32-WROOM-32 is 
 void setup() {
   Serial.begin(115200);
   delay(1000);
-
+  
   Serial.println();
   Serial.println("SmartSeal+ ESP32 Hardware Test");
   Serial.println("ESP32-WROOM-32 is running!");
