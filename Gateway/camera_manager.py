@@ -1,33 +1,53 @@
-# Controls the Raspberry Pi camera and provides a desktop-friendly simulator.
-# The gateway calls this module only when a tamper or vibration event needs
-# image evidence.
+"""Capture real event images from the Raspberry Pi camera."""
+
+import atexit
 from datetime import datetime, timezone
 
 from image_storage import image_path
 
+
+_camera = None
+
+
+def _get_camera():
+    global _camera
+
+    if _camera is None:
+        # Initialize the physical camera once and reuse it for each event.
+        from picamera2 import Picamera2
+
+        _camera = Picamera2()
+        _camera.configure(_camera.create_still_configuration())
+        _camera.start()
+
+    return _camera
+
+
+def _close_camera():
+    global _camera
+
+    if _camera is not None:
+        _camera.stop()
+        _camera.close()
+        _camera = None
+
+
+atexit.register(_close_camera)
+
+
 def capture_image(packet):
-    # Use the seal ID and UTC time to create a unique, traceable image name.
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    # Store a unique filename so each sensor event keeps its own evidence.
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     filename = f"seal_{packet['seal_id']}_{timestamp}.jpg"
     path = image_path(filename)
 
     try:
-        # This import is kept inside the function so the desktop simulation can
-        # run without installing Raspberry Pi camera libraries.
-        from picamera2 import Picamera2
-
-        # Configure the physical camera for one still image and save it locally.
-        camera = Picamera2()
-        camera.configure(camera.create_still_configuration())
-        camera.start()
-        camera.capture_file(str(path))
-        camera.stop()
+        # The dashboard serves this file from the gateway image directory.
+        _get_camera().capture_file(str(path))
         print(f"Image captured: {path}")
-    except Exception as error:
-        # Development fallback: create a labeled image when camera hardware or
-        # the Picamera2 package is unavailable.
+    except ImportError:
         _create_simulated_image(path, packet)
-        print(f"Simulated image captured: {path} ({error})")
+        print(f"Simulated image captured: {path} (picamera2 is unavailable)")
 
     return filename
 
