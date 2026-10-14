@@ -27,7 +27,7 @@ def run_gateway(interval=5):
             ai_analysis = None
 
             if packet["tamper"] or packet["vibration"]:
-                # Capture evidence only for physical events that need review.
+                # Capture real camera evidence for either physical alert type.
                 image_filename = capture_image(packet)
                 ai_analysis = analyze_image(
                     str(image_path(image_filename)),

@@ -1,5 +1,5 @@
 #cd ~/SmartSealPlus/TestFiles
-#~/gps-venv/bin/python gps_readable.py
+#python3 gps_readable.py
 import serial
 import pynmea2
 

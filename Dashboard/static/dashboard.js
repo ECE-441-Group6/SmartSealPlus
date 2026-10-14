@@ -62,7 +62,8 @@ function vibrationStatus(value) {
 
 // Refresh events from the Flask API.
 async function refreshEvents() {
-    try {
+try {
+        // Request the newest database rows from Flask.
         const response = await fetch("/api/events");
 
         if (!response.ok) {
@@ -71,24 +72,55 @@ async function refreshEvents() {
 
         const events = await response.json();
 
-        document.querySelector("#events").innerHTML = events.map((event) => {
-            const imageLink = event[6]
-                ? `<a href="/images/${encodeURIComponent(event[6])}"
-                      target="_blank" rel="noopener noreferrer">View</a>`
-                : "";
+        // Build the table using safe DOM operations.
+        const rows = events.map((event) => {
+            const row = document.createElement("tr");
 
-            return `
-                <tr>
-                    <td>${escapeHTML(event[1])}</td>
-                    <td>${escapeHTML(event[2])}</td>
-                    <td>${temperatureStatus(event[3])}</td>
-                    <td>${tamperStatus(event[4])}</td>
-                    <td>${vibrationStatus(event[5])}</td>
-                    <td>${imageLink}</td>
-                    <td>${escapeHTML(event[7])}</td>
-                </tr>
-            `;
-        }).join("");
+            // Time and Seal ID
+            for (const value of [event[1], event[2]]) {
+                const cell = document.createElement("td");
+                cell.textContent = value ?? "";
+                row.appendChild(cell);
+            }
+
+            // Temperature indicator
+            const tempCell = document.createElement("td");
+            tempCell.innerHTML = temperatureStatus(event[3]);
+            row.appendChild(tempCell);
+
+            // Tamper indicator
+            const tamperCell = document.createElement("td");
+            tamperCell.innerHTML = tamperStatus(event[4]);
+            row.appendChild(tamperCell);
+
+            // Vibration indicator
+            const vibrationCell = document.createElement("td");
+            vibrationCell.innerHTML = vibrationStatus(event[5]);
+            row.appendChild(vibrationCell);
+
+            // Camera evidence link
+            const imageCell = document.createElement("td");
+
+            if (event[6]) {
+                const link = document.createElement("a");
+                link.href = `/images/${encodeURIComponent(event[6])}`;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.textContent = "View";
+                imageCell.appendChild(link);
+            }
+
+            row.appendChild(imageCell);
+
+            // AI analysis: textContent prevents HTML injection.
+            const analysisCell = document.createElement("td");
+            analysisCell.textContent = event[7] ?? "";
+            row.appendChild(analysisCell);
+
+            return row;
+        });
+
+        document.querySelector("#events").replaceChildren(...rows);
 
     } catch (error) {
         console.error("SmartSeal dashboard refresh failed:", error);

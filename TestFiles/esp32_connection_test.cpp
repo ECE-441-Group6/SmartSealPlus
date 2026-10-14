@@ -1,5 +1,7 @@
 /*ESP Dev Module*/
 
+#include <Arduino.h>
+
 /*To configure the ESP32 development environment on Windows:
 Connect the ESP32-WROOM-32 development board to the computer using a USB data cable.
 Install the CP210x USB-to-UART Bridge VCP driver from the official Silicon Labs website.

@@ -2,7 +2,7 @@
 from pathlib import Path
 
 IMAGE_FOLDER = Path(__file__).resolve().parent / "images"
-# Ensure the destination exists before the camera or simulator saves a file.
+# Ensure the dashboard can serve the destination before capture begins.
 IMAGE_FOLDER.mkdir(exist_ok=True)
 
 

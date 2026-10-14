@@ -37,7 +37,7 @@ Raspberry Pi Gateway
 * Event Processing
 * Database Storage
 * Dashboard
-* Camera/Image Storage (Future Enhancement)
+* Camera/Image Storage
 
 ↓
 
@@ -46,7 +46,7 @@ User Dashboard
 * Temperature Monitoring
 * Tamper Alerts
 * Event History
-* Image Evidence (Future Enhancement)
+* Image Evidence
 
 ## Repository Structure
 
@@ -63,7 +63,9 @@ Documentation/
 * BLE packet framework
 * Alert processing
 * Event database
-* Dashboard prototype
+* Dashboard event history
+* Raspberry Pi camera capture for tamper and vibration events
+* Captured image links in the dashboard
 
 ## Planned Features
 
@@ -72,8 +74,8 @@ Documentation/
 * Temperature threshold alerts
 * Tamper detection alerts
 * Vibration event monitoring
-* Camera activation upon tamper detection
-* Image storage and dashboard integration
+* Production BLE communication between ESP32-C3 and Raspberry Pi
+* Cloud image upload
 
 ## Technologies
 
@@ -106,16 +108,49 @@ Current focus:
 * BLE communication design
 * Hardware procurement and integration
 
-## Run the simulation
+## Run the gateway and dashboard
 
-Install the dashboard dependency, then open two terminals from the repository root:
+Install the Python dependencies, then open two terminals from the repository root:
 
 ```text
-python -m pip install -r requirements.txt
-python Gateway/gateway_main.py
-python Dashboard/dashboard.py
+python3 -m pip install -r requirements.txt
+python3 Gateway/gateway_main.py
+python3 Dashboard/dashboard.py
 ```
 
-Open `http://127.0.0.1:5000`. The gateway simulates an ESP32 advertisement every five seconds, stores it in `Gateway/smartseal.db`, and the dashboard refreshes the readings automatically.
+Open `http://127.0.0.1:5000`. The gateway currently generates simulated ESP32 advertisements every five seconds, stores readings in `Gateway/smartseal.db`, and the dashboard refreshes the readings automatically.
 
-When `tamper` or `vibration` is true, the gateway captures an image and shows a `View` link plus an analysis in the dashboard. On a Raspberry Pi with `picamera2`, the image comes from the camera. On a development computer, Pillow creates a simulated camera frame. Without `OPENAI_API_KEY`, the AI result uses the sensor evidence as a local fallback; set `OPENAI_API_KEY` to enable vision analysis through the configured `OPENAI_VISION_MODEL` (default `gpt-4o-mini`).
+When `tamper` or `vibration` is true, the gateway captures a real JPEG with the Raspberry Pi camera, saves it in `Gateway/images/`, stores its filename with the event, and displays a `View` link in the dashboard. The gateway keeps one camera session open while it runs and closes it when the process exits.
+
+On a non-Raspberry Pi development computer, or when `picamera2` is unavailable, Pillow creates a labeled simulated camera frame instead. Without `OPENAI_API_KEY`, the AI result uses the sensor evidence as a local fallback. Set `OPENAI_API_KEY` to enable vision analysis through the configured `OPENAI_VISION_MODEL` (default `gpt-4o-mini`).
+
+### Test the camera directly
+
+To verify the attached Raspberry Pi camera without waiting for a sensor event:
+
+```text
+python3 TestFiles/gateway_camera.py
+```
+
+Choose `1` to capture a test image or `2` to capture a tamper-event image. Images are written to `Gateway/images/`.
+
+## Run ESP32 tests in Arduino IDE
+
+1. Install the Espressif ESP32 board package through Arduino IDE's Boards Manager.
+2. Connect the ESP32 and select the correct board and port. This project targets `ESP32C3 Dev Module`; select a different ESP32 board only when using different hardware.
+3. Open one test at a time from `TestFiles/`:
+	* `esp32_connection_test.cpp` checks serial output.
+	* `esp32_ble_test.cpp` advertises the device name `SmartSeal-01` and manufacturer data.
+4. For the most reliable Arduino IDE workflow, place each `.cpp` file in its own sketch folder with a matching `.ino` file, or open a copy renamed to `.ino`.
+5. Upload the sketch and open Serial Monitor at `115200` baud.
+
+The BLE test uses advertising, not a GATT service. To inspect it from a computer or Raspberry Pi, install the scanner dependency and run:
+
+```text
+python3 -m pip install bleak
+python3 TestFiles/verify_smartseal_ble.py
+```
+
+`verify_smartseal_ble.py` listens for the device named `SmartSeal-01` in three-second scan cycles. It reads only manufacturer data with company ID `0xFFFF`, decodes that payload as UTF-8, and prints it in the format `[SmartSeal-01] message`. Repeated messages are suppressed, so output appears only when a new BLE message is received. Press `Ctrl+C` to stop the monitor.
+
+The GPS scripts require a Raspberry Pi or another host with a connected GPS serial device. Install `pyserial` for `gps_test.py`, and install both `pyserial` and `pynmea2` for `gps_readable.py`. Update the serial port in the script if the GPS is not connected at `/dev/ttyAMA0`.
