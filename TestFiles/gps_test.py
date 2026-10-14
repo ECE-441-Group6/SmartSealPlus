@@ -5,47 +5,57 @@
 #Tx to Pin 10
 #Rx to Pin 8
 #GND to Pin 6
+
 import serial
+import pynmea2
 from datetime import datetime
 
 PORT = "/dev/ttyAMA0"
 BAUD = 9600
 
-print("SmartSeal+ Ultimate GPS Breakout v3 Test")
-print(f"GPS port: {PORT} at {BAUD} baud")
-print("Waiting for GPS data...\n")
+print("Starting SmartSeal+ GPS test...")
+print("Waiting for GPS data and satellite fix.")
+print("Press Ctrl+C to stop.\n")
 
 try:
     with serial.Serial(PORT, BAUD, timeout=2) as gps:
         while True:
-            raw = gps.readline().decode(
+            line = gps.readline().decode(
                 "ascii", errors="replace"
             ).strip()
 
-            if not raw:
+            if not line.startswith("$"):
                 continue
 
-            print(raw)
+            try:
+                msg = pynmea2.parse(line)
+            except pynmea2.ParseError:
+                continue
 
-            fields = raw.split(",")
+            if isinstance(msg, pynmea2.types.talker.GGA):
+                print(f"Time: {msg.timestamp}")
+                print(f"Fix quality: {msg.gps_qual}")
+                print(f"Satellites: {msg.num_sats}")
 
-            if raw.startswith("$GPGGA") or raw.startswith("$GNGGA"):
-                if len(fields) > 6:
-                    fix_quality = fields[6]
-                    satellites = fields[7] if len(fields) > 7 else "?"
-                    print(
-                        f"GPS fix quality: {fix_quality}; "
-                        f"satellites used: {satellites}"
-                    )
+                if int(msg.gps_qual or 0) > 0:
+                    print(f"Latitude:  {msg.latitude}")
+                    print(f"Longitude: {msg.longitude}")
+                    print(f"Altitude:  {msg.altitude} m")
+                    print("GPS FIX ACQUIRED")
+                else:
+                    print("NO FIX YET")
 
-                if len(fields) > 5 and fields[2] and fields[4]:
-                    print(
-                        f"Latitude raw: {fields[2]} {fields[3]}, "
-                        f"Longitude raw: {fields[4]} {fields[5]}"
-                    )
+                print("-" * 35)
 
+            elif isinstance(msg, pynmea2.types.talker.RMC):
+                if msg.status == "A":
+                    print("Valid RMC position:")
+                    print(f"Latitude:  {msg.latitude}")
+                    print(f"Longitude: {msg.longitude}")
+                    print(f"Date: {msg.datestamp}")
+                    print("-" * 35)
+
+except serial.SerialException as exc:
+    print(f"Serial port error: {exc}")
 except KeyboardInterrupt:
     print("\nGPS test stopped.")
-
-except serial.SerialException as error:
-    print(f"Serial error: {error}")
