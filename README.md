@@ -129,7 +129,26 @@ On a non-Raspberry Pi development computer, or when `picamera2` is unavailable, 
 To verify the attached Raspberry Pi camera without waiting for a sensor event:
 
 ```text
-python3 Gateway/gateway_camera.py
+python3 TestFiles/gateway_camera.py
 ```
 
 Choose `1` to capture a test image or `2` to capture a tamper-event image. Images are written to `Gateway/images/`.
+
+## Run ESP32 tests in Arduino IDE
+
+1. Install the Espressif ESP32 board package through Arduino IDE's Boards Manager.
+2. Connect the ESP32 and select the correct board and port. This project targets `ESP32C3 Dev Module`; select a different ESP32 board only when using different hardware.
+3. Open one test at a time from `TestFiles/`:
+	* `esp32_connection_test.cpp` checks serial output.
+	* `esp32_ble_test.cpp` advertises the device name `SmartSeal-01` and manufacturer data.
+4. For the most reliable Arduino IDE workflow, place each `.cpp` file in its own sketch folder with a matching `.ino` file, or open a copy renamed to `.ino`.
+5. Upload the sketch and open Serial Monitor at `115200` baud.
+
+The BLE test uses advertising, not a GATT service. To inspect it from a computer or Raspberry Pi, install the scanner dependency and run:
+
+```text
+python3 -m pip install bleak
+python3 TestFiles/verify_smartseal_ble.py
+```
+
+The GPS scripts require a Raspberry Pi or another host with a connected GPS serial device. Install `pyserial` for `gps_test.py`, and install both `pyserial` and `pynmea2` for `gps_readable.py`. Update the serial port in the script if the GPS is not connected at `/dev/ttyAMA0`.
