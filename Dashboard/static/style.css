@@ -100,3 +100,31 @@ a:hover {
         white-space: nowrap;
     }
 }
+    /* SmartSeal+ sensor status indicators */
+
+.sensor-status {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.sensor-normal {
+    background-color: #e5f5e9;
+    color: #166534;
+    border: 1px solid #a7d7b5;
+}
+
+.sensor-warning {
+    background-color: #fff3d6;
+    color: #92400e;
+    border: 1px solid #f2c76b;
+}
+
+.sensor-danger {
+    background-color: #fde8e8;
+    color: #b91c1c;
+    border: 1px solid #f5aaaa;
+}
