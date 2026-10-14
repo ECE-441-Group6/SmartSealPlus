@@ -1,5 +1,6 @@
 // This code is for testing BLE advertising on the ESP32. It sets up the ESP32 to advertise a BLE device with a specific name and manufacturer data payload.
 // After uploading this code to the ESP32, run verify_smartseal_ble.py on the Raspberry Pi to confirm that the BLE advertising is working correctly.
+#include <Arduino.h>
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEAdvertising.h>

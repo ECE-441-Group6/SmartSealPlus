@@ -45,9 +45,11 @@ def capture_image(packet):
         # The dashboard serves this file from the gateway image directory.
         _get_camera().capture_file(str(path))
         print(f"Image captured: {path}")
-    except ImportError:
+    except Exception as error:
+        # A missing camera module or unavailable hardware should not lose the event.
+        _close_camera()
         _create_simulated_image(path, packet)
-        print(f"Simulated image captured: {path} (picamera2 is unavailable)")
+        print(f"Simulated image captured: {path} (camera unavailable: {error})")
 
     return filename
 
