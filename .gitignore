@@ -12,3 +12,5 @@ camera_test/
 
 *.jpg
 *.png
+
+events/

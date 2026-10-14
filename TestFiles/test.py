@@ -1,60 +1,92 @@
-import asyncio 
-from bleak import BleakClient, BleakScanner 
- 
-DEVICE_NAME = "ESP32_Sensor" 
- 
-SERVICE_UUID = "12345678-1234-1234-1234-1234567890ab" 
- 
-CHARACTERISTIC_UUID = ( 
-   "abcdefab-1234-1234-1234-abcdefabcdef" 
-) 
- 
- 
-def handle_notification(sender, data): 
-   message = data.decode("utf-8", errors="replace").strip() 
- 
-   if message: 
-       print(message, flush=True) 
- 
- 
-async def main(): 
-   while True: 
-       print(f"Scanning for {DEVICE_NAME}...") 
- 
-       device = await BleakScanner.find_device_by_name( 
-           DEVICE_NAME, 
-           timeout=10.0 
-       ) 
- 
-       if device is None: 
-           print("ESP32 not found. Retrying...") 
-           await asyncio.sleep(2) 
-           continue 
- 
-       try: 
-           print(f"Connecting to {device.address}...") 
- 
-           async with BleakClient(device) as client: 
-               print("Connected to ESP32") 
-               print("Timestamp_ms,ADC_Value,Voltage_mV") 
- 
-               await client.start_notify( 
-                   CHARACTERISTIC_UUID, 
-                   handle_notification 
-               ) 
- 
-               while client.is_connected: 
-                   await asyncio.sleep(1) 
- 
-       except Exception as error: 
-           print(f"BLE error: {error}") 
- 
-       print("Disconnected. Reconnecting...") 
-       await asyncio.sleep(2) 
- 
- 
-if __name__ == "__main__": 
-   try: 
-       asyncio.run(main()) 
-   except KeyboardInterrupt: 
-       print("Receiver stopped.") 
+# Tests event handling for the SmartSealPlus gateway. Raspberry Pi BLE-to-camera trigger
+import asyncio
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from bleak import BleakScanner
+
+TARGET_NAME = "SmartSeal-01"
+TEST_COMPANY_ID = 0xFFFF
+
+ALERTS = {"TAMPER1", "TEMPHIGH", "TEMPLOW"}
+
+EVENT_DIR = Path.home() / "SmartSealPlus" / "events"
+EVENT_DIR.mkdir(parents=True, exist_ok=True)
+
+last_status = None
+
+
+def capture_image(status):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = EVENT_DIR / f"{timestamp}_{status}.jpg"
+
+    print(f"ALERT: {status}")
+    print("Activating Raspberry Pi camera...")
+
+    try:
+        subprocess.run(
+            [
+                "rpicam-still",
+                "-n",
+                "-t", "1000",
+                "-o", str(filename)
+            ],
+            check=True,
+            timeout=15
+        )
+
+        print(f"Photo saved: {filename}\n")
+
+    except (subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            FileNotFoundError) as error:
+        print(f"Camera capture failed: {error}")
+
+
+async def main():
+    global last_status
+
+    print(f"Listening for {TARGET_NAME}...")
+    print(f"Event photos will be saved in: {EVENT_DIR}")
+    print("Press Ctrl+C to stop.\n")
+
+    while True:
+        devices = await BleakScanner.discover(
+            timeout=2,
+            return_adv=True
+        )
+
+        for address, (device, adv) in devices.items():
+            name = adv.local_name or device.name or ""
+
+            if name != TARGET_NAME:
+                continue
+
+            for company_id, data in adv.manufacturer_data.items():
+                if company_id != TEST_COMPANY_ID:
+                    continue
+
+                status = data.decode(
+                    "utf-8", errors="replace"
+                ).strip("\x00 \r\n")
+
+                if status == last_status:
+                    continue
+
+                last_status = status
+                print(f"[{name}] Status: {status}")
+
+                if status in ALERTS:
+                    # Capture one photo for each new alert status.
+                    await asyncio.to_thread(
+                        capture_image, status
+                    )
+
+                elif status == "NORMAL":
+                    print("System is back to normal.\n")
+
+
+try:
+    asyncio.run(main())
+except KeyboardInterrupt:
+    print("\nGateway stopped.")
