@@ -7,61 +7,34 @@
 
 BLEAdvertising *advertising;
 
-void updateAdvertisement(String message) {
-  // Stop advertising before changing the payload
-  advertising->stop();
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  Serial.println("SmartSeal+ BLE Advertising Test");
+
+  BLEDevice::init("SmartSeal-01");
 
   BLEAdvertisementData advertData;
   advertData.setName("SmartSeal-01");
 
-  // Test manufacturer ID: 0xFFFF
   String payload = "";
   payload += (char)0xFF;
   payload += (char)0xFF;
-  payload += message;
+  payload += "SSTesting";
 
   advertData.setManufacturerData(payload);
 
+  advertising = BLEDevice::getAdvertising();
   advertising->setAdvertisementData(advertData);
   advertising->start();
 
-  Serial.print("Broadcast message: ");
-  Serial.println(message);
-}
-
-void setup() {
-  Serial.begin(115200);
-  Serial.setTimeout(1000);
-  delay(1000);
-
-  BLEDevice::init("SmartSeal-01");
-  advertising = BLEDevice::getAdvertising();
-
-  updateAdvertisement("READY");
-
-  Serial.println();
-  Serial.println("SmartSeal+ BLE Message Test");
-  Serial.println("Type a message and press Enter.");
-  Serial.println("Keep messages short for BLE advertising.");
+  Serial.println("BLE advertising started.");
+  Serial.println("Device name: SmartSeal-01");
+  Serial.println("Test payload: SSP:TEST:OK");
 }
 
 void loop() {
-  if (Serial.available()) {
-    String message = Serial.readStringUntil('\n');
-    message.trim();
-
-    if (message.length() > 0) {
-      // Keep the payload small to fit legacy BLE advertising.
-      // The device name and BLE packet overhead use space too.
-      if (message.length() > 8) {
-        message = message.substring(0, 8);
-        Serial.println("Message shortened to 8 characters.");
-      }
-
-      updateAdvertisement(message);
-    }
-  }
-
-  delay(10);
+  delay(5000);
+  Serial.println("BLE advertising is running.");
 }
-
