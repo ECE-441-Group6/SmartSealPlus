@@ -151,4 +151,6 @@ python3 -m pip install bleak
 python3 TestFiles/verify_smartseal_ble.py
 ```
 
+`verify_smartseal_ble.py` listens for the device named `SmartSeal-01` in three-second scan cycles. It reads only manufacturer data with company ID `0xFFFF`, decodes that payload as UTF-8, and prints it in the format `[SmartSeal-01] message`. Repeated messages are suppressed, so output appears only when a new BLE message is received. Press `Ctrl+C` to stop the monitor.
+
 The GPS scripts require a Raspberry Pi or another host with a connected GPS serial device. Install `pyserial` for `gps_test.py`, and install both `pyserial` and `pynmea2` for `gps_readable.py`. Update the serial port in the script if the GPS is not connected at `/dev/ttyAMA0`.
