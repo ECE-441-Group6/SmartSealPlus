@@ -1,7 +1,7 @@
-# Reads BLE advertisements from nearby ESP32-C3 SmartSeals.
-# The simulator uses this same packet shape until real BLE hardware is available.
+# Reads BLE notifications from the ESP32 SmartSeal recorder.
+# Receives START, STOP, and D,timestamp_ms,adc_value,button2_state packets.
+# Saves recorded data to CSV files.
 
-#Testing code
 import asyncio
 import csv
 from datetime import datetime
@@ -55,7 +55,7 @@ def start_recording():
         "w",
         newline="",
         buffering=1,
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     csv_writer = csv.writer(csv_file)
@@ -63,7 +63,7 @@ def start_recording():
     csv_writer.writerow([
         "timestamp_ms",
         "adc_value",
-        "button2_state"
+        "button2_state",
     ])
 
     csv_file.flush()
@@ -79,10 +79,13 @@ def stop_recording():
     if not recording:
         return
 
-    csv_file.flush()
-    csv_file.close()
+    saved_path = current_file_path
 
-    print(f"Recording saved: {current_file_path}")
+    if csv_file is not None:
+        csv_file.flush()
+        csv_file.close()
+
+    print(f"Recording saved: {saved_path}")
 
     csv_file = None
     csv_writer = None
@@ -105,7 +108,6 @@ def notification_handler(sender, data: bytearray):
             return
 
         if message.startswith("D,"):
-
             if not recording or csv_writer is None:
                 return
 
@@ -132,7 +134,7 @@ def notification_handler(sender, data: bytearray):
             csv_writer.writerow([
                 timestamp_ms,
                 adc_value,
-                button2_state
+                button2_state,
             ])
 
             csv_file.flush()
@@ -141,12 +143,17 @@ def notification_handler(sender, data: bytearray):
         print(f"Invalid notification: {error}")
 
 
-async def main():
+async def scan_ble():
+    """Find the ESP32 recorder, connect, and receive BLE notifications."""
+
     print("Searching for ESP32 BLE device...")
 
     device = await BleakScanner.find_device_by_filter(
-        lambda d, ad: d.name == DEVICE_NAME,
-        timeout=20.0
+        lambda d, ad: (
+            d.name == DEVICE_NAME
+            or ad.local_name == DEVICE_NAME
+        ),
+        timeout=20.0,
     )
 
     if device is None:
@@ -165,7 +172,7 @@ async def main():
 
             await client.start_notify(
                 CHARACTERISTIC_UUID,
-                notification_handler
+                notification_handler,
             )
 
             while True:
@@ -175,9 +182,10 @@ async def main():
         stop_recording()
 
 
+# Allow this file to run independently for testing.
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        asyncio.run(scan_ble())
     except KeyboardInterrupt:
         print("\nProgram stopped.")
     finally:
