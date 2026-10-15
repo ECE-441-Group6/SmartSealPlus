@@ -1,38 +1,101 @@
-<!-- Main dashboard webpage showing SmartSeal status, temperature, alerts, and captured images. -->
-
+<!-- SmartSeal+ Monitoring Dashboard -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>SmartSeal Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartSeal+ Monitoring Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
-<!-- Flask supplies the initial event list; dashboard.js refreshes it later. -->
 <h1>SmartSeal Dashboard</h1>
 
-<table border="1">
-<thead><tr>
-    <th>Time</th>
-    <th>Seal ID</th>
-    <th>Temp</th>
-    <th>Tamper</th>
-    <th>Vibration</th>
-    <th>Image</th>
-    <th>AI analysis</th>
-</tr></thead>
+<table>
+    <thead>
+        <tr>
+            <th>Time</th>
+            <th>Seal ID</th>
+            <th>Temp</th>
+            <th>Tamper</th>
+            <th>Vibration</th>
+            <th>Image</th>
+            <th>AI analysis</th>
+        </tr>
+    </thead>
 
-<!-- Event rows use SQLite column positions supplied by the Flask route. -->
-<tbody id="events">
-{% for event in events %}<tr>
-    <td>{{ event[1] }}</td><td>{{ event[2] }}</td><td>{{ event[3] }}</td>
-    <td>{{ event[4] }}</td><td>{{ event[5] }}</td>
-    <td>{% if event[6] %}<a href="{{ url_for('images', filename=event[6]) }}" target="_blank">View</a>{% endif %}</td>
-    <td>{{ event[7] or '' }}</td>
-</tr>{% endfor %}
-</tbody>
+    <!-- Initial event rows supplied by Flask -->
+    <tbody id="events">
+    {% for event in events %}
+        <tr>
+            <td>{{ event[1] }}</td>
+            <td>{{ event[2] }}</td>
 
+            <!-- Temperature status -->
+            <td>
+                {% if event[3] is none %}
+                    <span class="sensor-status sensor-warning">
+                        Unknown
+                    </span>
+                {% elif event[3]|float < 2 %}
+                    <span class="sensor-status sensor-danger">
+                        {{ "%.1f"|format(event[3]|float) }}°C - LOW
+                    </span>
+                {% elif event[3]|float > 8 %}
+                    <span class="sensor-status sensor-danger">
+                        {{ "%.1f"|format(event[3]|float) }}°C - HIGH
+                    </span>
+                {% else %}
+                    <span class="sensor-status sensor-normal">
+                        {{ "%.1f"|format(event[3]|float) }}°C - NORMAL
+                    </span>
+                {% endif %}
+            </td>
+
+            <!-- Tamper status -->
+            <td>
+                {% if event[4] %}
+                    <span class="sensor-status sensor-danger">
+                        DETECTED
+                    </span>
+                {% else %}
+                    <span class="sensor-status sensor-normal">
+                        SECURE
+                    </span>
+                {% endif %}
+            </td>
+
+            <!-- Vibration status -->
+            <td>
+                {% if event[5] %}
+                    <span class="sensor-status sensor-warning">
+                        DETECTED
+                    </span>
+                {% else %}
+                    <span class="sensor-status sensor-normal">
+                        NORMAL
+                    </span>
+                {% endif %}
+            </td>
+
+            <!-- Camera evidence -->
+            <td>
+                {% if event[6] %}
+                    <a href="{{ url_for('images', filename=event[6]) }}"
+                       target="_blank"
+                       rel="noopener noreferrer">View</a>
+                {% endif %}
+            </td>
+
+            <!-- AI analysis -->
+            <td>{{ event[7] or '' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
 </table>
 
+<!-- Automatically refresh sensor readings -->
 <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+
 </body>
 </html>
