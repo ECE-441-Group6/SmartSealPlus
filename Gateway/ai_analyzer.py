@@ -6,6 +6,8 @@ import json
 import os
 from urllib.request import Request, urlopen
 
+from alert_manager import TEMP_HIGH, TEMP_LOW
+
 
 def analyze_image(filename, packet):
     # Read configuration from the environment so credentials are not stored in
@@ -24,7 +26,14 @@ def analyze_image(filename, packet):
         "messages": [{
             "role": "user",
             "content": [
-                {"type": "text", "text": "Describe what happened in this SmartSeal event image in one concise sentence."},
+                {
+                    "type": "text",
+                    "text": (
+                        "Describe what happened in this SmartSeal event image in one concise "
+                        f"sentence. Sensor reading: {packet['temperature']} C; "
+                        f"tamper={packet['tamper']}; vibration={packet['vibration']}."
+                    ),
+                },
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}},
             ],
         }],
@@ -53,4 +62,8 @@ def _fallback_analysis(packet):
         events.append("possible tampering")
     if packet["vibration"]:
         events.append("movement or impact detected")
+    if packet["temperature"] > TEMP_HIGH:
+        events.append(f"temperature too high ({packet['temperature']} C)")
+    elif packet["temperature"] < TEMP_LOW:
+        events.append(f"temperature too low ({packet['temperature']} C)")
     return "; ".join(events) or "sensor alert triggered without a specific tamper or vibration classification"

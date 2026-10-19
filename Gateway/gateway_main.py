@@ -2,7 +2,7 @@
 from ble_scanner import scan_ble
 from packet_parser import parse_packet
 from database import init_database, insert_event
-from alert_manager import process_alerts
+from alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
 from ai_analyzer import analyze_image
 from camera_manager import capture_image
 from image_storage import image_path
@@ -26,8 +26,13 @@ def run_gateway(interval=5):
             image_filename = None
             ai_analysis = None
 
-            if packet["tamper"] or packet["vibration"]:
-                # Capture real camera evidence for either physical alert type.
+            temperature_out_of_range = (
+                packet["temperature"] < TEMP_LOW
+                or packet["temperature"] > TEMP_HIGH
+            )
+
+            if packet["tamper"] or packet["vibration"] or temperature_out_of_range:
+                # Capture camera evidence for tamper, vibration, or temperature alerts.
                 image_filename = capture_image(packet)
                 ai_analysis = analyze_image(
                     str(image_path(image_filename)),
