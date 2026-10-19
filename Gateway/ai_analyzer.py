@@ -66,4 +66,6 @@ def _fallback_analysis(packet):
         events.append(f"temperature too high ({packet['temperature']} C)")
     elif packet["temperature"] < TEMP_LOW:
         events.append(f"temperature too low ({packet['temperature']} C)")
+    else:
+        events.append(f"no issues detected")
     return "; ".join(events) or "sensor alert triggered without a specific tamper or vibration classification"
