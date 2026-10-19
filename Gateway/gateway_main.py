@@ -38,6 +38,8 @@ def run_gateway(interval=5):
                     str(image_path(image_filename)),
                     packet,
                 )
+            else:
+                ai_analysis = "No issues detected."
 
             # Persist every valid reading, including readings without alerts.
             insert_event(packet, image_filename, ai_analysis)
