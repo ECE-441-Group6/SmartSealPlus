@@ -1,27 +1,38 @@
-# Converts raw BLE advertisement bytes into useful information such as seal ID, temperature, and tamper status.
+# Converts incoming packet data into validated SmartSeal information.
+
 from math import isfinite
 from numbers import Real
 
 
 def parse_packet(packet):
-    # Reject malformed advertisements before they reach alerting or storage.
     try:
         seal_id = packet["seal_id"]
         temperature = packet["temperature"]
         tamper = packet["tamper"]
         vibration = packet["vibration"]
 
+        # Validate the seal ID.
         if (
             not isinstance(seal_id, int)
             or isinstance(seal_id, bool)
             or seal_id < 1
-            or not isinstance(temperature, Real)
+        ):
+            raise ValueError("Invalid seal ID")
+
+        # Validate the temperature.
+        if (
+            not isinstance(temperature, Real)
             or isinstance(temperature, bool)
             or not isfinite(temperature)
-            or not isinstance(tamper, bool)
-            or not isinstance(vibration, bool)
         ):
-            raise ValueError("invalid SmartSeal field type or value")
+            raise ValueError("Invalid temperature")
+
+        # Validate tamper and vibration states.
+        if not isinstance(tamper, bool):
+            raise ValueError("Invalid tamper status")
+
+        if not isinstance(vibration, bool):
+            raise ValueError("Invalid vibration status")
 
         return {
             "seal_id": seal_id,
@@ -31,6 +42,5 @@ def parse_packet(packet):
         }
 
     except (KeyError, TypeError, ValueError) as error:
-        # Invalid or incomplete advertisements are ignored by the main loop.
         print(f"Packet Error: {error}")
         return None
