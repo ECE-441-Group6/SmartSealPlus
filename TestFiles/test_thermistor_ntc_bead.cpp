@@ -1,3 +1,17 @@
+// SmartSeal+ NTC Thermistor Test
+/*ESP32-WROOM-32
+Pin 3V3
+   |
+   |
+   +---- Regular 10 kΩ resistor ----+
+                                    |
+                                    +---- Pin GPIO 34
+                                    |
+                                    +---- NTC thermistor bead
+                                              |
+                                              |
+                                         Pin GND*/
+
 #include <math.h>
 
 // Analog input connected to the voltage divider
