@@ -83,7 +83,7 @@ void loop() {
 
   if (now - lastUpdate >= UPDATE_INTERVAL) {
     lastUpdate = now;
-
+    
     float temperature = readTemperatureC();
 
     if (!isnan(temperature)) {
