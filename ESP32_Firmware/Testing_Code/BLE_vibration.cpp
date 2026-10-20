@@ -1,4 +1,5 @@
 
+
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
@@ -26,15 +27,15 @@ const int BUTTON2_PIN       = 32;  // Button 2: state logging
 
 BLEServer *pServer = nullptr;
 BLECharacteristic *dataCharacteristic = nullptr;
+BLEAdvertising *pAdvertising = nullptr;
 
-// Connection state
-bool deviceConnected = false;
+volatile bool deviceConnected = false;
 
 // ============================================================
 // RECORDING SETTINGS
 // ============================================================
 
-// Nominal sampling interval: 10 ms (100 Hz)
+// Nominal sampling interval: 10 ms = 100 Hz
 const unsigned long SAMPLE_INTERVAL_MS = 10;
 
 // Button debounce interval
@@ -61,28 +62,30 @@ class RecorderServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *server) override {
     deviceConnected = true;
 
+    Serial.println();
     Serial.println("================================");
-    Serial.println("Raspberry Pi connected!");
-    Serial.println("BLE connection established");
+    Serial.println("BLE CLIENT CONNECTED");
+    Serial.println("Raspberry Pi connection established");
     Serial.println("================================");
   }
 
   void onDisconnect(BLEServer *server) override {
     deviceConnected = false;
 
-    Serial.println("Raspberry Pi disconnected");
+    Serial.println();
+    Serial.println("BLE CLIENT DISCONNECTED");
 
-    // If a recording was active, stop it safely.
-    // The Pi cannot receive STOP while disconnected.
     if (recording) {
       recording = false;
-      Serial.println("Recording stopped: BLE disconnected");
+      Serial.println("Recording stopped due to disconnect.");
     }
 
-    // Restart advertising so the Raspberry Pi can reconnect.
+    Serial.println("Restarting BLE advertising...");
+
+    // Restart advertising so the Pi can reconnect.
     BLEDevice::startAdvertising();
 
-    Serial.println("BLE advertising restarted");
+    Serial.println("BLE advertising restarted.");
     Serial.println("Waiting for Raspberry Pi...");
   }
 };
@@ -92,6 +95,7 @@ class RecorderServerCallbacks : public BLEServerCallbacks {
 // ============================================================
 
 void sendMessage(const String &message) {
+
   if (!deviceConnected || dataCharacteristic == nullptr) {
     return;
   }
@@ -105,6 +109,7 @@ void sendMessage(const String &message) {
 // ============================================================
 
 void startRecording() {
+
   if (recording) {
     return;
   }
@@ -112,9 +117,9 @@ void startRecording() {
   recording = true;
   lastSampleTime = millis();
 
-  Serial.println("Recording started");
+  Serial.println("Recording started.");
 
-  // Tell Raspberry Pi to create a new CSV file.
+  // Tell Raspberry Pi to create a new CSV.
   sendMessage("START\n");
 }
 
@@ -123,15 +128,16 @@ void startRecording() {
 // ============================================================
 
 void stopRecording() {
+
   if (!recording) {
     return;
   }
 
   recording = false;
 
-  Serial.println("Recording stopped");
+  Serial.println("Recording stopped.");
 
-  // Tell Raspberry Pi to close and save the CSV file.
+  // Tell Raspberry Pi to save and close the CSV.
   sendMessage("STOP\n");
 }
 
@@ -140,25 +146,26 @@ void stopRecording() {
 // ============================================================
 
 void setup() {
+
   Serial.begin(115200);
   delay(500);
 
   Serial.println();
   Serial.println("================================");
   Serial.println("SmartSealPlus ESP32 Recorder");
-  Serial.println("Initializing...");
+  Serial.println("Starting...");
   Serial.println("================================");
 
   // Buttons are wired between GPIO and GND.
   pinMode(RECORD_BUTTON_PIN, INPUT_PULLUP);
   pinMode(BUTTON2_PIN, INPUT_PULLUP);
 
-  // ADC configuration: 12-bit readings (0-4095).
+  // ADC resolution: 12-bit (0-4095).
   analogReadResolution(12);
 
-  // ==========================================================
-  // INITIALIZE BLE SERVER
-  // ==========================================================
+  // ----------------------------------------------------------
+  // INITIALIZE BLE
+  // ----------------------------------------------------------
 
   Serial.println("Initializing BLE...");
 
@@ -166,7 +173,6 @@ void setup() {
 
   pServer = BLEDevice::createServer();
 
-  // Register connection/disconnection callbacks.
   pServer->setCallbacks(new RecorderServerCallbacks());
 
   BLEService *service =
@@ -178,23 +184,19 @@ void setup() {
       BLECharacteristic::PROPERTY_NOTIFY
   );
 
-  // Enable notification support for BLE clients.
   dataCharacteristic->addDescriptor(new BLE2902());
   dataCharacteristic->setValue("READY");
 
-  // Start the BLE service.
   service->start();
 
-  // Configure and start advertising.
-  BLEAdvertising *advertising =
-      BLEDevice::getAdvertising();
+  pAdvertising = BLEDevice::getAdvertising();
 
-  advertising->addServiceUUID(SERVICE_UUID);
-  advertising->setScanResponse(true);
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
 
   BLEDevice::startAdvertising();
 
-  Serial.println("BLE advertising started");
+  Serial.println("BLE advertising started.");
   Serial.print("Device name: ");
   Serial.println(DEVICE_NAME);
 
@@ -243,7 +245,7 @@ void loop() {
   }
 
   // ----------------------------------------------------------
-  // 2. RECORD ADC VALUE, TIMESTAMP, AND BUTTON 2 STATE
+  // 2. SAMPLE ADC AND BUTTON 2
   // ----------------------------------------------------------
 
   if (recording &&
@@ -251,30 +253,30 @@ void loop() {
 
     lastSampleTime = millis();
 
-    // Timestamp in milliseconds since ESP32 boot.
+    // Timestamp since ESP32 boot.
     unsigned long timestamp = millis();
 
-    // Read raw ADC value from GPIO34.
+    // Raw ADC reading from GPIO34.
     int adcValue = analogRead(ADC_PIN);
 
     // Button 2: LOW = pressed (1), HIGH = released (0).
     int button2State =
         (digitalRead(BUTTON2_PIN) == LOW) ? 1 : 0;
 
-    // Packet format:
+    // Data format expected by the Raspberry Pi:
     // D,timestamp_ms,adc_value,button2_state
     String packet = "D," +
                     String(timestamp) + "," +
                     String(adcValue) + "," +
                     String(button2State) + "\n";
 
-    // Send the sample to the Raspberry Pi.
+    // Send the notification if connected.
     sendMessage(packet);
 
-    // Also print samples to USB serial for debugging.
+    // Print sample for serial debugging.
     Serial.print(packet);
   }
 
-  // Short delay yields CPU time to other tasks.
+  // Yield CPU time to other tasks.
   delay(1);
 }
