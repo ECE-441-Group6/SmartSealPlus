@@ -13,7 +13,7 @@ void setup() {
   Serial.println("SmartSeal+ Vibration Sensor Test");
 }
 
-void loop() {
+void loop() { 
   int reading = analogRead(VIBRATION_PIN);
 
   Serial.print("Vibration reading: ");
