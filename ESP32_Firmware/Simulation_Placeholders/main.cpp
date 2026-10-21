@@ -1,4 +1,5 @@
 /* Main ESP32 program. Initializes sensors, BLE, buzzer/LED, then repeatedly reads sensors and broadcasts status. */
+#include <Arduino.h>
 #include "sensor_manager.h"
 #include "ble_advertising.h"
 #include "alert_manager.h"

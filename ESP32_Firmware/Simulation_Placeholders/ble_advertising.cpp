@@ -1,25 +1,61 @@
 /* Creates and periodically broadcasts the BLE advertisement containing SmartSeal data. */
 #include "ble_advertising.h"
 #include <Arduino.h>
+#include <BLEDevice.h>
+#include <BLEAdvertising.h>
+#include <cstdio>
+#include <string>
+
+namespace
+{
+constexpr uint8_t manufacturerIdLowByte = 0x53;
+constexpr uint8_t manufacturerIdHighByte = 0x53;
+BLEAdvertising* advertising = nullptr;
+}
 
 void initBLE()
 {
-    // TODO: initialize the ESP32 BLE stack, service, and advertising payload.
-    Serial.println("BLE Initialized");
+    BLEDevice::init(SMARTSEAL_DEVICE_NAME);
+    advertising = BLEDevice::getAdvertising();
+    advertising->setScanResponse(false);
+
+    Serial.println("BLE initialized");
 }
 
 void updateBLEAdvertisement(SensorData data)
 {
-    // This output is a placeholder for a real BLE advertisement update.
+    if (advertising == nullptr)
+    {
+        Serial.println("BLE update skipped: BLE is not initialized");
+        return;
+    }
+
+    char payload[40];
+    std::snprintf(
+        payload,
+        sizeof(payload),
+        "S:%d,T:%.2f,A:%d,V:%d",
+        SMARTSEAL_SEAL_ID,
+        static_cast<double>(data.temperature),
+        data.tamper ? 1 : 0,
+        data.vibration ? 1 : 0);
+
+    // BLEAdvertisementData expects the two-byte company ID at the start of
+    // the raw manufacturer field. Bleak removes these bytes before parsing.
+    std::string manufacturerData;
+    manufacturerData.push_back(static_cast<char>(manufacturerIdLowByte));
+    manufacturerData.push_back(static_cast<char>(manufacturerIdHighByte));
+    manufacturerData += payload;
+
+    BLEAdvertisementData advertisementData;
+    advertisementData.setFlags(0x06);
+    advertisementData.setName(SMARTSEAL_DEVICE_NAME);
+    advertisementData.setManufacturerData(manufacturerData);
+
+    advertising->stop();
+    advertising->setAdvertisementData(advertisementData);
+    advertising->start();
+
     Serial.print("Advertising: ");
-
-    Serial.print(data.temperature);
-    Serial.print(" ");
-
-    Serial.print(data.tamper);
-    Serial.print(" ");
-
-    Serial.println(data.vibration);
-
-    // TODO: encode seal ID and sensor values, then start/restart advertising.
+    Serial.println(payload);
 }

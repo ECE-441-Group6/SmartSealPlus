@@ -138,11 +138,12 @@ Choose `1` to capture a test image or `2` to capture a tamper-event image. Image
 
 1. Install the Espressif ESP32 board package through Arduino IDE's Boards Manager.
 2. Connect the ESP32 and select the correct board and port. This project targets `ESP32C3 Dev Module`; select a different ESP32 board only when using different hardware.
-3. Open one test at a time from `TestFiles/`:
+3. To build the simulation firmware, open `ESP32_Firmware/Simulation_Placeholders/Simulation_Placeholders.ino`. It uses simulated sensor readings (`4.5 C`, no tamper, no vibration), serial-only alerts, and broadcasts the gateway packet format.
+4. Open one test at a time from `TestFiles/`:
 	* `esp32_connection_test.cpp` checks serial output.
 	* `esp32_ble_test.cpp` advertises the device name `SmartSeal-01` and manufacturer data.
-4. For the most reliable Arduino IDE workflow, place each `.cpp` file in its own sketch folder with a matching `.ino` file, or open a copy renamed to `.ino`.
-5. Upload the sketch and open Serial Monitor at `115200` baud.
+5. For the most reliable Arduino IDE workflow, place each `.cpp` test file in its own sketch folder with a matching `.ino` file, or open a copy renamed to `.ino`.
+6. Upload the sketch and open Serial Monitor at `115200` baud.
 
 The BLE test uses advertising, not a GATT service. To inspect it from a computer or Raspberry Pi, install the scanner dependency and run:
 
@@ -151,6 +152,6 @@ python3 -m pip install bleak
 python3 TestFiles/verify_smartseal_ble.py
 ```
 
-`verify_smartseal_ble.py` listens for the device named `SmartSeal-01` in three-second scan cycles. It reads only manufacturer data with company ID `0xFFFF`, decodes that payload as UTF-8, and prints it in the format `[SmartSeal-01] message`. Repeated messages are suppressed, so output appears only when a new BLE message is received. Press `Ctrl+C` to stop the monitor.
+`verify_smartseal_ble.py` listens for the device named `SmartSeal-01` in three-second scan cycles. It reads only manufacturer data with company ID `0x5353`, decodes that payload as UTF-8, and prints it in the format `[SmartSeal-01] message`. Repeated messages are suppressed, so output appears only when a new BLE message is received. Press `Ctrl+C` to stop the monitor.
 
 The GPS scripts require a Raspberry Pi or another host with a connected GPS serial device. Install `pyserial` for `gps_test.py`, and install both `pyserial` and `pynmea2` for `gps_readable.py`. Update the serial port in the script if the GPS is not connected at `/dev/ttyAMA0`.

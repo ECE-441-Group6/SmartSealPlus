@@ -1,2 +1,8 @@
 /* Declares functions for checking POF tamper status. */
-// TODO: add the public tamper detector function declarations.
+#ifndef TAMPER_DETECTOR_H
+#define TAMPER_DETECTOR_H
+
+void initTamperDetector();
+bool tamperDetected();
+
+#endif

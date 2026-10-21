@@ -1,2 +1,8 @@
 /* Declares vibration-sensing functions. */
-// TODO: add the public vibration sensor function declarations.
+#ifndef VIBRATION_SENSOR_H
+#define VIBRATION_SENSOR_H
+
+void initVibrationSensor();
+bool vibrationDetected();
+
+#endif
