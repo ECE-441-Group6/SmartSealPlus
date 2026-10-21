@@ -1,207 +1,174 @@
+#include <bluefruit.h>
+#include <math.h>
+#include <string.h>
+#include <stdio.h>
+
 // ===========================================================
-// XIAO nRF52840
-// Vishay Ametherm PANE103395 NTC Thermistor
+// XIAO nRF52840 — THERMISTOR TESTER
 //
 // Voltage divider:
 //
-//       3.3 V
+//       3.05 V
 //         |
+//       NTC Thermistor
 //         |
-//       NTC
-//     10 kΩ @ 25°C
+//         +-------- A0
 //         |
-//         +-------- ADC
-//         |
-//       26 kΩ
+//         1 kΩ
 //         |
 //        GND
 //
-// Reads the ADC every 5 seconds and calculates temperature.
+// Reads temperature every 5 seconds.
+// Displays temperature in Celsius and Fahrenheit.
 // ===========================================================
 
-
-// ===========================================================
 // ADC PIN
-// ===========================================================
+const int ANALOG_PIN = A0;
 
-#define ANALOG_PIN A0
-
-
-// ===========================================================
 // THERMISTOR CONSTANTS
-// ===========================================================
+// Vishay Ametherm PANE103395-ND
+const float R25 = 10000.0;   // Resistance at 25°C (ohms)
+const float BETA = 3950.0;   // Beta value (K)
+const float T25_K = 298.15;  // 25°C in Kelvin
 
-// PANE103395:
-// Resistance at 25°C
-const float R25 = 10000.0;
+// VOLTAGE DIVIDER CONSTANTS
+const float R_BOTTOM = 1000.0;  // 1 kΩ
+const float VCC = 3.05;
 
-
-// Beta value from Ametherm datasheet
-const float BETA = 3950.0;
-
-
-// Reference temperature:
-// 25°C in Kelvin
-const float T25_K = 298.15;
-
-
-// Fixed resistor in voltage divider
-const float R_FIXED = 26000.0;
-
-
-// Supply voltage
-const float VCC = 3.3;
-
-
-// ADC resolution
 const int ADC_MAX = 4095;
 
+const unsigned long SAMPLE_INTERVAL_MS = 5000;
+unsigned long lastSampleTime = 0;
 
 // ===========================================================
 // SETUP
 // ===========================================================
 
 void setup() {
-
   Serial.begin(115200);
 
-  delay(500);
+  // Wait up to 10 seconds for Serial Monitor.
+  unsigned long serialWaitStart = millis();
 
+  while (!Serial &&
+         millis() - serialWaitStart < 10000) {
+    delay(10);
+  }
 
-  // 12-bit ADC
-  //
-  // Raw ADC:
-  // 0    = minimum
-  // 4095 = maximum
-  analogReadResolution(12);
+  delay(200);
 
+  Serial.println();
+  Serial.println("=================================");
+  Serial.println("XIAO nRF52840 Thermistor Tester");
+  Serial.println("Vishay Ametherm PANE103395-ND");
+  Serial.println("=================================");
 
   pinMode(ANALOG_PIN, INPUT);
+  analogReadResolution(12);
 
-
-  Serial.println();
-  Serial.println("=================================");
-  Serial.println("XIAO nRF52840 NTC Temperature");
-  Serial.println("Vishay Ametherm PANE103395");
-  Serial.println("=================================");
-  Serial.println();
-
-  Serial.println("Divider:");
-  Serial.println("3.3V -> NTC -> ADC -> 26k -> GND");
+  Serial.println(
+      "Divider: 3.05V -> NTC -> A0 -> 1k -> GND"
+  );
+  Serial.println("Sampling interval: 5 seconds");
+  Serial.println("Temperature: Celsius and Fahrenheit");
   Serial.println();
 
-  Serial.println("Reading temperature every 5 seconds...");
-  Serial.println();
+  lastSampleTime = millis();
 }
-
 
 // ===========================================================
 // MAIN LOOP
 // ===========================================================
 
 void loop() {
+  if (millis() - lastSampleTime < SAMPLE_INTERVAL_MS) {
+    delay(1);
+    return;
+  }
 
+  lastSampleTime = millis();
 
   // ---------------------------------------------------------
-  // READ ADC
+  // 1. READ ADC
   // ---------------------------------------------------------
 
   int adcValue = analogRead(ANALOG_PIN);
 
-
   // ---------------------------------------------------------
-  // CONVERT ADC READING TO VOLTAGE
+  // 2. CONVERT ADC READING TO VOLTAGE
   // ---------------------------------------------------------
 
   float voltage =
-    ((float)adcValue / (float)ADC_MAX) * VCC;
-
+      ((float)adcValue / (float)ADC_MAX) * VCC;
 
   // ---------------------------------------------------------
-  // CALCULATE NTC RESISTANCE
+  // 3. CALCULATE THERMISTOR RESISTANCE
   //
-  // Voltage divider:
+  // Divider:
+  // VCC -> R_NTC -> A0 -> R_BOTTOM -> GND
   //
-  //       VCC
-  //        |
-  //       R_NTC
-  //        |
-  //        +---- VADC
-  //        |
-  //       R_FIXED
-  //        |
-  //       GND
-  //
-  // VADC = VCC * R_FIXED / (R_NTC + R_FIXED)
-  //
-  // Therefore:
-  //
-  // R_NTC = R_FIXED * (VCC/VADC - 1)
+  // R_NTC = R_BOTTOM * (VCC - VADC) / VADC
   // ---------------------------------------------------------
 
-  float resistance;
+  float resistance = -1.0;
 
-
-  // Prevent division by zero if ADC reads 0
-  if (voltage > 0.001) {
-
+  if (voltage > 0.001 && voltage < VCC) {
     resistance =
-      R_FIXED * ((VCC / voltage) - 1.0);
+        R_BOTTOM * (VCC - voltage) / voltage;
   }
 
-  else {
+  // ---------------------------------------------------------
+  // 4. CALCULATE TEMPERATURE USING BETA EQUATION
+  // ---------------------------------------------------------
 
-    resistance = 999999999.0;
+  float temperatureC = NAN;
+  float temperatureF = NAN;
+
+  if (resistance > 0.0 && BETA > 0.0) {
+    float temperatureK =
+        1.0 /
+        (
+          (1.0 / T25_K) +
+          (1.0 / BETA) * log(resistance / R25)
+        );
+
+    temperatureC = temperatureK - 273.15;
+
+    // Convert Celsius to Fahrenheit.
+    temperatureF = (temperatureC * 9.0 / 5.0) + 32.0;
   }
 
-
   // ---------------------------------------------------------
-  // CALCULATE TEMPERATURE
-  //
-  // Beta equation:
-  //
-  // 1/T = 1/T25 + (1/BETA) * ln(R/R25)
-  //
-  // Temperature returned in Kelvin.
-  // ---------------------------------------------------------
-
-  float temperature_K =
-    1.0 /
-    (
-      (1.0 / T25_K) +
-      (1.0 / BETA) *
-      log(resistance / R25)
-    );
-
-
-  // Convert Kelvin to Celsius
-  float temperature_C =
-    temperature_K - 273.15;
-
-
-  // ---------------------------------------------------------
-  // PRINT RESULTS
+  // 5. PRINT RESULTS
   // ---------------------------------------------------------
 
   Serial.print("ADC: ");
   Serial.print(adcValue);
 
-  Serial.print("    Voltage: ");
+  Serial.print(" | Voltage: ");
   Serial.print(voltage, 4);
   Serial.print(" V");
 
-  Serial.print("    Resistance: ");
-  Serial.print(resistance, 1);
-  Serial.print(" ohm");
+  Serial.print(" | Resistance: ");
 
-  Serial.print("    Temperature: ");
-  Serial.print(temperature_C, 2);
-  Serial.println(" °C");
+  if (resistance > 0.0 &&
+      isfinite(temperatureC) &&
+      isfinite(temperatureF)) {
 
+    Serial.print(resistance, 1);
+    Serial.print(" ohm");
 
-  // ---------------------------------------------------------
-  // WAIT 5 SECONDS
-  // ---------------------------------------------------------
+    Serial.print(" | Temperature: ");
+    Serial.print(temperatureC, 2);
+    Serial.print(" C");
 
-  delay(5000);
+    Serial.print(" / ");
+    Serial.print(temperatureF, 2);
+    Serial.println(" F");
+
+  } else {
+    Serial.println(
+        "Invalid reading; check wiring and ADC voltage."
+    );
+  }
 }
