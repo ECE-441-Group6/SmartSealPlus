@@ -7,7 +7,7 @@ import asyncio
 import re
 from bleak import BleakScanner
 
-TARGET_NAME = "SmartSeal-01"
+TARGET_NAME = "Xiao_Recorder"
 MANUFACTURER_ID = 0x5353
 PACKET_PATTERN = re.compile(
     r"S:\d+,T:[-+]?\d+(?:\.\d+)?,A:[01],V:[01]"
