@@ -3,9 +3,11 @@
 #include "tamper_detector.h"
 #include "temperature_sensor.h"
 #include "vibration_sensor.h"
+#include <Arduino.h>
 
 void initSensors()
 {
+    randomSeed(static_cast<unsigned long>(micros()));
     initTemperatureSensor();
     initTamperDetector();
     initVibrationSensor();

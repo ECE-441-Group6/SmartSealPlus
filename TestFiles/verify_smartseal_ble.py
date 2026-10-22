@@ -8,6 +8,7 @@ import asyncio
 from bleak import BleakScanner
 
 TARGET_NAME = "SmartSeal-01"
+MANUFACTURER_ID = 0x5353
 
 async def main():
     print(f"Waiting for messages from {TARGET_NAME}...")
@@ -28,10 +29,10 @@ async def main():
                 continue
 
             for company_id, data in adv.manufacturer_data.items():
-                if company_id != 0xFFFF:
+                if company_id != MANUFACTURER_ID:
                     continue
 
-                message = data.decode("utf-8", errors="replace")
+                message = data.decode("utf-8", errors="replace").strip()
 
                 # Only print when a new message is received
                 if message != last_message:

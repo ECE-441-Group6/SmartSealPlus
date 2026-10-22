@@ -122,6 +122,16 @@ Open `http://127.0.0.1:5000`. The gateway currently generates simulated ESP32 ad
 
 When `tamper` or `vibration` is true, the gateway captures a real JPEG with the Raspberry Pi camera, saves it in `Gateway/images/`, stores its filename with the event, and displays a `View` link in the dashboard. The gateway keeps one camera session open while it runs and closes it when the process exits.
 
+The ESP32 simulation sketch generates a random temperature between `1.00 C` and
+`10.00 C`, plus occasional simulated tamper and vibration events. It advertises
+packets such as `S:1,T:4.50,A:0,V:1` using manufacturer ID `0x5353`. On the
+Raspberry Pi, the gateway scans for `SmartSeal-01`, parses each packet, and
+processes it through the normal alert, camera, AI, database, and dashboard flow.
+Start the gateway only after uploading
+`ESP32_Firmware/Simulation_Placeholders/Simulation_Placeholders.ino` to the
+ESP32. For development without the ESP32, run `SMARTSEAL_SIMULATION=1
+python3 Gateway/gateway_main.py`.
+
 On a non-Raspberry Pi development computer, or when `picamera2` is unavailable, Pillow creates a labeled simulated camera frame instead. Without `OPENAI_API_KEY`, the AI result uses the sensor evidence as a local fallback. Set `OPENAI_API_KEY` to enable vision analysis through the configured `OPENAI_VISION_MODEL` (default `gpt-4o-mini`).
 
 ### Test the camera directly

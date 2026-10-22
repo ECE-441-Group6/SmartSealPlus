@@ -1,4 +1,5 @@
-/* Reads the current container temperature from the DS18B20. */
+/* Generates a simulated container temperature until the DS18B20 is connected. */
+#include <Arduino.h>
 #include "temperature_sensor.h"
 
 void initTemperatureSensor()
@@ -7,5 +8,5 @@ void initTemperatureSensor()
 
 float readTemperatureC()
 {
-    return 4.5f;
+    return 1.0f + static_cast<float>(random(0, 901)) / 100.0f;
 }

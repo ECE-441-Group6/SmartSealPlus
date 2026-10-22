@@ -1,4 +1,5 @@
-/* Reads the piezoelectric sensor and determines whether a significant vibration or impact occurred. */
+/* Generates a simulated vibration state until the sensor is connected. */
+#include <Arduino.h>
 #include "vibration_sensor.h"
 
 void initVibrationSensor()
@@ -7,5 +8,5 @@ void initVibrationSensor()
 
 bool vibrationDetected()
 {
-    return false;
+    return random(0, 10) == 0;
 }
