@@ -166,6 +166,11 @@ void advertiseGatewayPacket(float temperatureF, int vibrationADC) {
     return;
   }
 
+  uint8_t manufacturerData[sizeof(packet) + 2];
+  manufacturerData[0] = (uint8_t)(GATEWAY_MANUFACTURER_ID & 0xFF);
+  manufacturerData[1] = (uint8_t)(GATEWAY_MANUFACTURER_ID >> 8);
+  memcpy(manufacturerData + 2, packet, packetLength);
+
   // The gateway scans advertisements rather than connecting to the GATT
   // characteristic. Rebuild the manufacturer field with the latest sample.
   Bluefruit.Advertising.stop();
@@ -175,9 +180,8 @@ void advertiseGatewayPacket(float temperatureF, int vibrationADC) {
   );
   Bluefruit.Advertising.addTxPower();
   Bluefruit.Advertising.addManufacturerData(
-    GATEWAY_MANUFACTURER_ID,
-    packet,
-    packetLength
+    manufacturerData,
+    packetLength + 2
   );
   Bluefruit.ScanResponse.clearData();
   Bluefruit.ScanResponse.addName();
@@ -388,10 +392,20 @@ void setup() {
     BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
   );
   Bluefruit.Advertising.addTxPower();
+  const char initialGatewayPacket[] = "S:1,T:0.0,A:0,V:0";
+  uint8_t initialManufacturerData[sizeof(initialGatewayPacket) + 1];
+  initialManufacturerData[0] =
+    (uint8_t)(GATEWAY_MANUFACTURER_ID & 0xFF);
+  initialManufacturerData[1] =
+    (uint8_t)(GATEWAY_MANUFACTURER_ID >> 8);
+  memcpy(
+    initialManufacturerData + 2,
+    initialGatewayPacket,
+    sizeof(initialGatewayPacket) - 1
+  );
   Bluefruit.Advertising.addManufacturerData(
-    GATEWAY_MANUFACTURER_ID,
-    "S:1,T:0.0,A:0,V:0",
-    17
+    initialManufacturerData,
+    sizeof(initialGatewayPacket) + 1
   );
   Bluefruit.ScanResponse.addName();
 
