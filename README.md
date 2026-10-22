@@ -130,6 +130,11 @@ processes it through the normal alert, camera, AI, database, and dashboard flow.
 The ESP32 publishes one reading every five seconds, matching the Pi's five-second
 BLE scan window. The Pi starts the next scan immediately after processing a valid
 reading.
+
+The XIAO nRF52840 integrated recorder is organized as an Arduino sketch in
+`XIAOnRF8540/VT_IntegratedBLE/`. Open `VT_IntegratedBLE.ino` to upload it; the
+supporting `main.cpp`, sensor manager, BLE manager, and configuration files are
+compiled as part of the same sketch.
 Start the gateway only after uploading
 `ESP32_Firmware/Simulation_Placeholders/Simulation_Placeholders.ino` to the
 ESP32. For development without the ESP32, run `SMARTSEAL_SIMULATION=1
