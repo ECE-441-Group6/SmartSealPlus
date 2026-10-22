@@ -1,24 +1,36 @@
-#The purpose of this file is to verify the BLE advertising of the SmartSeal+ device by scanning for it and displaying its information.
+# The purpose of this file is to verify BLE advertising from the SmartSeal+
+# device and the XIAO nRF52840.
 #Run the following command to execute this script:
 #cd ~/SmartSealPlus/TestFiles
 #python3 verify_smartseal_ble.py
-
 
 import asyncio
 import re
 from bleak import BleakScanner
 
-TARGET_NAME = "SmartSeal-01"
+TARGET_NAMES = {"SmartSeal-01", "Xiao_Recorder"}
 MANUFACTURER_ID = 0x5353
 PACKET_PATTERN = re.compile(
-    r"S:\d+,T:[-+]?\d+(?:\.\d+)?,A:[01],V:[01]"
+    r"^S:(\d+),T:([-+]?\d+(?:\.\d+)?),A:([01]),V:([01])$"
 )
 
+
+def decode_packet(data):
+    """Decode manufacturer data with or without an embedded company ID."""
+    if data.startswith(b"\x53\x53"):
+        data = data[2:]
+
+    message = data.decode("ascii", errors="replace").strip()
+    return message if PACKET_PATTERN.fullmatch(message) else None
+
+
 async def main():
-    print(f"Waiting for messages from {TARGET_NAME}...")
+    names = ", ".join(sorted(TARGET_NAMES))
+    print(f"Scanning for BLE packets from: {names}")
+    print(f"Manufacturer ID: 0x{MANUFACTURER_ID:04X}")
     print("Press Ctrl+C to stop.\n")
 
-    last_message = None
+    last_packets = {}
 
     while True:
         devices = await BleakScanner.discover(
@@ -33,13 +45,29 @@ async def main():
                 if company_id != MANUFACTURER_ID:
                     continue
 
-                message = data.decode("utf-8", errors="replace").strip()
-                if not PACKET_PATTERN.fullmatch(message):
+                message = decode_packet(data)
+                if message is None:
                     continue
 
-                # Only print when a new message is received
-                if message != last_message:
-                    print(f"[{name or TARGET_NAME}] {message}")
-                    last_message = message
+                packet_key = (address, message)
+                if packet_key == last_packets.get(address):
+                    continue
 
-asyncio.run(main())
+                last_packets[address] = packet_key
+                seal_id, temperature, tamper, vibration = (
+                    PACKET_PATTERN.fullmatch(message).groups()
+                )
+                print("BLE packet received")
+                print(f"  Device: {name or 'unnamed'}")
+                print(f"  Address: {address}")
+                print(f"  RSSI: {adv.rssi} dBm")
+                print(f"  Packet: {message}")
+                print(
+                    f"  Parsed: seal_id={seal_id}, temperature={temperature}, "
+                    f"tamper={tamper}, vibration={vibration}"
+                )
+                print(f"  Raw payload: {data.hex(' ')}")
+                print("-" * 45)
+
+if __name__ == "__main__":
+    asyncio.run(main())

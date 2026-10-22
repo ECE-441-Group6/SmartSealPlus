@@ -1,4 +1,4 @@
-"""Receive SmartSeal sensor packets over BLE."""
+"""Receive SmartSeal sensor packets over BLE advertisements."""
 
 import asyncio
 import os
@@ -8,13 +8,13 @@ import re
 from bleak import BleakScanner
 
 MANUFACTURER_ID = 0x5353
-DEVICE_NAME = "SmartSeal-01"
+DEVICE_NAMES = {"SmartSeal-01", "Xiao_Recorder"}
 SCAN_TIMEOUT = 5.0
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
 
 def parse_advertisement(payload):
-    """Convert the ESP32 manufacturer payload into a gateway packet."""
+    """Convert an ESP32 or XIAO manufacturer payload into a gateway packet."""
     if payload is None:
         return None
 
@@ -61,8 +61,8 @@ async def scan_real_ble():
             return
 
         # The device name may be placed in a scan response or omitted when the
-        # advertisement is full. The SmartSeal company ID and payload are the
-        # reliable protocol identifiers, so do not require the name here.
+        # advertisement is full. The company ID and payload are the reliable
+        # protocol identifiers, so do not require the name here.
         packet = parse_advertisement(payload)
         if packet is not None:
             packets.append(packet)
@@ -75,7 +75,8 @@ async def scan_real_ble():
         await scanner.stop()
 
     if not packets:
-        print(f"No valid {DEVICE_NAME} BLE advertisement received.")
+        names = ", ".join(sorted(DEVICE_NAMES))
+        print(f"No valid BLE advertisement received from {names}.")
         return None
 
     packet = packets[-1]

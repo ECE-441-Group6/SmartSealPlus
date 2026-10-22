@@ -393,7 +393,8 @@ void setup() {
   );
   Bluefruit.Advertising.addTxPower();
   const char initialGatewayPacket[] = "S:1,T:0.0,A:0,V:0";
-  uint8_t initialManufacturerData[sizeof(initialGatewayPacket) + 1];
+  const size_t initialPacketLength = sizeof(initialGatewayPacket) - 1;
+  uint8_t initialManufacturerData[initialPacketLength + 2];
   initialManufacturerData[0] =
     (uint8_t)(GATEWAY_MANUFACTURER_ID & 0xFF);
   initialManufacturerData[1] =
@@ -401,11 +402,11 @@ void setup() {
   memcpy(
     initialManufacturerData + 2,
     initialGatewayPacket,
-    sizeof(initialGatewayPacket) - 1
+    initialPacketLength
   );
   Bluefruit.Advertising.addManufacturerData(
     initialManufacturerData,
-    sizeof(initialGatewayPacket) + 1
+    initialPacketLength + 2
   );
   Bluefruit.ScanResponse.addName();
 
