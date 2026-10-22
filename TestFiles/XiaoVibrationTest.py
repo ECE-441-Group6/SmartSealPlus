@@ -10,7 +10,7 @@ from bleak import BleakClient, BleakScanner
 # BLE CONFIGURATION
 # ============================================================
 
-DEVICE_NAME = "ESP32_Recorder"
+DEVICE_NAME = "Xiao_Recorder"
 
 SERVICE_UUID = "12345678-1234-1234-1234-1234567890ab"
 
