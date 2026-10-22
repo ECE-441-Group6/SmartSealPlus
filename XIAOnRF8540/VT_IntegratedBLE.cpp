@@ -14,6 +14,9 @@
 // BLE packet:
 // D,timestamp_ms,vibration_adc,temperature_F
 //
+// Gateway advertisement:
+// S:1,T:temperature_F,A:0,V:vibration
+//
 // Temperature is "nan" if no valid reading is available.
 //
 // Serial Plotter:
@@ -64,6 +67,10 @@ const float ADC_REFERENCE_VOLTAGE = 3050;   //Milivolts
 #define CHARACTERISTIC_UUID \
   "12345678-1234-1234-1234-1234567890ac"
 
+const uint16_t GATEWAY_MANUFACTURER_ID = 0x5353;
+const int SEAL_ID = 1;
+const int VIBRATION_THRESHOLD = ADC_MAX / 2;
+
 BLEService recordingService(SERVICE_UUID);
 BLECharacteristic dataCharacteristic(CHARACTERISTIC_UUID);
 
@@ -77,9 +84,11 @@ bool recording = false;
 const unsigned long TEMP_INTERVAL_MS = 5000;
 const unsigned long VIBRATION_INTERVAL_MS = 10;
 const unsigned long DEBOUNCE_MS = 40;
+const unsigned long ADVERTISEMENT_INTERVAL_MS = 1000;
 
 unsigned long lastTempSampleTime = 0;
 unsigned long lastVibrationSampleTime = 0;
+unsigned long lastAdvertisementTime = 0;
 
 // Latest valid temperature, reused for vibration packets
 float latestTemperatureF = NAN;
@@ -137,6 +146,42 @@ void sendMessage(const char* message) {
     (const uint8_t*)message,
     length
   );
+}
+
+void advertiseGatewayPacket(float temperatureF, int vibrationADC) {
+  if (!isfinite(temperatureF)) return;
+
+  char packet[24];
+  int packetLength = snprintf(
+    packet,
+    sizeof(packet),
+    "S:%d,T:%.1f,A:0,V:%d",
+    SEAL_ID,
+    temperatureF,
+    vibrationADC >= VIBRATION_THRESHOLD ? 1 : 0
+  );
+
+  if (packetLength <= 0 || packetLength >= (int)sizeof(packet)) {
+    Serial.println("WARNING: Gateway BLE packet is too long.");
+    return;
+  }
+
+  // The gateway scans advertisements rather than connecting to the GATT
+  // characteristic. Rebuild the manufacturer field with the latest sample.
+  Bluefruit.Advertising.stop();
+  Bluefruit.Advertising.clearData();
+  Bluefruit.Advertising.addFlags(
+    BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
+  );
+  Bluefruit.Advertising.addTxPower();
+  Bluefruit.Advertising.addManufacturerData(
+    GATEWAY_MANUFACTURER_ID,
+    packet,
+    packetLength
+  );
+  Bluefruit.ScanResponse.clearData();
+  Bluefruit.ScanResponse.addName();
+  Bluefruit.Advertising.start(0);
 }
 
 // ============================================================
@@ -342,9 +387,12 @@ void setup() {
   Bluefruit.Advertising.addFlags(
     BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
   );
-
   Bluefruit.Advertising.addTxPower();
-  Bluefruit.Advertising.addService(recordingService);
+  Bluefruit.Advertising.addManufacturerData(
+    GATEWAY_MANUFACTURER_ID,
+    "S:1,T:0.0,A:0,V:0",
+    17
+  );
   Bluefruit.ScanResponse.addName();
 
   Bluefruit.Advertising.restartOnDisconnect(true);
@@ -486,6 +534,11 @@ void loop() {
       sendMessage(packet);
     }
 
+    if (now - lastAdvertisementTime >= ADVERTISEMENT_INTERVAL_MS) {
+      lastAdvertisementTime = now;
+      advertiseGatewayPacket(latestTemperatureF, vibrationADC);
+    }
+
     printVibrationDebug(
       now, vibrationADC, vibrationVoltage,
       latestTemperatureF
@@ -494,4 +547,3 @@ void loop() {
 
   delay(1);
 }
-
