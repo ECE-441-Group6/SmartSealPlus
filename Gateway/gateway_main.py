@@ -18,6 +18,12 @@ def run_gateway(interval=5):
         # Receive a raw advertisement and normalize it into the gateway packet
         # shape used by alerts, storage, image capture, and AI analysis.
         raw_packet = scan_ble()
+        if raw_packet is None:
+            print("No sensor packet received; retrying BLE scan.")
+            # scan_ble already waits for the complete BLE scan window. Start the
+            # next scan immediately after processing a valid reading.
+            continue
+
         packet = parse_packet(raw_packet)
 
         if packet:

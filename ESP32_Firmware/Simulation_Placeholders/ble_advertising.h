@@ -6,6 +6,7 @@
 
 #define SMARTSEAL_DEVICE_NAME "SmartSeal-01"
 #define SMARTSEAL_SEAL_ID 1
+#define SMARTSEAL_TRANSMIT_INTERVAL_MS 5000
 
 void initBLE();
 void updateBLEAdvertisement(SensorData data);

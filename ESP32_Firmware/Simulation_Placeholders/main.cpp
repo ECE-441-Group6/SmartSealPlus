@@ -25,6 +25,6 @@ void loop()
 
     processAlerts(data);
 
-    // Limit broadcasts and sensor checks to approximately once per second.
-    delay(1000);
+    // Match the Raspberry Pi scan window so each scan receives one reading.
+    delay(SMARTSEAL_TRANSMIT_INTERVAL_MS);
 }

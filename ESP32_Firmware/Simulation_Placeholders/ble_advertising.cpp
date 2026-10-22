@@ -4,7 +4,6 @@
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
 #include <cstdio>
-#include <string>
 
 namespace
 {
@@ -42,14 +41,16 @@ void updateBLEAdvertisement(SensorData data)
 
     // BLEAdvertisementData expects the two-byte company ID at the start of
     // the raw manufacturer field. Bleak removes these bytes before parsing.
-    std::string manufacturerData;
-    manufacturerData.push_back(static_cast<char>(manufacturerIdLowByte));
-    manufacturerData.push_back(static_cast<char>(manufacturerIdHighByte));
+    String manufacturerData;
+    manufacturerData += static_cast<char>(manufacturerIdLowByte);
+    manufacturerData += static_cast<char>(manufacturerIdHighByte);
     manufacturerData += payload;
 
     BLEAdvertisementData advertisementData;
     advertisementData.setFlags(0x06);
-    advertisementData.setName(SMARTSEAL_DEVICE_NAME);
+    // Keep the sensor packet in the primary legacy advertisement. Including
+    // the 15-character name here can exceed the 31-byte BLE limit and cause
+    // scanners to miss the manufacturer data.
     advertisementData.setManufacturerData(manufacturerData);
 
     advertising->stop();

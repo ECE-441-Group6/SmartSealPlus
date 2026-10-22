@@ -15,7 +15,14 @@ SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
 def parse_advertisement(payload):
     """Convert the ESP32 manufacturer payload into a gateway packet."""
+    if payload is None:
+        return None
+
     if isinstance(payload, bytes):
+        # Bleak normally removes the company ID. Accept it too for backends
+        # that expose the raw manufacturer field.
+        if payload.startswith(b"\x53\x53"):
+            payload = payload[2:]
         payload = payload.decode("ascii", errors="ignore")
 
     match = re.fullmatch(
@@ -49,16 +56,13 @@ async def scan_real_ble():
     packets = []
 
     def detection_callback(device, advertisement):
-        if DEVICE_NAME not in {
-            device.name or "",
-            advertisement.local_name or "",
-        }:
-            return
-
         payload = advertisement.manufacturer_data.get(MANUFACTURER_ID)
         if payload is None:
             return
 
+        # The device name may be placed in a scan response or omitted when the
+        # advertisement is full. The SmartSeal company ID and payload are the
+        # reliable protocol identifiers, so do not require the name here.
         packet = parse_advertisement(payload)
         if packet is not None:
             packets.append(packet)

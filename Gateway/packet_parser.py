@@ -6,6 +6,9 @@ from numbers import Real
 
 def parse_packet(packet):
     try:
+        if packet is None:
+            raise ValueError("No packet received")
+
         seal_id = packet["seal_id"]
         temperature = packet["temperature"]
         tamper = packet["tamper"]

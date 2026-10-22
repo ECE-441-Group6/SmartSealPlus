@@ -127,6 +127,9 @@ The ESP32 simulation sketch generates a random temperature between `1.00 C` and
 packets such as `S:1,T:4.50,A:0,V:1` using manufacturer ID `0x5353`. On the
 Raspberry Pi, the gateway scans for `SmartSeal-01`, parses each packet, and
 processes it through the normal alert, camera, AI, database, and dashboard flow.
+The ESP32 publishes one reading every five seconds, matching the Pi's five-second
+BLE scan window. The Pi starts the next scan immediately after processing a valid
+reading.
 Start the gateway only after uploading
 `ESP32_Firmware/Simulation_Placeholders/Simulation_Placeholders.ino` to the
 ESP32. For development without the ESP32, run `SMARTSEAL_SIMULATION=1
@@ -162,6 +165,6 @@ python3 -m pip install bleak
 python3 TestFiles/verify_smartseal_ble.py
 ```
 
-`verify_smartseal_ble.py` listens for the device named `SmartSeal-01` in three-second scan cycles. It reads only manufacturer data with company ID `0x5353`, decodes that payload as UTF-8, and prints it in the format `[SmartSeal-01] message`. Repeated messages are suppressed, so output appears only when a new BLE message is received. Press `Ctrl+C` to stop the monitor.
+`verify_smartseal_ble.py` listens for manufacturer data with company ID `0x5353` in three-second scan cycles, decodes the sensor payload as UTF-8, and prints it in the format `[SmartSeal-01] message`. The packet is identified by its company ID and format even when the BLE name is omitted to stay within the legacy advertisement size limit. Repeated messages are suppressed, so output appears only when a new BLE message is received. Press `Ctrl+C` to stop the monitor.
 
 The GPS scripts require a Raspberry Pi or another host with a connected GPS serial device. Install `pyserial` for `gps_test.py`, and install both `pyserial` and `pynmea2` for `gps_readable.py`. Update the serial port in the script if the GPS is not connected at `/dev/ttyAMA0`.

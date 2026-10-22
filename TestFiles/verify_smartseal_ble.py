@@ -5,10 +5,14 @@
 
 
 import asyncio
+import re
 from bleak import BleakScanner
 
 TARGET_NAME = "SmartSeal-01"
 MANUFACTURER_ID = 0x5353
+PACKET_PATTERN = re.compile(
+    r"S:\d+,T:[-+]?\d+(?:\.\d+)?,A:[01],V:[01]"
+)
 
 async def main():
     print(f"Waiting for messages from {TARGET_NAME}...")
@@ -25,18 +29,17 @@ async def main():
         for address, (device, adv) in devices.items():
             name = adv.local_name or device.name or ""
 
-            if name != TARGET_NAME:
-                continue
-
             for company_id, data in adv.manufacturer_data.items():
                 if company_id != MANUFACTURER_ID:
                     continue
 
                 message = data.decode("utf-8", errors="replace").strip()
+                if not PACKET_PATTERN.fullmatch(message):
+                    continue
 
                 # Only print when a new message is received
                 if message != last_message:
-                    print(f"[{name}] {message}")
+                    print(f"[{name or TARGET_NAME}] {message}")
                     last_message = message
 
 asyncio.run(main())
