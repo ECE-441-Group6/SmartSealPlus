@@ -1,3 +1,4 @@
+
 """SmartSeal+ gateway with error handling and continuous monitoring."""
 
 import time
@@ -12,47 +13,21 @@ from image_storage import image_path
 
 
 def run_gateway(interval=5):
-    # Initialize the database before starting monitoring.
     init_database()
     print("SmartSeal+ gateway started.")
 
-<<<<<<< HEAD
-    while True:
-        # Receive a raw advertisement and normalize it into the gateway packet
-        # shape used by alerts, storage, image capture, and AI analysis.
-        raw_packet = scan_ble()
-        if raw_packet is None:
-            print("No sensor packet received; retrying BLE scan.")
-            # scan_ble already waits for the complete BLE scan window. Start the
-            # next scan immediately after processing a valid reading.
-            continue
-
-        packet = parse_packet(raw_packet)
-=======
     try:
         while True:
             try:
-                # Receive and validate sensor data.
+                # Receive sensor data from BLE.
                 raw_packet = scan_ble()
->>>>>>> 67fda2a (Improve gateway error handling and monitoring reliability)
 
                 if raw_packet is None:
-                    print("No BLE packet received. Retrying...")
+                    print("No sensor packet received; retrying BLE scan.")
+                    # The BLE scan already waits for its scan window.
                     continue
 
-<<<<<<< HEAD
-            temperature_out_of_range = (
-                packet["temperature"] < TEMP_LOW
-                or packet["temperature"] > TEMP_HIGH
-            )
-
-            if packet["tamper"] or packet["vibration"] or temperature_out_of_range:
-                # Capture camera evidence for tamper, vibration, or temperature alerts.
-                image_filename = capture_image(packet)
-                ai_analysis = analyze_image(
-                    str(image_path(image_filename)),
-                    packet,
-=======
+                # Validate the sensor packet.
                 packet = parse_packet(raw_packet)
 
                 if packet is None:
@@ -65,10 +40,7 @@ def run_gateway(interval=5):
                 temperature_out_of_range = (
                     packet["temperature"] < TEMP_LOW
                     or packet["temperature"] > TEMP_HIGH
->>>>>>> 67fda2a (Improve gateway error handling and monitoring reliability)
                 )
-            else:
-                ai_analysis = "No issues detected."
 
                 alert_triggered = (
                     packet["tamper"]
@@ -80,13 +52,13 @@ def run_gateway(interval=5):
                 ai_analysis = "No issues detected."
 
                 if alert_triggered:
-                    # Camera failure should not prevent event storage.
+                    # Camera errors must not stop gateway monitoring.
                     try:
                         image_filename = capture_image(packet)
                     except Exception as error:
                         print(f"Camera error: {error}")
 
-                    # AI failure should not prevent event storage.
+                    # AI errors must not stop database storage.
                     if image_filename:
                         try:
                             ai_analysis = analyze_image(
@@ -99,7 +71,7 @@ def run_gateway(interval=5):
                     else:
                         ai_analysis = "Alert detected; image unavailable."
 
-                # Save sensor data.
+                # Store the sensor event.
                 try:
                     insert_event(packet, image_filename, ai_analysis)
                 except Exception as error:
@@ -113,11 +85,11 @@ def run_gateway(interval=5):
 
                 print("Analysis:", ai_analysis)
 
+                # Wait between successfully processed readings.
+                time.sleep(interval)
+
             except Exception as error:
                 print(f"Gateway processing error: {error}")
-
-            finally:
-                # Maintain a consistent polling interval.
                 time.sleep(interval)
 
     except KeyboardInterrupt:
