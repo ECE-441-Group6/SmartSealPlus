@@ -135,6 +135,11 @@ The XIAO nRF52840 integrated recorder is organized as an Arduino sketch in
 `XIAOnRF8540/VT_IntegratedBLE/`. Open `VT_IntegratedBLE.ino` to upload it; the
 supporting `main.cpp`, sensor manager, BLE manager, and configuration files are
 compiled as part of the same sketch.
+The recorder keeps its existing recording characteristic and also exposes the
+XIAO test interface as `SmartSeal-XIAO` with service `0x180F` and characteristic
+`0x2A19`. The gateway reads the sensor packet from that characteristic when no
+ESP32 manufacturer advertisement is available, so ESP32 connectivity remains
+supported.
 Start the gateway only after uploading
 `ESP32_Firmware/Simulation_Placeholders/Simulation_Placeholders.ino` to the
 ESP32. For development without the ESP32, run `SMARTSEAL_SIMULATION=1

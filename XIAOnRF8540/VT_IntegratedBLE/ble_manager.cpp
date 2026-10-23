@@ -8,7 +8,7 @@
 #include "config.h"
 
 namespace {
-constexpr char DEVICE_NAME[] = "Xiao_Recorder";
+constexpr char DEVICE_NAME[] = "SmartSeal-XIAO";
 constexpr char SERVICE_UUID[] = "12345678-1234-1234-1234-1234567890ab";
 constexpr char CHARACTERISTIC_UUID[] = "12345678-1234-1234-1234-1234567890ac";
 constexpr uint16_t GATEWAY_MANUFACTURER_ID = 0x5353;
@@ -17,6 +17,8 @@ constexpr int VIBRATION_THRESHOLD = ADC_MAX / 2;
 
 BLEService recordingService(SERVICE_UUID);
 BLECharacteristic dataCharacteristic(CHARACTERISTIC_UUID);
+BLEService xiaoService(0x180F);
+BLECharacteristic xiaoCharacteristic(0x2A19);
 bool deviceConnected = false;
 
 void connectCallback(uint16_t connHandle) {
@@ -56,12 +58,21 @@ void initializeBle() {
   dataCharacteristic.setMaxLen(20);
   dataCharacteristic.begin();
   dataCharacteristic.write((const uint8_t *)"READY", 5);
+  xiaoService.begin();
+  xiaoCharacteristic.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
+  xiaoCharacteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+  xiaoCharacteristic.setMaxLen(20);
+  xiaoCharacteristic.begin();
+  const char initialPacket[] = "S:1,T:0.0,A:0,V:0";
+  xiaoCharacteristic.write(
+    (const uint8_t *)initialPacket,
+    sizeof(initialPacket) - 1
+  );
 
   Bluefruit.Advertising.addFlags(
     BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
   );
   Bluefruit.Advertising.addTxPower();
-  const char initialPacket[] = "S:1,T:0.0,A:0,V:0";
   addGatewayManufacturerData(initialPacket, sizeof(initialPacket) - 1);
   Bluefruit.ScanResponse.addName();
   Bluefruit.Advertising.restartOnDisconnect(true);
@@ -101,6 +112,11 @@ void updateGatewayAdvertisement(float temperatureF, int vibrationADC) {
   if (packetLength <= 0 || packetLength >= (int)sizeof(packet)) {
     Serial.println("WARNING: Gateway BLE packet is too long.");
     return;
+  }
+
+  xiaoCharacteristic.write((const uint8_t *)packet, packetLength);
+  if (deviceConnected) {
+    xiaoCharacteristic.notify((const uint8_t *)packet, packetLength);
   }
 
   Bluefruit.Advertising.stop();

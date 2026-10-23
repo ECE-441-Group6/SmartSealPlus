@@ -1,46 +1,77 @@
-
+//Run with xiaobletest.py in Gateway/Test folder
 #include <bluefruit.h>
 
-const char* DEVICE_NAME = "SmartSeal-01";
+BLEService smartSealService(
+    0x180F
+);
 
-BLEUart bleuart;
+BLECharacteristic messageCharacteristic(
+    0x2A19
+);
+
+int messageCount = 0;
+unsigned long lastSendTime = 0;
+
+void connect_callback(uint16_t conn_handle) {
+  Serial.println("Raspberry Pi connected!");
+}
+
+void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
+  Serial.println("Raspberry Pi disconnected!");
+}
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  Bluefruit.begin();
-  Bluefruit.setName(DEVICE_NAME);
+  Serial.println("Starting XIAO BLE...");
 
-  // Advertise the device name and BLE UART service.
-  bleuart.begin();
+  Bluefruit.begin();
+  Bluefruit.setName("SmartSeal-XIAO");
+
+  Bluefruit.Periph.setConnectCallback(connect_callback);
+  Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
+
+  smartSealService.begin();
+
+  messageCharacteristic.setProperties(
+      CHR_PROPS_READ | CHR_PROPS_NOTIFY
+  );
+  messageCharacteristic.setPermission(
+      SECMODE_OPEN, SECMODE_NO_ACCESS
+  );
+  messageCharacteristic.setMaxLen(20);
+  messageCharacteristic.begin();
+  messageCharacteristic.write("BLE_READY");
 
   Bluefruit.Advertising.addFlags(
-    BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
+      BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
   );
   Bluefruit.Advertising.addTxPower();
-  Bluefruit.Advertising.addService(bleuart);
-  Bluefruit.ScanResponse.addName();
+  Bluefruit.Advertising.addService(smartSealService);
+  Bluefruit.Advertising.addName();
 
   Bluefruit.Advertising.restartOnDisconnect(true);
-  Bluefruit.Advertising.setInterval(160, 160);
+  Bluefruit.Advertising.setInterval(32, 244);
   Bluefruit.Advertising.start(0);
 
-  Serial.println("SmartSeal-01 BLE started");
-  Serial.println("Advertising BLE UART service");
+  Serial.println("Advertising as SmartSeal-XIAO");
 }
 
 void loop() {
-  // Send a test message when a BLE central connects.
-  // This is a BLE UART test; it does not broadcast
-  // the message itself inside each advertisement.
-  if (Bluefruit.connected()) {
-    static unsigned long lastSend = 0;
+  if (millis() - lastSendTime >= 2000) {
+    lastSendTime = millis();
 
-    if (millis() - lastSend >= 1000) {
-      lastSend = millis();
-      bleuart.println("SmartSeal-01:TAMPER_OK");
-      Serial.println("Sent: SmartSeal-01:TAMPER_OK");
+    char message[20];
+    snprintf(message, sizeof(message), "Hello_%d", messageCount++);
+
+    messageCharacteristic.write(message);
+
+    if (Bluefruit.connected()) {
+      messageCharacteristic.notify(message);
     }
+
+    Serial.print("Current message: ");
+    Serial.println(message);
   }
 }

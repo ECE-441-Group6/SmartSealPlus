@@ -5,10 +5,13 @@ import os
 import random
 import re
 
-from bleak import BleakScanner
+from bleak import BleakClient, BleakScanner
+from bleak.exc import BleakError
 
 MANUFACTURER_ID = 0x5353
-DEVICE_NAMES = {"SmartSeal-01", "Xiao_Recorder"}
+ESP_DEVICE_NAMES = {"SmartSeal-01"}
+XIAO_DEVICE_NAME = "SmartSeal-XIAO"
+XIAO_CHARACTERISTIC_UUID = "00002a19-0000-1000-8000-00805f9b34fb"
 SCAN_TIMEOUT = 5.0
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
@@ -18,7 +21,7 @@ def parse_advertisement(payload):
     if payload is None:
         return None
 
-    if isinstance(payload, bytes):
+    if isinstance(payload, (bytes, bytearray)):
         # Bleak normally removes the company ID. Accept it too for backends
         # that expose the raw manufacturer field.
         if payload.startswith(b"\x53\x53"):
@@ -41,6 +44,13 @@ def parse_advertisement(payload):
     }
 
 
+def parse_xiao_message(payload):
+    """Parse the sensor packet exposed by the XIAO GATT characteristic."""
+    if isinstance(payload, (bytes, bytearray)):
+        payload = payload.decode("ascii", errors="ignore")
+    return parse_advertisement(payload)
+
+
 def simulated_packet():
     """Generate a packet when a BLE adapter or ESP32 is not available."""
     return {
@@ -52,10 +62,16 @@ def simulated_packet():
 
 
 async def scan_real_ble():
-    """Scan for the latest valid SmartSeal manufacturer advertisement."""
+    """Scan ESP advertisements and read a packet from the XIAO GATT service."""
     packets = []
+    xiao_device = None
 
     def detection_callback(device, advertisement):
+        nonlocal xiao_device
+        device_name = advertisement.local_name or device.name or ""
+        if device_name == XIAO_DEVICE_NAME:
+            xiao_device = device
+
         payload = advertisement.manufacturer_data.get(MANUFACTURER_ID)
         if payload is None:
             return
@@ -74,14 +90,28 @@ async def scan_real_ble():
     finally:
         await scanner.stop()
 
-    if not packets:
-        names = ", ".join(sorted(DEVICE_NAMES))
-        print(f"No valid BLE advertisement received from {names}.")
-        return None
+    if packets:
+        packet = packets[-1]
+        print(f"BLE packet received: {packet}")
+        return packet
 
-    packet = packets[-1]
-    print(f"BLE packet received: {packet}")
-    return packet
+    if xiao_device is not None:
+        try:
+            async with BleakClient(xiao_device) as client:
+                payload = await client.read_gatt_char(XIAO_CHARACTERISTIC_UUID)
+            packet = parse_xiao_message(payload)
+            if packet is not None:
+                print(f"XIAO BLE packet received: {packet}")
+                return packet
+            print("XIAO BLE characteristic did not contain a sensor packet.")
+        except (BleakError, OSError, asyncio.TimeoutError) as error:
+            print(f"XIAO BLE read error: {error}")
+
+    print(
+        "No valid BLE packet received from "
+        f"{', '.join(sorted(ESP_DEVICE_NAMES | {XIAO_DEVICE_NAME}))}."
+    )
+    return None
 
 
 def scan_ble():
