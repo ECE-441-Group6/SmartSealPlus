@@ -142,6 +142,7 @@ async def scan_real_ble():
 
 def scan_ble():
     """Return one ESP32 packet, using simulation only when explicitly enabled."""
+
     if SIMULATION_MODE:
         packet = simulated_packet()
         print(f"SIMULATED packet: {packet}")
@@ -149,8 +150,16 @@ def scan_ble():
 
     try:
         return asyncio.run(scan_real_ble())
+
+    except RuntimeError as error:
+        if "asyncio.run() cannot be called" in str(error):
+            print(f"ASYNCIO EVENT LOOP ERROR: {error}")
+        else:
+            print(f"RUNTIME ERROR DURING BLE SCAN: {error}")
+        return None
+
     except Exception as error:
-        print(f"BLE scanning error: {error}")
+        print(f"BLE SCANNING ERROR: {type(error).__name__}: {error}")
         return None
 
 
