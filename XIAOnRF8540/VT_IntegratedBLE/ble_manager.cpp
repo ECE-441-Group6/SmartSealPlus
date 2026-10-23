@@ -1,5 +1,4 @@
 #include "ble_manager.h"
-
 #include <bluefruit.h>
 #include <math.h>
 #include <stdio.h>
