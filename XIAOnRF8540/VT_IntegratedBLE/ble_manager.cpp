@@ -73,6 +73,7 @@ void initializeBle() {
     BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
   );
   Bluefruit.Advertising.addTxPower();
+  Bluefruit.Advertising.addService(xiaoService);
   addGatewayManufacturerData(initialPacket, sizeof(initialPacket) - 1);
   Bluefruit.ScanResponse.addName();
   Bluefruit.Advertising.restartOnDisconnect(true);
@@ -125,6 +126,7 @@ void updateGatewayAdvertisement(float temperatureF, int vibrationADC) {
     BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
   );
   Bluefruit.Advertising.addTxPower();
+  Bluefruit.Advertising.addService(xiaoService);
   addGatewayManufacturerData(packet, packetLength);
   Bluefruit.ScanResponse.clearData();
   Bluefruit.ScanResponse.addName();

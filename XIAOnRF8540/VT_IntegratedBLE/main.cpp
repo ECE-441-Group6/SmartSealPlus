@@ -113,18 +113,32 @@ void sampleVibration(unsigned long now) {
 
 void setup() {
   Serial.begin(115200);
+  const unsigned long serialStart = millis();
+  while (!Serial && millis() - serialStart < 5000) {
+    delay(10);
+  }
+  delay(250);
+  Serial.println();
+  Serial.println("Starting VT_IntegratedBLE...");
   pinMode(RECORD_BUTTON_PIN, INPUT_PULLUP);
   pinMode(TEMP_PIN, INPUT);
   pinMode(VIBRATION_PIN, INPUT);
   analogReadResolution(12);
+  Serial.println("Initializing BLE...");
   initializeBle();
   Serial.println("XIAO nRF52840 recorder ready.");
+  Serial.println("Press the record button on D4 to start sampling.");
 }
 
 void loop() {
   const unsigned long now = millis();
   updateButton(now);
   if (!recording) {
+    static unsigned long lastIdleMessage = 0;
+    if (now - lastIdleMessage >= 5000) {
+      lastIdleMessage = now;
+      Serial.println("Idle: waiting for record button.");
+    }
     delay(1);
     return;
   }
