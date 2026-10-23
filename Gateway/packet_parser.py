@@ -30,12 +30,17 @@ def parse_packet(packet):
         ):
             raise ValueError("Invalid temperature")
 
-        # Validate tamper and vibration states.
+        # Validate tamper and vibration readings.
         if not isinstance(tamper, bool):
             raise ValueError("Invalid tamper status")
 
-        if not isinstance(vibration, bool):
-            raise ValueError("Invalid vibration status")
+        if (
+            not isinstance(vibration, Real)
+            or isinstance(vibration, bool)
+            or not isfinite(vibration)
+            or vibration < 0
+        ):
+            raise ValueError("Invalid vibration voltage")
 
         return {
             "seal_id": seal_id,

@@ -17,7 +17,7 @@ def init_database():
         seal_id INTEGER,
         temperature REAL,
         tamper INTEGER,
-        vibration INTEGER,
+        vibration REAL,
         image_path TEXT,
         ai_analysis TEXT
     )
@@ -48,7 +48,7 @@ def insert_event(packet, image_filename=None, ai_analysis=None):
         packet["seal_id"],
         packet["temperature"],
         int(packet["tamper"]),
-        int(packet["vibration"]),
+        packet["vibration"],
         image_filename,
         ai_analysis
     ))

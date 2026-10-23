@@ -29,18 +29,18 @@ def parse_advertisement(payload):
         payload = payload.decode("ascii", errors="ignore")
 
     match = re.fullmatch(
-        r"S:(\d+),T:([-+]?\d+(?:\.\d+)?),A:([01]),V:([01])",
+        r"S:(\d+),T:([-+]?\d+(?:\.\d+)?),A:([01]),V:([-+]?\d+(?:\.\d+)?)",
         payload.strip("\x00 \r\n"),
     )
     if not match:
         return None
 
-    seal_id, temperature, tamper, vibration = match.groups()
+    seal_id, temperature, tamper, vibration_voltage = match.groups()
     return {
         "seal_id": int(seal_id),
         "temperature": float(temperature),
         "tamper": tamper == "1",
-        "vibration": vibration == "1",
+        "vibration": float(vibration_voltage),
     }
 
 
@@ -57,7 +57,7 @@ def simulated_packet():
         "seal_id": 1,
         "temperature": round(random.uniform(1.0, 10.0), 1),
         "tamper": random.choice([True, False]),
-        "vibration": random.choice([True, False]),
+        "vibration": round(random.uniform(0.0, 3.05), 2),
     }
 
 
