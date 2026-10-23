@@ -30,7 +30,7 @@ def parse_advertisement(payload):
 
     match = re.fullmatch(
         r"S:(\d+),T:([-+]?\d+(?:\.\d+)?),A:([01]),V:([01])",
-        payload.strip(),
+        payload.strip("\x00 \r\n"),
     )
     if not match:
         return None
@@ -90,6 +90,11 @@ async def scan_real_ble():
         packet = parse_advertisement(payload)
         if packet is not None:
             packets.append(packet)
+        else:
+            print(
+                "Ignoring invalid manufacturer payload from "
+                f"{device.name or 'unnamed'}: {payload!r}"
+            )
 
     scanner = BleakScanner(detection_callback=detection_callback)
     await scanner.start()
@@ -97,6 +102,15 @@ async def scan_real_ble():
         await asyncio.sleep(SCAN_TIMEOUT)
     finally:
         await scanner.stop()
+
+    if xiao_device is None and not packets:
+        try:
+            xiao_device = await BleakScanner.find_device_by_name(
+                XIAO_DEVICE_NAME,
+                timeout=SCAN_TIMEOUT,
+            )
+        except (BleakError, OSError, asyncio.TimeoutError) as error:
+            print(f"XIAO BLE discovery error: {error}")
 
     if xiao_device is not None:
         try:
@@ -118,6 +132,10 @@ async def scan_real_ble():
     print(
         "No valid BLE packet received from "
         f"{', '.join(sorted(ESP_DEVICE_NAMES | {XIAO_DEVICE_NAME}))}."
+    )
+    print(
+        "Check that the XIAO is advertising and that the integrated sketch "
+        "is uploaded; press D4 to start live sensor updates."
     )
     return None
 

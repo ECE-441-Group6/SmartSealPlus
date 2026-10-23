@@ -1,4 +1,4 @@
-#Run with ble_test.cpp in XIAOnRF8540 folder
+#Run with ble_test.cpp in XIAOnRF8540/Test folder
 import asyncio
 from bleak import BleakScanner, BleakClient
 
