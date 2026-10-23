@@ -30,7 +30,7 @@ void disconnectCallback(uint16_t connHandle, uint8_t reason) {
   (void)connHandle;
   (void)reason;
   deviceConnected = false;
-  Serial.println("BLE client disconnected.");
+  Serial.println("BLE client disconnected; XIAO advertising will restart.");
 }
 
 void addGatewayManufacturerData(const char *packet, int packetLength) {
@@ -79,7 +79,9 @@ void initializeBle() {
   Bluefruit.Advertising.setInterval(32, 244);
   Bluefruit.Advertising.setFastTimeout(30);
   Bluefruit.Advertising.start(0);
-  Serial.println("BLE advertising started.");
+  Serial.print("XIAO is advertising as ");
+  Serial.print(DEVICE_NAME);
+  Serial.println(".");
 }
 
 void sendBleMessage(const char *message) {
@@ -130,6 +132,8 @@ void updateGatewayAdvertisement(float temperatureF, int vibrationADC) {
   Bluefruit.ScanResponse.clearData();
   Bluefruit.ScanResponse.addName();
   Bluefruit.Advertising.start(0);
+  Serial.print("XIAO advertisement updated: ");
+  Serial.println(packet);
 }
 
 bool isBleClientConnected() {
