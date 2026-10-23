@@ -139,7 +139,9 @@ The recorder keeps its existing recording characteristic and also exposes the
 XIAO test interface as `SmartSeal-XIAO` with service `0x180F` and characteristic
 `0x2A19`. The gateway reads the sensor packet from that characteristic when no
 ESP32 manufacturer advertisement is available, so ESP32 connectivity remains
-supported.
+supported. XIAO packets use the `V` field for the measured vibration voltage
+(for example, `S:1,T:63.4,A:0,V:2.20`); ESP32 packets continue to use `V` as
+their vibration event flag.
 Start the gateway only after uploading
 `ESP32_Firmware/Simulation_Placeholders/Simulation_Placeholders.ino` to the
 ESP32. For development without the ESP32, run `SMARTSEAL_SIMULATION=1

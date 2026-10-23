@@ -106,7 +106,7 @@ void sampleVibration(unsigned long now) {
 
   if (now - lastAdvertisementTime >= ADVERTISEMENT_INTERVAL_MS) {
     lastAdvertisementTime = now;
-    updateGatewayAdvertisement(latestTemperatureF, vibrationADC);
+    updateGatewayAdvertisement(latestTemperatureF, vibrationVoltage);
   }
 }
 }

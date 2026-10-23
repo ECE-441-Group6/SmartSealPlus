@@ -12,8 +12,6 @@ constexpr char SERVICE_UUID[] = "12345678-1234-1234-1234-1234567890ab";
 constexpr char CHARACTERISTIC_UUID[] = "12345678-1234-1234-1234-1234567890ac";
 constexpr uint16_t GATEWAY_MANUFACTURER_ID = 0x5353;
 constexpr int SEAL_ID = 1;
-constexpr int VIBRATION_THRESHOLD = ADC_MAX / 2;
-
 BLEService recordingService(SERVICE_UUID);
 BLECharacteristic dataCharacteristic(CHARACTERISTIC_UUID);
 BLEService xiaoService(0x180F);
@@ -62,7 +60,7 @@ void initializeBle() {
   xiaoCharacteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
   xiaoCharacteristic.setMaxLen(20);
   xiaoCharacteristic.begin();
-  const char initialPacket[] = "S:1,T:0.0,A:0,V:0";
+  const char initialPacket[] = "S:1,T:0.0,A:0,V:0.00";
   xiaoCharacteristic.write(
     (const uint8_t *)initialPacket,
     sizeof(initialPacket) - 1
@@ -97,7 +95,7 @@ void sendBleMessage(const char *message) {
   dataCharacteristic.notify((const uint8_t *)message, length);
 }
 
-void updateGatewayAdvertisement(float temperatureF, int vibrationADC) {
+void updateGatewayAdvertisement(float temperatureF, float vibrationVoltage) {
   if (!isfinite(temperatureF)) {
     return;
   }
@@ -106,10 +104,10 @@ void updateGatewayAdvertisement(float temperatureF, int vibrationADC) {
   const int packetLength = snprintf(
     packet,
     sizeof(packet),
-    "S:%d,T:%.1f,A:0,V:%d",
+    "S:%d,T:%.1f,A:0,V:%.2f",
     SEAL_ID,
     temperatureF,
-    vibrationADC >= VIBRATION_THRESHOLD ? 1 : 0
+    vibrationVoltage
   );
   if (packetLength <= 0 || packetLength >= (int)sizeof(packet)) {
     Serial.println("WARNING: Gateway BLE packet is too long.");

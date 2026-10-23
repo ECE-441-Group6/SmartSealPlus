@@ -11,7 +11,7 @@ from bleak import BleakScanner
 TARGET_NAMES = {"SmartSeal-01", "Xiao_Recorder"}
 MANUFACTURER_ID = 0x5353
 PACKET_PATTERN = re.compile(
-    r"^S:(\d+),T:([-+]?\d+(?:\.\d+)?),A:([01]),V:([01])$"
+    r"^S:(\d+),T:([-+]?\d+(?:\.\d+)?),A:([01]),V:([-+]?\d+(?:\.\d+)?)$"
 )
 
 
