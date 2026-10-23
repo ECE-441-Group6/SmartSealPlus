@@ -14,6 +14,7 @@ int stableButtonState = HIGH;
 unsigned long lastDebounceTime = 0;
 unsigned long lastTempSampleTime = 0;
 unsigned long lastVibrationSampleTime = 0;
+unsigned long lastSerialPrintTime = 0;
 unsigned long lastAdvertisementTime = 0;
 float latestTemperatureF = NAN;
 
@@ -39,6 +40,7 @@ void startRecording() {
   const unsigned long now = millis();
   lastTempSampleTime = now - TEMP_INTERVAL_MS;
   lastVibrationSampleTime = now - VIBRATION_INTERVAL_MS;
+  lastSerialPrintTime = now - SERIAL_INTERVAL_MS;
   lastAdvertisementTime = now - ADVERTISEMENT_INTERVAL_MS;
   latestTemperatureF = NAN;
   Serial.println("Recording started.");
@@ -89,7 +91,10 @@ void sampleVibration(unsigned long now) {
 
   int vibrationADC = 0;
   const float vibrationVoltage = readVibrationVoltage(vibrationADC);
-  printPlotterValues(latestTemperatureF, vibrationVoltage);
+  if (now - lastSerialPrintTime >= SERIAL_INTERVAL_MS) {
+    lastSerialPrintTime = now;
+    printPlotterValues(latestTemperatureF, vibrationVoltage);
+  }
 
   char packet[21];
   const int packetLength = snprintf(
