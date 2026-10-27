@@ -88,14 +88,21 @@ async def scan_real_ble():
         if is_xiao:
             xiao_device = device
 
-        payload = advertisement.manufacturer_data.get(MANUFACTURER_ID)
-        if payload is None or is_xiao:
+        payloads = advertisement.manufacturer_data.values()
+        if is_xiao:
             return
 
         # The device name may be placed in a scan response or omitted when the
         # advertisement is full. The company ID and payload are the reliable
         # protocol identifiers, so do not require the name here.
-        packet = parse_advertisement(payload)
+        packet = next(
+            (
+                parse_advertisement(payload)
+                for payload in payloads
+                if parse_advertisement(payload) is not None
+            ),
+            None,
+        )
         if packet is not None:
             packets.append(packet)
         else:

@@ -26,8 +26,14 @@ async def scan_real_ble():
     def detection_callback(device, advertisement):
         nonlocal advertised_packet, xiao_device
         device_name = advertisement.local_name or device.name or ""
-        payload = advertisement.manufacturer_data.get(MANUFACTURER_ID)
-        packet = parse_advertisement(payload)
+        packet = None
+        for manufacturer_id, payload in advertisement.manufacturer_data.items():
+            if manufacturer_id == MANUFACTURER_ID:
+                packet = parse_advertisement(payload)
+            if packet is None and isinstance(payload, (bytes, bytearray)):
+                packet = parse_advertisement(payload)
+            if packet is not None:
+                break
         if device_name == XIAO_DEVICE_NAME:
             xiao_device = device
         if packet is not None:
@@ -45,7 +51,7 @@ async def scan_real_ble():
     finally:
         await scanner.stop()
 
-    if advertised_packet is not None and xiao_device is not None:
+    if advertised_packet is not None:
         print(f"XIAO BLE advertisement received: {advertised_packet}")
         return advertised_packet
 
@@ -62,7 +68,10 @@ async def scan_real_ble():
         print("No valid BLE packet received from SmartSeal-XIAO.")
         return None
 
-    print("XIAO was found, but no sensor advertisement was received.")
+    print(
+        "XIAO was found, but no SmartSeal manufacturer advertisement "
+        "was received. Ensure the updated firmware is uploaded."
+    )
     return None
 
 

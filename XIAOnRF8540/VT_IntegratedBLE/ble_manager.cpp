@@ -54,10 +54,14 @@ void initializeBle() {
   dataCharacteristic.setMaxLen(32);
   dataCharacteristic.begin();
   dataCharacteristic.write((const uint8_t *)"READY", 5);
+  const uint8_t initialPacket[] = {
+    0xA5, 1, SEAL_ID, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  };
   Bluefruit.Advertising.addFlags(
     BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
   );
   Bluefruit.Advertising.addTxPower();
+  addGatewayManufacturerData(initialPacket, sizeof(initialPacket));
   Bluefruit.ScanResponse.addName();
   Bluefruit.Advertising.restartOnDisconnect(true);
   Bluefruit.Advertising.setInterval(32, 244);
