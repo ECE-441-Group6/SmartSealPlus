@@ -3,16 +3,25 @@
 
 import time
 
-from ble_scanner import scan_ble
-from packet_parser import parse_packet
-from database import init_database, insert_event
-from alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
-from ai_analyzer import analyze_image
-from camera_manager import capture_image
-from image_storage import image_path
+if __package__:
+    from .ble_scanner import scan_ble
+    from .packet_parser import parse_packet
+    from .database import init_database, insert_event
+    from .alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
+    from .ai_analyzer import analyze_image
+    from .camera_manager import capture_image
+    from .image_storage import image_path
+else:
+    from ble_scanner import scan_ble
+    from packet_parser import parse_packet
+    from database import init_database, insert_event
+    from alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
+    from ai_analyzer import analyze_image
+    from camera_manager import capture_image
+    from image_storage import image_path
 
 
-def run_gateway(interval=5):
+def run_gateway(interval=5, scanner=scan_ble):
     init_database()
     print("SmartSeal+ gateway started.")
 
@@ -20,7 +29,7 @@ def run_gateway(interval=5):
         while True:
             try:
                 # Receive sensor data from BLE.
-                raw_packet = scan_ble()
+                raw_packet = scanner()
 
                 if raw_packet is None:
                     print("No sensor packet received; retrying BLE scan.")

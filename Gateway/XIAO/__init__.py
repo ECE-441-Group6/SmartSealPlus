@@ -1,0 +1,1 @@
+"""XIAO-specific SmartSeal+ gateway."""

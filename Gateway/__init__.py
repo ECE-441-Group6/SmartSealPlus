@@ -1,0 +1,1 @@
+"""SmartSeal+ gateway package."""

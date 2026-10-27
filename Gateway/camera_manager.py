@@ -3,7 +3,10 @@
 import atexit
 from datetime import datetime, timezone
 
-from image_storage import image_path
+if __package__:
+    from .image_storage import image_path
+else:
+    from image_storage import image_path
 
 
 _camera = None

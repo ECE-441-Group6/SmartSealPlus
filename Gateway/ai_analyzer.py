@@ -6,7 +6,10 @@ import json
 import os
 from urllib.request import Request, urlopen
 
-from alert_manager import TEMP_HIGH, TEMP_LOW
+if __package__:
+    from .alert_manager import TEMP_HIGH, TEMP_LOW
+else:
+    from alert_manager import TEMP_HIGH, TEMP_LOW
 
 
 def analyze_image(filename, packet):

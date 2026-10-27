@@ -20,6 +20,18 @@ Sensor information is transmitted to a Raspberry Pi gateway using Bluetooth Low 
 
 The gateway receives sensor data, stores events, generates alerts, and displays status information through a monitoring dashboard.
 
+The gateway can also be run for one hardware target at a time:
+
+```text
+python3 -m Gateway.ESP32.gateway_main
+python3 -m Gateway.XIAO.gateway_main
+```
+
+`Gateway/ESP32/` scans only for ESP32 manufacturer advertisements, while
+`Gateway/XIAO/` scans for the XIAO GATT service and reads its sensor
+characteristic. Both use the same alert, camera, AI, database, and dashboard
+processing as the combined `Gateway/gateway_main.py` entry point.
+
 ## System Architecture
 
 SmartSeal Device (ESP32-C3)
