@@ -22,6 +22,10 @@ void loop()
     SensorData data = readSensors();
 
     updateBLEAdvertisement(data);
+    while (!waitForGatewayAcknowledgement())
+    {
+        updateBLEAdvertisement(data);
+    }
 
     processAlerts(data);
 

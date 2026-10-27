@@ -4,6 +4,8 @@ import asyncio
 import os
 
 from bleak import BleakScanner
+from bleak import BleakClient
+from bleak.exc import BleakError
 
 from Gateway.ble_scanner import (
     MANUFACTURER_ID,
@@ -13,11 +15,14 @@ from Gateway.ble_scanner import (
 )
 
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
+ACK_CHARACTERISTIC_UUID = "12345678-1234-1234-1234-1234567890ad"
+ACK_MESSAGE = b"ACK"
 
 
 async def scan_real_ble():
     """Scan for the ESP32 manufacturer payload and return its latest packet."""
     packets = []
+    packet_devices = {}
 
     def detection_callback(device, advertisement):
         payload = advertisement.manufacturer_data.get(MANUFACTURER_ID)
@@ -27,6 +32,7 @@ async def scan_real_ble():
         packet = parse_advertisement(payload)
         if packet is not None:
             packets.append(packet)
+            packet_devices[id(packet)] = device
         else:
             print(
                 "Ignoring invalid manufacturer payload from "
@@ -45,6 +51,14 @@ async def scan_real_ble():
         return None
 
     packet = packets[-1]
+    device = packet_devices[id(packet)]
+    try:
+        async with BleakClient(device) as client:
+            await client.write_gatt_char(ACK_CHARACTERISTIC_UUID, ACK_MESSAGE)
+    except (BleakError, OSError, asyncio.TimeoutError) as error:
+        print(f"ESP32 BLE acknowledgment error: {error}")
+        return None
+
     print(f"ESP32 BLE packet received: {packet}")
     return packet
 

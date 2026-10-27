@@ -32,6 +32,13 @@ python3 -m Gateway.XIAO.gateway_main
 characteristic. Both use the same alert, camera, AI, database, and dashboard
 processing as the combined `Gateway/gateway_main.py` entry point.
 
+Gateway packets use an application-level `ACK` over a BLE GATT write. The
+gateway acknowledges a valid packet immediately after reading and validating
+it. The ESP32 and XIAO keep advertising the same reading and do not sample or
+publish the next reading until that acknowledgment arrives; if it times out,
+the same reading is retried. This prevents a gateway scan or connection delay
+from silently dropping a reading.
+
 ## System Architecture
 
 SmartSeal Device (ESP32-C3)

@@ -12,6 +12,8 @@ MANUFACTURER_ID = 0x5353
 ESP_DEVICE_NAMES = {"SmartSeal-01"}
 XIAO_DEVICE_NAME = "SmartSeal-XIAO"
 XIAO_CHARACTERISTIC_UUID = "00002a19-0000-1000-8000-00805f9b34fb"
+ESP32_ACK_CHARACTERISTIC_UUID = "12345678-1234-1234-1234-1234567890ad"
+ACK_MESSAGE = b"ACK"
 SCAN_TIMEOUT = 5.0
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
@@ -64,6 +66,7 @@ def simulated_packet():
 async def scan_real_ble():
     """Scan ESP advertisements and read a packet from the XIAO GATT service."""
     packets = []
+    packet_devices = []
     xiao_device = None
 
     def detection_callback(device, advertisement):
@@ -90,6 +93,7 @@ async def scan_real_ble():
         packet = parse_advertisement(payload)
         if packet is not None:
             packets.append(packet)
+            packet_devices.append(device)
         else:
             print(
                 "Ignoring invalid manufacturer payload from "
@@ -118,6 +122,11 @@ async def scan_real_ble():
                 payload = await client.read_gatt_char(XIAO_CHARACTERISTIC_UUID)
             packet = parse_xiao_message(payload)
             if packet is not None:
+                async with BleakClient(xiao_device) as client:
+                    await client.write_gatt_char(
+                        XIAO_CHARACTERISTIC_UUID,
+                        ACK_MESSAGE,
+                    )
                 print(f"XIAO BLE packet received: {packet}")
                 return packet
             print("XIAO BLE characteristic did not contain a sensor packet.")
@@ -126,6 +135,15 @@ async def scan_real_ble():
 
     if packets:
         packet = packets[-1]
+        try:
+            async with BleakClient(packet_devices[-1]) as client:
+                await client.write_gatt_char(
+                    ESP32_ACK_CHARACTERISTIC_UUID,
+                    ACK_MESSAGE,
+                )
+        except (BleakError, OSError, asyncio.TimeoutError) as error:
+            print(f"ESP32 BLE acknowledgment error: {error}")
+            return None
         print(f"BLE packet received: {packet}")
         return packet
 

@@ -17,6 +17,20 @@ BLECharacteristic dataCharacteristic(CHARACTERISTIC_UUID);
 BLEService xiaoService(0x180F);
 BLECharacteristic xiaoCharacteristic(0x2A19);
 bool deviceConnected = false;
+volatile bool gatewayAcknowledged = false;
+
+class GatewayAckCallbacks : public BLECharacteristicCallbacks {
+  void onWrite(
+    uint16_t connHandle,
+    BLECharacteristic *characteristic,
+    uint8_t *data,
+    uint16_t len
+  ) override {
+    (void)connHandle;
+    (void)characteristic;
+    gatewayAcknowledged = len == 3 && memcmp(data, "ACK", 3) == 0;
+  }
+};
 
 void connectCallback(uint16_t connHandle) {
   (void)connHandle;
@@ -56,9 +70,12 @@ void initializeBle() {
   dataCharacteristic.begin();
   dataCharacteristic.write((const uint8_t *)"READY", 5);
   xiaoService.begin();
-  xiaoCharacteristic.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
-  xiaoCharacteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+  xiaoCharacteristic.setProperties(
+    CHR_PROPS_READ | CHR_PROPS_NOTIFY | CHR_PROPS_WRITE
+  );
+  xiaoCharacteristic.setPermission(SECMODE_OPEN, SECMODE_OPEN);
   xiaoCharacteristic.setMaxLen(20);
+  xiaoCharacteristic.setWriteCallback(new GatewayAckCallbacks());
   xiaoCharacteristic.begin();
   const char initialPacket[] = "S:1,T:0.0,A:0,V:0.00";
   xiaoCharacteristic.write(
@@ -136,4 +153,17 @@ void updateGatewayAdvertisement(float temperatureF, float vibrationVoltage) {
 
 bool isBleClientConnected() {
   return deviceConnected;
+}
+
+bool waitForGatewayAcknowledgement() {
+  gatewayAcknowledged = false;
+  const unsigned long start = millis();
+  while (!gatewayAcknowledged &&
+         millis() - start < ACK_TIMEOUT_MS) {
+    delay(10);
+  }
+  if (!gatewayAcknowledged) {
+    Serial.println("Gateway acknowledgment timeout; retrying packet.");
+  }
+  return gatewayAcknowledged;
 }

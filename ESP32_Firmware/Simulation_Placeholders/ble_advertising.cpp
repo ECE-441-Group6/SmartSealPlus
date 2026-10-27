@@ -3,13 +3,26 @@
 #include <Arduino.h>
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
 #include <cstdio>
+#include <string>
 
 namespace
 {
 constexpr uint8_t manufacturerIdLowByte = 0x53;
 constexpr uint8_t manufacturerIdHighByte = 0x53;
 BLEAdvertising* advertising = nullptr;
+volatile bool gatewayAcknowledged = false;
+
+class GatewayAckCallbacks : public BLECharacteristicCallbacks
+{
+    void onWrite(BLECharacteristic* characteristic) override
+    {
+        std::string value = characteristic->getValue();
+        gatewayAcknowledged = value == "ACK";
+    }
+};
 }
 
 void initBLE()
@@ -17,6 +30,14 @@ void initBLE()
     BLEDevice::init(SMARTSEAL_DEVICE_NAME);
     advertising = BLEDevice::getAdvertising();
     advertising->setScanResponse(false);
+    BLEServer* server = BLEDevice::createServer();
+    BLEService* service = server->createService(
+        "12345678-1234-1234-1234-1234567890ab");
+    BLECharacteristic* acknowledgement = service->createCharacteristic(
+        "12345678-1234-1234-1234-1234567890ad",
+        BLECharacteristic::PROPERTY_WRITE);
+    acknowledgement->setCallbacks(new GatewayAckCallbacks());
+    service->start();
 
     Serial.println("BLE initialized");
 }
@@ -59,4 +80,20 @@ void updateBLEAdvertisement(SensorData data)
 
     Serial.print("Advertising: ");
     Serial.println(payload);
+}
+
+bool waitForGatewayAcknowledgement()
+{
+    gatewayAcknowledged = false;
+    const unsigned long start = millis();
+    while (!gatewayAcknowledged &&
+           millis() - start < SMARTSEAL_ACK_TIMEOUT_MS)
+    {
+        delay(10);
+    }
+    if (!gatewayAcknowledged)
+    {
+        Serial.println("Gateway acknowledgment timeout; retrying packet.");
+    }
+    return gatewayAcknowledged;
 }
