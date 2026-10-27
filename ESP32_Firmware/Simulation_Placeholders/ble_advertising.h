@@ -8,9 +8,12 @@
 #define SMARTSEAL_SEAL_ID 1
 #define SMARTSEAL_TRANSMIT_INTERVAL_MS 5000
 #define SMARTSEAL_ACK_TIMEOUT_MS 10000
+#define SMARTSEAL_MAX_CRITICAL_RETRIES 5
 
 void initBLE();
 void updateBLEAdvertisement(SensorData data);
+void repeatBLEAdvertisement(SensorData data);
 bool waitForGatewayAcknowledgement();
+bool isCriticalEvent(SensorData data);
 
 #endif

@@ -22,9 +22,16 @@ void loop()
     SensorData data = readSensors();
 
     updateBLEAdvertisement(data);
-    while (!waitForGatewayAcknowledgement())
+    if (isCriticalEvent(data))
     {
-        updateBLEAdvertisement(data);
+        for (int attempt = 0; attempt < SMARTSEAL_MAX_CRITICAL_RETRIES; ++attempt)
+        {
+            if (waitForGatewayAcknowledgement())
+            {
+                break;
+            }
+            repeatBLEAdvertisement(data);
+        }
     }
 
     processAlerts(data);

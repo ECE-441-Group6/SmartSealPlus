@@ -77,7 +77,7 @@ try {
             const row = document.createElement("tr");
 
             // Time and Seal ID
-            for (const value of [event[1], event[2]]) {
+            for (const value of [event[1], event[2], event[3]]) {
                 const cell = document.createElement("td");
                 cell.textContent = value ?? "";
                 row.appendChild(cell);
@@ -85,25 +85,25 @@ try {
 
             // Temperature indicator
             const tempCell = document.createElement("td");
-            tempCell.innerHTML = temperatureStatus(event[3]);
+            tempCell.innerHTML = temperatureStatus(event[4]);
             row.appendChild(tempCell);
 
             // Tamper indicator
             const tamperCell = document.createElement("td");
-            tamperCell.innerHTML = tamperStatus(event[4]);
+            tamperCell.innerHTML = tamperStatus(event[5]);
             row.appendChild(tamperCell);
 
             // Vibration indicator
             const vibrationCell = document.createElement("td");
-            vibrationCell.innerHTML = vibrationStatus(event[5]);
+            vibrationCell.innerHTML = vibrationStatus(event[6]);
             row.appendChild(vibrationCell);
 
             // Camera evidence link
             const imageCell = document.createElement("td");
 
-            if (event[6]) {
+            if (event[7]) {
                 const link = document.createElement("a");
-                link.href = `/images/${encodeURIComponent(event[6])}`;
+                link.href = `/images/${encodeURIComponent(event[7])}`;
                 link.target = "_blank";
                 link.rel = "noopener noreferrer";
                 link.textContent = "View";
@@ -114,7 +114,7 @@ try {
 
             // AI analysis: textContent prevents HTML injection.
             const analysisCell = document.createElement("td");
-            analysisCell.textContent = event[7] ?? "";
+            analysisCell.textContent = event[8] ?? "";
             row.appendChild(analysisCell);
 
             return row;

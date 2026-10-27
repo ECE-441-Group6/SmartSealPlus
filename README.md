@@ -32,12 +32,24 @@ python3 -m Gateway.XIAO.gateway_main
 characteristic. Both use the same alert, camera, AI, database, and dashboard
 processing as the combined `Gateway/gateway_main.py` entry point.
 
-Gateway packets use an application-level `ACK` over a BLE GATT write. The
-gateway acknowledges a valid packet immediately after reading and validating
-it. The ESP32 and XIAO keep advertising the same reading and do not sample or
-publish the next reading until that acknowledgment arrives; if it times out,
-the same reading is retried. This prevents a gateway scan or connection delay
-from silently dropping a reading.
+Gateway packets use an application-level identity-bound ACK over a BLE GATT
+write. Packets now include `E:<event_sequence>`, and an ACK has the form
+`ACK:S:<seal_id>,E:<event_sequence>`. The gateway validates and commits the
+event to SQLite before sending the ACK. Retransmitted packets are idempotent
+because `(seal_id, event_sequence)` is unique. Critical tamper and
+temperature-excursion events are repeated a bounded number of times by the
+firmware; ordinary readings are not held indefinitely waiting for an ACK.
+The firmware verifies both the seal ID and sequence number before clearing its
+outstanding event.
+
+This ACK path requires a BLE connection to the GATT write characteristic; an
+advertisement by itself cannot receive an ACK. The current gateway scanners
+connect only after receiving an advertisement, write the ACK, and disconnect.
+If the connection or write fails, the firmware retries critical events up to
+the configured limit. No HMAC authentication is currently implemented:
+sequence numbers provide deduplication and replay ordering, not sender
+authentication. Provision a per-device key and add a verified MAC before
+relying on this protocol against spoofing.
 
 ## System Architecture
 
@@ -141,9 +153,37 @@ Open `http://127.0.0.1:5000`. The gateway currently generates simulated ESP32 ad
 
 When `tamper` or `vibration` is true, the gateway captures a real JPEG with the Raspberry Pi camera, saves it in `Gateway/images/`, stores its filename with the event, and displays a `View` link in the dashboard. The gateway keeps one camera session open while it runs and closes it when the process exits.
 
+### Reliability tests
+
+Run the protocol and SQLite checks from the repository root:
+
+```text
+python -m unittest Gateway.Test.test_reliability -v
+python -m py_compile Gateway\packet_parser.py Gateway\ble_scanner.py Gateway\database.py Gateway\gateway_main.py
+```
+
+The tests cover normal and critical parsing, duplicate retransmissions, ACK
+seal/sequence matching, rollover ordering, and independent seals. Hardware
+advertising, GATT connection timing, and physical retry behavior still require
+an ESP32/XIAO and Raspberry Pi test.
+
+Before using hardware ACKs:
+
+1. Upload the updated firmware and confirm the serial log shows the new
+   `S:<seal>,E:<sequence>,...` packet.
+2. Ensure the Raspberry Pi has a working BLE adapter and that `bleak` can
+   connect to the advertised GATT service.
+3. Use the matching scanner entry point (`Gateway.ESP32.gateway_main` or
+   `Gateway.XIAO.gateway_main`); these now ACK only after SQLite insertion.
+4. Test with the gateway database writable. A database failure deliberately
+   suppresses the ACK, causing critical-event retries.
+5. Configure a device-specific authentication key and MAC scheme before
+   deploying in an adversarial environment; this repository does not yet
+   claim packet authentication.
+
 The ESP32 simulation sketch generates a random temperature between `1.00 C` and
 `10.00 C`, plus occasional simulated tamper and vibration events. It advertises
-packets such as `S:1,T:4.50,A:0,V:1` using manufacturer ID `0x5353`. On the
+packets such as `S:1,E:42,T:4.5,A:0,V:1` using manufacturer ID `0x5353`. On the
 Raspberry Pi, the gateway scans for `SmartSeal-01`, parses each packet, and
 processes it through the normal alert, camera, AI, database, and dashboard flow.
 The ESP32 publishes one reading every five seconds, matching the Pi's five-second

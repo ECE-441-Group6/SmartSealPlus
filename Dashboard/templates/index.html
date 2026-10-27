@@ -16,6 +16,7 @@
         <tr>
             <th>Time</th>
             <th>Seal ID</th>
+            <th>Event</th>
             <th>Temp</th>
             <th>Tamper</th>
             <th>Vibration</th>
@@ -30,31 +31,32 @@
         <tr>
             <td>{{ event[1] }}</td>
             <td>{{ event[2] }}</td>
+            <td>{{ event[3] }}</td>
 
             <!-- Temperature status -->
             <td>
-                {% if event[3] is none %}
+                {% if event[4] is none %}
                     <span class="sensor-status sensor-warning">
                         Unknown
                     </span>
-                {% elif event[3]|float < 2 %}
+                {% elif event[4]|float < 2 %}
                     <span class="sensor-status sensor-danger">
-                        {{ "%.1f"|format(event[3]|float) }}°C - LOW
+                        {{ "%.1f"|format(event[4]|float) }}°C - LOW
                     </span>
-                {% elif event[3]|float > 8 %}
+                {% elif event[4]|float > 8 %}
                     <span class="sensor-status sensor-danger">
-                        {{ "%.1f"|format(event[3]|float) }}°C - HIGH
+                        {{ "%.1f"|format(event[4]|float) }}°C - HIGH
                     </span>
                 {% else %}
                     <span class="sensor-status sensor-normal">
-                        {{ "%.1f"|format(event[3]|float) }}°C - NORMAL
+                        {{ "%.1f"|format(event[4]|float) }}°C - NORMAL
                     </span>
                 {% endif %}
             </td>
 
             <!-- Tamper status -->
             <td>
-                {% if event[4] %}
+                {% if event[5] %}
                     <span class="sensor-status sensor-danger">
                         DETECTED
                     </span>
@@ -67,7 +69,7 @@
 
             <!-- Vibration status -->
             <td>
-                {% if event[5] %}
+                {% if event[6] %}
                     <span class="sensor-status sensor-warning">
                         DETECTED
                     </span>
@@ -80,15 +82,15 @@
 
             <!-- Camera evidence -->
             <td>
-                {% if event[6] %}
-                    <a href="{{ url_for('images', filename=event[6]) }}"
+                {% if event[7] %}
+                    <a href="{{ url_for('images', filename=event[7]) }}"
                        target="_blank"
                        rel="noopener noreferrer">View</a>
                 {% endif %}
             </td>
 
             <!-- AI analysis -->
-            <td>{{ event[7] or '' }}</td>
+            <td>{{ event[8] or '' }}</td>
         </tr>
     {% endfor %}
     </tbody>

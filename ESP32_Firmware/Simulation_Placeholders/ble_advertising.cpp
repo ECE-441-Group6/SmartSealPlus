@@ -14,13 +14,23 @@ constexpr uint8_t manufacturerIdLowByte = 0x53;
 constexpr uint8_t manufacturerIdHighByte = 0x53;
 BLEAdvertising* advertising = nullptr;
 volatile bool gatewayAcknowledged = false;
+volatile uint32_t acknowledgedSequence = 0;
+uint32_t advertisedSequence = 0;
 
 class GatewayAckCallbacks : public BLECharacteristicCallbacks
 {
     void onWrite(BLECharacteristic* characteristic) override
     {
         std::string value = characteristic->getValue();
-        gatewayAcknowledged = value == "ACK";
+        unsigned int sealId = 0;
+        unsigned long sequence = 0;
+        if (std::sscanf(value.c_str(), "ACK:S:%u,E:%lu", &sealId, &sequence) == 2 &&
+            sealId == SMARTSEAL_SEAL_ID &&
+            sequence == advertisedSequence)
+        {
+            acknowledgedSequence = static_cast<uint32_t>(sequence);
+            gatewayAcknowledged = true;
+        }
     }
 };
 }
@@ -42,7 +52,7 @@ void initBLE()
     Serial.println("BLE initialized");
 }
 
-void updateBLEAdvertisement(SensorData data)
+void publishBLEAdvertisement(SensorData data, uint32_t sequence)
 {
     if (advertising == nullptr)
     {
@@ -54,8 +64,9 @@ void updateBLEAdvertisement(SensorData data)
     std::snprintf(
         payload,
         sizeof(payload),
-        "S:%d,T:%.2f,A:%d,V:%d",
+        "S:%d,E:%lu,T:%.1f,A:%d,V:%d",
         SMARTSEAL_SEAL_ID,
+        static_cast<unsigned long>(sequence),
         static_cast<double>(data.temperature),
         data.tamper ? 1 : 0,
         data.vibration ? 1 : 0);
@@ -82,6 +93,16 @@ void updateBLEAdvertisement(SensorData data)
     Serial.println(payload);
 }
 
+void updateBLEAdvertisement(SensorData data)
+{
+    publishBLEAdvertisement(data, ++advertisedSequence);
+}
+
+void repeatBLEAdvertisement(SensorData data)
+{
+    publishBLEAdvertisement(data, advertisedSequence);
+}
+
 bool waitForGatewayAcknowledgement()
 {
     gatewayAcknowledged = false;
@@ -91,9 +112,15 @@ bool waitForGatewayAcknowledgement()
     {
         delay(10);
     }
+
     if (!gatewayAcknowledged)
     {
         Serial.println("Gateway acknowledgment timeout; retrying packet.");
     }
     return gatewayAcknowledged;
+}
+
+bool isCriticalEvent(SensorData data)
+{
+    return data.tamper || data.temperature < 2.0f || data.temperature > 8.0f;
 }

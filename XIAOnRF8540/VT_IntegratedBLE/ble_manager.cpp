@@ -18,6 +18,8 @@ BLEService xiaoService(0x180F);
 BLECharacteristic xiaoCharacteristic(0x2A19);
 bool deviceConnected = false;
 volatile bool gatewayAcknowledged = false;
+volatile uint32_t acknowledgedSequence = 0;
+uint32_t advertisedSequence = 0;
 
 class GatewayAckCallbacks : public BLECharacteristicCallbacks {
   void onWrite(
@@ -28,7 +30,18 @@ class GatewayAckCallbacks : public BLECharacteristicCallbacks {
   ) override {
     (void)connHandle;
     (void)characteristic;
-    gatewayAcknowledged = len == 3 && memcmp(data, "ACK", 3) == 0;
+    unsigned int sealId = 0;
+    unsigned long sequence = 0;
+    char ack[24] = {};
+    if (len >= sizeof(ack)) {
+      return;
+    }
+    memcpy(ack, data, len);
+    if (sscanf(ack, "ACK:S:%u,E:%lu", &sealId, &sequence) == 2 &&
+        sealId == SEAL_ID && sequence == advertisedSequence) {
+      acknowledgedSequence = static_cast<uint32_t>(sequence);
+      gatewayAcknowledged = true;
+    }
   }
 };
 
@@ -66,7 +79,7 @@ void initializeBle() {
   recordingService.begin();
   dataCharacteristic.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
   dataCharacteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
-  dataCharacteristic.setMaxLen(20);
+  dataCharacteristic.setMaxLen(32);
   dataCharacteristic.begin();
   dataCharacteristic.write((const uint8_t *)"READY", 5);
   xiaoService.begin();
@@ -74,10 +87,10 @@ void initializeBle() {
     CHR_PROPS_READ | CHR_PROPS_NOTIFY | CHR_PROPS_WRITE
   );
   xiaoCharacteristic.setPermission(SECMODE_OPEN, SECMODE_OPEN);
-  xiaoCharacteristic.setMaxLen(20);
+  xiaoCharacteristic.setMaxLen(32);
   xiaoCharacteristic.setWriteCallback(new GatewayAckCallbacks());
   xiaoCharacteristic.begin();
-  const char initialPacket[] = "S:1,T:0.0,A:0,V:0.00";
+  const char initialPacket[] = "S:1,E:0,T:0.0,A:0,V:0";
   xiaoCharacteristic.write(
     (const uint8_t *)initialPacket,
     sizeof(initialPacket) - 1
@@ -112,8 +125,12 @@ void sendBleMessage(const char *message) {
   dataCharacteristic.notify((const uint8_t *)message, length);
 }
 
-void updateGatewayAdvertisement(float temperatureF, float vibrationVoltage) {
-  if (!isfinite(temperatureF)) {
+void publishGatewayAdvertisement(
+  float temperatureC,
+  float vibrationVoltage,
+  uint32_t sequence
+) {
+  if (!isfinite(temperatureC)) {
     return;
   }
 
@@ -121,9 +138,11 @@ void updateGatewayAdvertisement(float temperatureF, float vibrationVoltage) {
   const int packetLength = snprintf(
     packet,
     sizeof(packet),
-    "S:%d,T:%.1f,A:0,V:%.2f",
+    "S:%d,E:%lu,T:%.1f,A:%d,V:%.2f",
     SEAL_ID,
-    temperatureF,
+    static_cast<unsigned long>(sequence),
+    temperatureC,
+    temperatureC < 2.0f || temperatureC > 8.0f ? 1 : 0,
     vibrationVoltage
   );
   if (packetLength <= 0 || packetLength >= (int)sizeof(packet)) {
@@ -151,6 +170,14 @@ void updateGatewayAdvertisement(float temperatureF, float vibrationVoltage) {
   Serial.println(packet);
 }
 
+void updateGatewayAdvertisement(float temperatureC, float vibrationVoltage) {
+  publishGatewayAdvertisement(temperatureC, vibrationVoltage, ++advertisedSequence);
+}
+
+void repeatGatewayAdvertisement(float temperatureC, float vibrationVoltage) {
+  publishGatewayAdvertisement(temperatureC, vibrationVoltage, advertisedSequence);
+}
+
 bool isBleClientConnected() {
   return deviceConnected;
 }
@@ -165,5 +192,5 @@ bool waitForGatewayAcknowledgement() {
   if (!gatewayAcknowledged) {
     Serial.println("Gateway acknowledgment timeout; retrying packet.");
   }
-  return gatewayAcknowledged;
+  return gatewayAcknowledged && acknowledgedSequence == advertisedSequence;
 }

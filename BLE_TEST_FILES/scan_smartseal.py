@@ -10,7 +10,7 @@ from bleak import BleakScanner
 TARGET_NAME = "Xiao_Recorder"
 MANUFACTURER_ID = 0x5353
 PACKET_PATTERN = re.compile(
-    r"S:\d+,T:[-+]?\d+(?:\.\d+)?,A:[01],V:[-+]?\d+(?:\.\d+)?"
+    r"S:\d+,E:\d+,T:[-+]?\d+(?:\.\d+)?,A:[01],V:[-+]?\d+(?:\.\d+)?"
 )
 
 async def main():

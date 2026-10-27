@@ -10,6 +10,7 @@ def parse_packet(packet):
             raise ValueError("No packet received")
 
         seal_id = packet["seal_id"]
+        event_sequence = packet["event_sequence"]
         temperature = packet["temperature"]
         tamper = packet["tamper"]
         vibration = packet["vibration"]
@@ -21,6 +22,13 @@ def parse_packet(packet):
             or seal_id < 1
         ):
             raise ValueError("Invalid seal ID")
+
+        if (
+            not isinstance(event_sequence, int)
+            or isinstance(event_sequence, bool)
+            or not 0 <= event_sequence <= 0xFFFFFFFF
+        ):
+            raise ValueError("Invalid event sequence")
 
         # Validate the temperature.
         if (
@@ -44,6 +52,7 @@ def parse_packet(packet):
 
         return {
             "seal_id": seal_id,
+            "event_sequence": event_sequence,
             "temperature": temperature,
             "tamper": tamper,
             "vibration": vibration

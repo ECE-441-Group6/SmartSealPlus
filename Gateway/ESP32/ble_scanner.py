@@ -12,11 +12,11 @@ from Gateway.ble_scanner import (
     SCAN_TIMEOUT,
     parse_advertisement,
     simulated_packet,
+    write_ack,
 )
 
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 ACK_CHARACTERISTIC_UUID = "12345678-1234-1234-1234-1234567890ad"
-ACK_MESSAGE = b"ACK"
 
 
 async def scan_real_ble():
@@ -52,14 +52,10 @@ async def scan_real_ble():
 
     packet = packets[-1]
     device = packet_devices[id(packet)]
-    try:
-        async with BleakClient(device) as client:
-            await client.write_gatt_char(ACK_CHARACTERISTIC_UUID, ACK_MESSAGE)
-    except (BleakError, OSError, asyncio.TimeoutError) as error:
-        print(f"ESP32 BLE acknowledgment error: {error}")
-        return None
-
     print(f"ESP32 BLE packet received: {packet}")
+    packet["_acknowledge"] = lambda: asyncio.run(
+        write_ack(device, ACK_CHARACTERISTIC_UUID, packet)
+    )
     return packet
 
 

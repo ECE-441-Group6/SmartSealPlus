@@ -12,13 +12,13 @@ from Gateway.ble_scanner import (
     XIAO_DEVICE_NAME,
     parse_xiao_message,
     simulated_packet,
+    write_ack,
 )
 
 XIAO_SERVICE_UUIDS = {
     "0000180f-0000-1000-8000-00805f9b34fb",
     "180f",
 }
-ACK_MESSAGE = b"ACK"
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
 
@@ -65,9 +65,10 @@ async def scan_real_ble():
         if packet is None:
             print("XIAO BLE characteristic did not contain a sensor packet.")
             return None
-        async with BleakClient(xiao_device) as client:
-            await client.write_gatt_char(XIAO_CHARACTERISTIC_UUID, ACK_MESSAGE)
         print(f"XIAO BLE packet received: {packet}")
+        packet["_acknowledge"] = lambda: asyncio.run(
+            write_ack(xiao_device, XIAO_CHARACTERISTIC_UUID, packet)
+        )
         return packet
     except (BleakError, OSError, asyncio.TimeoutError) as error:
         print(f"XIAO BLE read error: {error}")

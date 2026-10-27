@@ -16,15 +16,15 @@ unsigned long lastTempSampleTime = 0;
 unsigned long lastVibrationSampleTime = 0;
 unsigned long lastSerialPrintTime = 0;
 unsigned long lastAdvertisementTime = 0;
-float latestTemperatureF = NAN;
+float latestTemperatureC = NAN;
 
-void printPlotterValues(float temperatureF, float vibrationVoltage) {
+void printPlotterValues(float temperatureC, float vibrationVoltage) {
   if (!SERIAL_PLOTTER_MODE) {
     return;
   }
   Serial.print("Temp_F:");
-  if (isfinite(temperatureF)) {
-    Serial.print(temperatureF, 2);
+  if (isfinite(temperatureC)) {
+    Serial.print(temperatureC, 2);
   } else {
     Serial.print("nan");
   }
@@ -79,7 +79,7 @@ void sampleTemperature(unsigned long now) {
   lastTempSampleTime = now;
   const TemperatureReading reading = readTemperature();
   if (reading.valid) {
-    latestTemperatureF = reading.fahrenheit;
+    latestTemperatureC = reading.celsius;
   }
 }
 
@@ -93,7 +93,7 @@ void sampleVibration(unsigned long now) {
   const float vibrationVoltage = readVibrationVoltage(vibrationADC);
   if (now - lastSerialPrintTime >= SERIAL_INTERVAL_MS) {
     lastSerialPrintTime = now;
-    printPlotterValues(latestTemperatureF, vibrationVoltage);
+    printPlotterValues(latestTemperatureC, vibrationVoltage);
   }
 
   char packet[21];
@@ -103,7 +103,7 @@ void sampleVibration(unsigned long now) {
     "D,%lu,%d,%.1f",
     now,
     vibrationADC,
-    latestTemperatureF
+    latestTemperatureC
   );
   if (packetLength > 0 && packetLength <= 20) {
     sendBleMessage(packet);
@@ -111,9 +111,15 @@ void sampleVibration(unsigned long now) {
 
   if (now - lastAdvertisementTime >= ADVERTISEMENT_INTERVAL_MS) {
     lastAdvertisementTime = now;
-    updateGatewayAdvertisement(latestTemperatureF, vibrationVoltage);
-    while (!waitForGatewayAcknowledgement()) {
-      updateGatewayAdvertisement(latestTemperatureF, vibrationVoltage);
+    repeatGatewayAdvertisement(latestTemperatureC, vibrationVoltage);
+    if (isfinite(latestTemperatureC) &&
+        (latestTemperatureC < 2.0f || latestTemperatureC > 8.0f)) {
+      for (uint8_t attempt = 0; attempt < MAX_CRITICAL_RETRIES; ++attempt) {
+        if (waitForGatewayAcknowledgement()) {
+          break;
+        }
+        updateGatewayAdvertisement(latestTemperatureC, vibrationVoltage);
+      }
     }
   }
 }
