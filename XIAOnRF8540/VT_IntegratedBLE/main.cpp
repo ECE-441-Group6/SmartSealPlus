@@ -22,7 +22,7 @@ void printPlotterValues(float temperatureC, float vibrationVoltage) {
   if (!SERIAL_PLOTTER_MODE) {
     return;
   }
-  Serial.print("Temp_F:");
+  Serial.print("Temp_C:");
   if (isfinite(temperatureC)) {
     Serial.print(temperatureC, 2);
   } else {
@@ -42,7 +42,7 @@ void startRecording() {
   lastVibrationSampleTime = now - VIBRATION_INTERVAL_MS;
   lastSerialPrintTime = now - SERIAL_INTERVAL_MS;
   lastAdvertisementTime = now - ADVERTISEMENT_INTERVAL_MS;
-  latestTemperatureF = NAN;
+  latestTemperatureC = NAN;
   Serial.println("Recording started.");
   sendBleMessage("START\n");
 }
