@@ -1,241 +1,164 @@
 # SmartSeal+
 
-SmartSeal+ is a low-cost active smart seal designed for medical cold-chain transportation. The system combines tamper detection, temperature monitoring, vibration sensing, and wireless communication to provide real-time shipment monitoring and alerts.
+SmartSeal+ monitors a shipment seal using a Seeed XIAO nRF52840 Sense. The
+XIAO samples temperature and vibration, broadcasts sensor readings over BLE,
+and a Python gateway records events for a local web dashboard.
 
-## Team Members
-
-* Zifeng Huang — Microcontroller firmware, BLE communication, sensor testing, event detection, dashboard development, camera integration
-* Jessica Perez — SmartSeal hardware design, POF tamper detection, sensor integration, Microncontroller firmware
-* Sadek Mezine — Raspberry Pi gateway, dashboard development, data storage, cloud integration
-
-## Project Overview
-
-The SmartSeal device uses an ESP32-C3 microcontroller to monitor:
-
-* POF-based tamper detection
-* Temperature using a DS18B20 sensor
-* Vibration and impact events
-
-Sensor information is transmitted to a Raspberry Pi gateway using Bluetooth Low Energy (BLE) advertising.
-
-The gateway receives sensor data, stores events, generates alerts, and displays status information through a monitoring dashboard.
-
-The gateway can also be run for one hardware target at a time:
+## Current system
 
 ```text
-python3 -m Gateway.ESP32.gateway_main
-python3 -m Gateway.XIAO.gateway_main
+XIAO nRF52840 Sense
+  └─ BLE manufacturer advertisements (company ID 0x5353)
+       └─ Python gateway + SQLite
+            ├─ temperature/vibration alerts
+            ├─ optional camera capture and image analysis
+            └─ Flask dashboard and CSV session archives
 ```
 
-`Gateway/ESP32/` scans only for ESP32 manufacturer advertisements, while
-`Gateway/XIAO/` scans for the XIAO GATT service and reads its sensor
-characteristic. Both use the same alert, camera, AI, database, and dashboard
-processing as the combined `Gateway/gateway_main.py` entry point.
+The XIAO-to-gateway sensor path uses BLE advertising only. The gateway does
+not connect to the XIAO, read GATT characteristics, or send acknowledgments.
+The dashboard communicates with the gateway's local SQLite database through
+Flask HTTP endpoints; it does not use BLE.
 
-Gateway packets use an application-level identity-bound ACK over a BLE GATT
-write. Packets now include `E:<event_sequence>`, and an ACK has the form
-`ACK:S:<seal_id>,E:<event_sequence>`. The gateway validates and commits the
-event to SQLite before sending the ACK. Retransmitted packets are idempotent
-because `(seal_id, event_sequence)` is unique. Critical tamper and
-temperature-excursion events are repeated a bounded number of times by the
-firmware; ordinary readings are not held indefinitely waiting for an ACK.
-The firmware verifies both the seal ID and sequence number before clearing its
-outstanding event.
+Tamper detection is not currently installed. The gateway normalizes every
+received event's tamper status to `false`. Temperature outside the 2–8 °C
+range raises an alert but does not by itself trigger a photo. Vibration events
+trigger a camera capture.
 
-This ACK path requires a BLE connection to the GATT write characteristic; an
-advertisement by itself cannot receive an ACK. The current gateway scanners
-connect only after receiving an advertisement, write the ACK, and disconnect.
-If the connection or write fails, the firmware retries critical events up to
-the configured limit. No HMAC authentication is currently implemented:
-sequence numbers provide deduplication and replay ordering, not sender
-authentication. Provision a per-device key and add a verified MAC before
-relying on this protocol against spoofing.
+## Requirements
 
-## System Architecture
+- Python 3.10 or later
+- A BLE adapter supported by Bleak
+- Seeed XIAO nRF52840 Sense and Arduino IDE for hardware firmware
+- Raspberry Pi camera for real photographs (optional; Pillow creates a
+  simulated image when camera hardware is unavailable)
 
-SmartSeal Device (ESP32-C3)
+Install gateway and dashboard dependencies from the repository root:
 
-* Temperature Sensor
-* POF Tamper Detection
-* Vibration Sensor
-* BLE Advertising
-
-↓
-
-Raspberry Pi Gateway
-
-* BLE Receiver
-* Event Processing
-* Database Storage
-* Dashboard
-* Camera/Image Storage
-
-↓
-
-User Dashboard
-
-* Temperature Monitoring
-* Tamper Alerts
-* Event History
-* Image Evidence
-
-## Repository Structure
-
-```text
-ESP32_Firmware/
-Gateway/
-Dashboard/
-Documentation/
+```bash
+python3 -m pip install -r requirements.txt
 ```
 
-## Current Features
+The requirements are Flask, Pillow, and Bleak.
 
-* Simulated sensor data
-* BLE packet framework
-* Alert processing
-* Event database
-* Dashboard event history
-* Raspberry Pi camera capture for tamper and vibration events
-* Captured image links in the dashboard
+## Upload the XIAO firmware
 
-## Planned Features
+1. Open `XIAOnRF8540/VT_IntegratedBLE/VT_IntegratedBLE.ino` in Arduino IDE.
+2. Select the Seeed XIAO nRF52840 Sense board and its serial port.
+3. Upload the sketch.
+4. Open Serial Monitor at 115200 baud.
+5. Press the record button on D4 to start sampling.
 
-* Real sensor integration
-* BLE communication between ESP32-C3 and Raspberry Pi
-* Temperature threshold alerts
-* Tamper detection alerts
-* Vibration event monitoring
-* Production BLE communication between ESP32-C3 and Raspberry Pi
-* Cloud image upload
+The current firmware configuration in `XIAOnRF8540/VT_IntegratedBLE/config.h`
+uses:
 
-## Technologies
+- Record button: D4
+- Temperature input: A0
+- Vibration input: A2
+- Temperature sampling: every 5 seconds
+- BLE sensor advertisement update: every 5 seconds while recording
+- Serial plotter output: every 5 seconds
 
-### Firmware
+The advertisement includes a binary sensor packet in manufacturer data:
 
-* C++
-* ESP32-C3
-* Arduino Framework / PlatformIO
+| Field | Encoding |
+|---|---|
+| Header and format version | `A5 01` |
+| Seal ID | 1 byte |
+| Event sequence | 4-byte little-endian unsigned integer |
+| Temperature | 2-byte little-endian signed integer, tenths of °C |
+| Tamper flag | 1 byte (gateway currently ignores it and records `false`) |
+| Vibration voltage | 2-byte little-endian unsigned integer, hundredths of volts |
 
-### Gateway
-
-* Python
-* SQLite
-
-### Dashboard
-
-* Flask
-* HTML
-* CSS
-* JavaScript
-
-## Project Status
-
-In Development
-
-Current focus:
-
-* Software architecture
-* Dashboard implementation
-* BLE communication design
-* Hardware procurement and integration
+The gateway accepts the packet using the manufacturer ID and packet format,
+not the advertised device name.
 
 ## Run the gateway and dashboard
 
-Install the Python dependencies, then open two terminals from the repository root:
+Run each program in a separate terminal from the repository root.
 
-```text
-python3 -m pip install -r requirements.txt
-python3 Gateway/gateway_main.py
+Terminal 1 — XIAO BLE gateway:
+
+```bash
+python3 Gateway/XIAO/gateway_main.py
+```
+
+Alternatively, run from the XIAO gateway directory:
+
+```bash
+cd Gateway/XIAO
+python3 gateway_main.py
+```
+
+Terminal 2 — dashboard:
+
+```bash
 python3 Dashboard/dashboard.py
 ```
 
-Open `http://127.0.0.1:5000`. The gateway currently generates simulated ESP32 advertisements every five seconds, stores readings in `Gateway/smartseal.db`, and the dashboard refreshes the readings automatically.
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000). The live dashboard polls
+the gateway every two seconds and displays a sync time and event count. Use
+the **Event history** selector to switch between the current session and
+previously archived sessions.
 
-When `tamper` or `vibration` is true, the gateway captures a real JPEG with the Raspberry Pi camera, saves it in `Gateway/images/`, stores its filename with the event, and displays a `View` link in the dashboard. The gateway keeps one camera session open while it runs and closes it when the process exits.
+Set `SMARTSEAL_SIMULATION=1` to exercise the gateway without BLE hardware:
 
-### Reliability tests
-
-Run the protocol and SQLite checks from the repository root:
-
-```text
-python -m unittest Gateway.Test.test_reliability -v
-python -m py_compile Gateway\packet_parser.py Gateway\ble_scanner.py Gateway\database.py Gateway\gateway_main.py
+```bash
+SMARTSEAL_SIMULATION=1 python3 Gateway/XIAO/gateway_main.py
 ```
 
-The tests cover normal and critical parsing, duplicate retransmissions, ACK
-seal/sequence matching, rollover ordering, and independent seals. Hardware
-advertising, GATT connection timing, and physical retry behavior still require
-an ESP32/XIAO and Raspberry Pi test.
+## Event processing and storage
 
-Before using hardware ACKs:
+The gateway:
 
-1. Upload the updated firmware and confirm the serial log shows the new
-   `S:<seal>,E:<sequence>,...` packet.
-2. Ensure the Raspberry Pi has a working BLE adapter and that `bleak` can
-   connect to the advertised GATT service.
-3. Use the matching scanner entry point (`Gateway.ESP32.gateway_main` or
-   `Gateway.XIAO.gateway_main`); these now ACK only after SQLite insertion.
-4. Test with the gateway database writable. A database failure deliberately
-   suppresses the ACK, causing critical-event retries.
-5. Configure a device-specific authentication key and MAC scheme before
-   deploying in an adversarial environment; this repository does not yet
-   claim packet authentication.
+1. Scans for BLE manufacturer advertisements and parses valid SmartSeal
+   packets.
+2. Validates packet fields and forces tamper status to `false`.
+3. Stores events in `Gateway/smartseal.db`.
+4. Raises low-temperature alerts below 2 °C and high-temperature alerts
+   above 8 °C.
+5. Captures an image for vibration events. Temperature alerts alone do not
+   take a picture.
+6. Stores image filenames and analysis with events when available.
 
-The ESP32 simulation sketch generates a random temperature between `1.00 C` and
-`10.00 C`, plus occasional simulated tamper and vibration events. It advertises
-packets such as `S:1,E:42,T:4.5,A:0,V:1` using manufacturer ID `0x5353`. On the
-Raspberry Pi, the gateway scans for `SmartSeal-01`, parses each packet, and
-processes it through the normal alert, camera, AI, database, and dashboard flow.
-The ESP32 publishes one reading every five seconds, matching the Pi's five-second
-BLE scan window. The Pi starts the next scan immediately after processing a valid
-reading.
+Rows are unique by `(seal_id, event_sequence)`, so receiving the same sequence
+again does not create another database row.
 
-The XIAO nRF52840 integrated recorder is organized as an Arduino sketch in
-`XIAOnRF8540/VT_IntegratedBLE/`. Open `VT_IntegratedBLE.ino` to upload it; the
-supporting `main.cpp`, sensor manager, BLE manager, and configuration files are
-compiled as part of the same sketch.
-The recorder keeps its existing recording characteristic and also exposes the
-XIAO test interface as `SmartSeal-XIAO` with service `0x180F` and characteristic
-`0x2A19`. The gateway reads the sensor packet from that characteristic when no
-ESP32 manufacturer advertisement is available, so ESP32 connectivity remains
-supported. XIAO packets use the `V` field for the measured vibration voltage
-(for example, `S:1,T:63.4,A:0,V:2.20`); ESP32 packets continue to use `V` as
-their vibration event flag.
-Start the gateway only after uploading
-`ESP32_Firmware/Simulation_Placeholders/Simulation_Placeholders.ino` to the
-ESP32. For development without the ESP32, run `SMARTSEAL_SIMULATION=1
-python3 Gateway/gateway_main.py`.
-
-On a non-Raspberry Pi development computer, or when `picamera2` is unavailable, Pillow creates a labeled simulated camera frame instead. Without `OPENAI_API_KEY`, the AI result uses the sensor evidence as a local fallback. Set `OPENAI_API_KEY` to enable vision analysis through the configured `OPENAI_VISION_MODEL` (default `gpt-4o-mini`).
-
-### Test the camera directly
-
-To verify the attached Raspberry Pi camera without waiting for a sensor event:
+Each gateway start clears the live event and seal-status tables so the
+dashboard starts with a fresh session. When stopped with Ctrl+C, the gateway
+exports that session's events to a timestamped CSV in `Gateway/archives/`.
+For example:
 
 ```text
-python3 TestFiles/gateway_camera.py
+Gateway/archives/gateway-events-20261027-154408-123456.csv
 ```
 
-Choose `1` to capture a test image or `2` to capture a tamper-event image. Images are written to `Gateway/images/`.
+Archives remain available after later gateway starts and can be selected in
+the dashboard. The CSV stores event values and image filenames; captured
+images are stored separately in `Gateway/images/`. A forced process kill or
+power loss may prevent the shutdown archive from being written.
 
-## Run ESP32 tests in Arduino IDE
+## Tests
 
-1. Install the Espressif ESP32 board package through Arduino IDE's Boards Manager.
-2. Connect the ESP32 and select the correct board and port. This project targets `ESP32C3 Dev Module`; select a different ESP32 board only when using different hardware.
-3. To build the simulation firmware, open `ESP32_Firmware/Simulation_Placeholders/Simulation_Placeholders.ino`. It uses simulated sensor readings (`4.5 C`, no tamper, no vibration), serial-only alerts, and broadcasts the gateway packet format.
-4. Open one test at a time from `TestFiles/`:
-	* `esp32_connection_test.cpp` checks serial output.
-	* `esp32_ble_test.cpp` advertises the device name `SmartSeal-01` and manufacturer data.
-5. For the most reliable Arduino IDE workflow, place each `.cpp` test file in its own sketch folder with a matching `.ino` file, or open a copy renamed to `.ino`.
-6. Upload the sketch and open Serial Monitor at `115200` baud.
+From the repository root:
 
-The BLE test uses advertising, not a GATT service. To inspect it from a computer or Raspberry Pi, install the scanner dependency and run:
+```bash
+python3 -m unittest Gateway.Test.test_reliability -v
+python3 -m py_compile Gateway/packet_parser.py Gateway/ble_scanner.py \
+  Gateway/database.py Gateway/gateway_main.py Dashboard/dashboard.py
+```
+
+The tests cover packet parsing, tamper normalization, duplicate storage,
+event-history clearing, CSV export, and archiving on gateway shutdown.
+
+## Main project paths
 
 ```text
-python3 -m pip install bleak
-python3 TestFiles/verify_smartseal_ble.py
+XIAOnRF8540/VT_IntegratedBLE/   XIAO Arduino sketch and firmware modules
+Gateway/XIAO/                   XIAO BLE advertisement scanner and launcher
+Gateway/                         Shared packet handling, alerts, storage, camera
+Gateway/archives/                Timestamped CSV archives after gateway shutdown
+Gateway/images/                  Captured or simulated camera images
+Dashboard/                       Flask app, templates, and browser assets
+requirements.txt                 Python dependencies
 ```
-
-`verify_smartseal_ble.py` listens for manufacturer data with company ID `0x5353` in three-second scan cycles, decodes the sensor payload as UTF-8, and prints it in the format `[SmartSeal-01] message`. The packet is identified by its company ID and format even when the BLE name is omitted to stay within the legacy advertisement size limit. Repeated messages are suppressed, so output appears only when a new BLE message is received. Press `Ctrl+C` to stop the monitor.
-
-The GPS scripts require a Raspberry Pi or another host with a connected GPS serial device. Install `pyserial` for `gps_test.py`, and install both `pyserial` and `pynmea2` for `gps_readable.py`. Update the serial port in the script if the GPS is not connected at `/dev/ttyAMA0`.
