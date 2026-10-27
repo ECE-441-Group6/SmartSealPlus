@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from Gateway import database
-from Gateway.ble_scanner import ack_matches, ack_message, parse_advertisement
+from Gateway.ble_scanner import parse_advertisement
 from Gateway.packet_parser import parse_packet
 
 
@@ -38,12 +38,6 @@ class ReliabilityTests(unittest.TestCase):
         self.assertFalse(database.insert_event(first))
         self.assertTrue(database.insert_event(other_seal))
         self.assertEqual(len(database.get_latest_events()), 2)
-
-    def test_ack_requires_matching_seal_and_sequence(self):
-        packet = self.packet(sequence=10)
-        self.assertTrue(ack_matches(packet, ack_message(packet)))
-        self.assertFalse(ack_matches(packet, b"ACK:S:1,E:11"))
-        self.assertFalse(ack_matches(packet, b"ACK:S:2,E:10"))
 
     def test_stale_sequence_is_rejected_with_wraparound_ordering(self):
         current = self.packet(sequence=0)

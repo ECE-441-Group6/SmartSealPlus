@@ -57,17 +57,6 @@ def run_gateway(interval=5, scanner=scan_ble):
                         f"Stale event rejected: seal={packet['seal_id']} "
                         f"seq={packet['event_sequence']}"
                     )
-                    acknowledge = raw_packet.get("_acknowledge")
-                    if acknowledge is not None:
-                        try:
-                            acknowledge()
-                            print(
-                                f"ACK transmitted for stale event: "
-                                f"seal={packet['seal_id']} "
-                                f"seq={packet['event_sequence']}"
-                            )
-                        except Exception as error:
-                            print(f"Stale event ACK failed: {error}")
                     continue
                 record_seen(packet)
                 now = time.monotonic()
@@ -85,17 +74,6 @@ def run_gateway(interval=5, scanner=scan_ble):
                     f"Event {status}: seal={packet['seal_id']} "
                     f"seq={packet['event_sequence']}"
                 )
-                acknowledge = raw_packet.get("_acknowledge")
-                if acknowledge is not None:
-                    try:
-                        acknowledge()
-                        print(
-                            f"ACK transmitted: seal={packet['seal_id']} "
-                            f"seq={packet['event_sequence']}"
-                        )
-                    except Exception as error:
-                        print(f"ACK failed: {error}")
-
                 alerts = process_alerts(packet)
                 temperature_out_of_range = (
                     packet["temperature"] < TEMP_LOW

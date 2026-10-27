@@ -111,16 +111,7 @@ void sampleVibration(unsigned long now) {
 
   if (now - lastAdvertisementTime >= ADVERTISEMENT_INTERVAL_MS) {
     lastAdvertisementTime = now;
-    repeatGatewayAdvertisement(latestTemperatureC, vibrationVoltage);
-    if (isfinite(latestTemperatureC) &&
-        (latestTemperatureC < 2.0f || latestTemperatureC > 8.0f)) {
-      for (uint8_t attempt = 0; attempt < MAX_CRITICAL_RETRIES; ++attempt) {
-        if (waitForGatewayAcknowledgement()) {
-          break;
-        }
-        updateGatewayAdvertisement(latestTemperatureC, vibrationVoltage);
-      }
-    }
+    updateGatewayAdvertisement(latestTemperatureC, vibrationVoltage);
   }
 }
 }

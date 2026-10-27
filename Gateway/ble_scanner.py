@@ -1,30 +1,16 @@
 """Receive SmartSeal sensor packets over BLE advertisements."""
 
-import asyncio
 import os
 import random
 import re
 
-from bleak import BleakClient, BleakScanner
+import asyncio
+from bleak import BleakScanner
 from bleak.exc import BleakError
 
 MANUFACTURER_ID = 0x5353
 ESP_DEVICE_NAMES = {"SmartSeal-01"}
 XIAO_DEVICE_NAME = "SmartSeal-XIAO"
-XIAO_CHARACTERISTIC_UUID = "12345678-1234-1234-1234-1234567890ae"
-ESP32_ACK_CHARACTERISTIC_UUID = "12345678-1234-1234-1234-1234567890ad"
-
-
-def ack_message(packet):
-    return f"ACK:S:{packet['seal_id']},E:{packet['event_sequence']}".encode("ascii")
-
-
-def ack_matches(packet, acknowledgement):
-    if isinstance(acknowledgement, (bytes, bytearray)):
-        acknowledgement = acknowledgement.decode("ascii", errors="ignore")
-    return acknowledgement == ack_message(packet).decode("ascii")
-
-
 SCAN_TIMEOUT = 5.0
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
@@ -71,13 +57,6 @@ def parse_advertisement(payload):
     }
 
 
-def parse_xiao_message(payload):
-    """Parse the sensor packet exposed by the XIAO GATT characteristic."""
-    if isinstance(payload, (bytes, bytearray)):
-        payload = payload.decode("ascii", errors="ignore")
-    return parse_advertisement(payload)
-
-
 def simulated_packet():
     """Generate a packet when a BLE adapter or ESP32 is not available."""
     simulated_packet.sequence = (getattr(simulated_packet, "sequence", 0) + 1) & 0xFFFFFFFF
@@ -93,7 +72,6 @@ def simulated_packet():
 async def scan_real_ble():
     """Scan ESP advertisements and read a packet from the XIAO GATT service."""
     packets = []
-    packet_devices = []
     xiao_device = None
 
     def detection_callback(device, advertisement):
@@ -120,7 +98,6 @@ async def scan_real_ble():
         packet = parse_advertisement(payload)
         if packet is not None:
             packets.append(packet)
-            packet_devices.append(device)
         else:
             print(
                 "Ignoring invalid manufacturer payload from "
@@ -143,28 +120,9 @@ async def scan_real_ble():
         except (BleakError, OSError, asyncio.TimeoutError) as error:
             print(f"XIAO BLE discovery error: {error}")
 
-    if xiao_device is not None:
-        try:
-            async with BleakClient(xiao_device) as client:
-                payload = await client.read_gatt_char(XIAO_CHARACTERISTIC_UUID)
-            packet = parse_xiao_message(payload)
-            if packet is not None:
-                print(f"XIAO BLE packet received: {packet}")
-                packet["_acknowledge"] = lambda: asyncio.run(
-                    write_ack(xiao_device, XIAO_CHARACTERISTIC_UUID, packet)
-                )
-                return packet
-            print("XIAO BLE characteristic did not contain a sensor packet.")
-        except (BleakError, OSError, asyncio.TimeoutError) as error:
-            print(f"XIAO BLE read error: {error}")
-
     if packets:
         packet = packets[-1]
         print(f"BLE packet received: {packet}")
-        device = packet_devices[-1]
-        packet["_acknowledge"] = lambda: asyncio.run(
-            write_ack(device, ESP32_ACK_CHARACTERISTIC_UUID, packet)
-        )
         return packet
 
     print(
@@ -176,26 +134,6 @@ async def scan_real_ble():
         "is uploaded; press D4 to start live sensor updates."
     )
     return None
-
-
-async def write_ack(device, characteristic_uuid, packet):
-    """Write an identity-bound ACK after the gateway commits the event."""
-    acknowledgement = ack_message(packet)
-    last_error = None
-    for attempt in range(2):
-        try:
-            async with BleakClient(device) as client:
-                await client.write_gatt_char(
-                    characteristic_uuid,
-                    acknowledgement,
-                    response=True,
-                )
-            return
-        except (BleakError, OSError, asyncio.TimeoutError) as error:
-            last_error = error
-            if attempt == 0:
-                await asyncio.sleep(0.2)
-    raise last_error
 
 
 def scan_ble():
