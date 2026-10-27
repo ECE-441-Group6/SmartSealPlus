@@ -4,9 +4,9 @@ SmartSeal+ is a low-cost active smart seal designed for medical cold-chain trans
 
 ## Team Members
 
-* Zifeng Huang — ESP32-C3 firmware, BLE communication, sensor integration, event detection
-* Jessica Perez — SmartSeal hardware design, POF tamper detection, sensor integration
-* Sadek Mezine — Raspberry Pi gateway, dashboard development, data storage, cloud and camera integration
+* Zifeng Huang — Microcontroller firmware, BLE communication, sensor testing, event detection, dashboard development, camera integration
+* Jessica Perez — SmartSeal hardware design, POF tamper detection, sensor integration, Microncontroller firmware
+* Sadek Mezine — Raspberry Pi gateway, dashboard development, data storage, cloud integration
 
 ## Project Overview
 
