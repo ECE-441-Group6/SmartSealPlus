@@ -1,16 +1,33 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
 
-smartseal.db
+# Local databases and SQLite sidecar files
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
 
+# Editors and local environment
 .vscode/
-
 .env
+.env.*
 
+# Generated media and test output
 images/
 camera_test/
-
 *.jpg
 *.png
-
 events/
+
+# Arduino / PlatformIO build output
+.pio/
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
