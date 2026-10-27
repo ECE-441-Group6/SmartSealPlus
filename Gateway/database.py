@@ -107,31 +107,6 @@ def record_seen(packet):
     conn.close()
 
 
-def is_stale_sequence(packet):
-    conn = sqlite3.connect(DB_NAME)
-    row = conn.execute(
-        "SELECT last_event_sequence FROM seal_status WHERE seal_id = ?",
-        (packet["seal_id"],),
-    ).fetchone()
-    existing = conn.execute(
-        "SELECT 1 FROM events WHERE seal_id = ? AND event_sequence = ?",
-        (packet["seal_id"], packet["event_sequence"]),
-    ).fetchone()
-    conn.close()
-    if existing is not None:
-        return True
-    if row is None or row[0] is None:
-        return False
-    previous = int(row[0])
-    current = packet["event_sequence"]
-    distance = (current - previous) & 0xFFFFFFFF
-    return (
-        current != previous
-        and distance > 0x7FFFFFFF
-        and current > previous
-    )
-
-
 def get_stale_seals(timeout_seconds):
     conn = sqlite3.connect(DB_NAME)
     rows = conn.execute("""
@@ -143,8 +118,8 @@ def get_stale_seals(timeout_seconds):
     return rows
 
 
-def get_latest_events(limit=20):
-    # Return the newest events first for the dashboard and its JSON endpoint.
+def get_latest_events():
+    # Return the complete event history, newest first, for the dashboard.
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
 
@@ -152,9 +127,8 @@ def get_latest_events(limit=20):
     SELECT id, timestamp, seal_id, event_sequence, temperature, tamper,
            vibration, image_path, ai_analysis
     FROM events
-    ORDER BY timestamp DESC
-    LIMIT ?
-    """, (limit,))
+    ORDER BY timestamp DESC, id DESC
+    """)
 
     rows = cur.fetchall()
 

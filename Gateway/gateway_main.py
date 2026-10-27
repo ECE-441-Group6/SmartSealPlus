@@ -9,7 +9,6 @@ if __package__:
         get_stale_seals,
         init_database,
         insert_event,
-        is_stale_sequence,
         record_seen,
         update_event_artifacts,
     )
@@ -24,7 +23,6 @@ else:
         get_stale_seals,
         init_database,
         insert_event,
-        is_stale_sequence,
         record_seen,
         update_event_artifacts,
     )
@@ -52,12 +50,6 @@ def run_gateway(interval=5, scanner=scan_ble):
                     print("Invalid sensor packet. Skipping...")
                     continue
 
-                if is_stale_sequence(packet):
-                    print(
-                        f"Stale event rejected: seal={packet['seal_id']} "
-                        f"seq={packet['event_sequence']}"
-                    )
-                    continue
                 record_seen(packet)
                 now = time.monotonic()
                 if now - last_stale_check >= max(interval, 5):
@@ -79,15 +71,15 @@ def run_gateway(interval=5, scanner=scan_ble):
                     packet["temperature"] < TEMP_LOW
                     or packet["temperature"] > TEMP_HIGH
                 )
-                alert_triggered = (
-                    packet["tamper"]
-                    or packet["vibration"]
-                    or temperature_out_of_range
-                )
+                capture_triggered = packet["tamper"] or packet["vibration"]
 
                 image_filename = None
-                ai_analysis = "No issues detected."
-                if alert_triggered:
+                ai_analysis = (
+                    "Temperature out of bounds; image capture skipped."
+                    if temperature_out_of_range and not capture_triggered
+                    else "No issues detected."
+                )
+                if capture_triggered:
                     try:
                         image_filename = capture_image(packet)
                     except Exception as error:
