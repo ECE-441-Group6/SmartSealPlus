@@ -39,6 +39,19 @@ def parse_advertisement(payload):
         # that expose the raw manufacturer field.
         if payload.startswith(b"\x53\x53"):
             payload = payload[2:]
+        if len(payload) == 12 and payload[0] == 0xA5 and payload[1] == 1:
+            sequence = int.from_bytes(payload[3:7], "little")
+            temperature = int.from_bytes(
+                payload[7:9], "little", signed=True
+            ) / 10.0
+            vibration = int.from_bytes(payload[10:12], "little") / 100.0
+            return {
+                "seal_id": payload[2],
+                "event_sequence": sequence,
+                "temperature": temperature,
+                "tamper": bool(payload[9]),
+                "vibration": vibration,
+            }
         payload = payload.decode("ascii", errors="ignore")
 
     match = re.fullmatch(

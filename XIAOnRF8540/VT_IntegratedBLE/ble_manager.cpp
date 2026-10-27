@@ -56,8 +56,8 @@ void disconnectCallback(uint16_t connHandle, uint8_t reason) {
   Serial.println("BLE client disconnected; XIAO advertising will restart.");
 }
 
-void addGatewayManufacturerData(const char *packet, int packetLength) {
-  uint8_t manufacturerData[32];
+void addGatewayManufacturerData(const uint8_t *packet, int packetLength) {
+  uint8_t manufacturerData[29];
   manufacturerData[0] = (uint8_t)(GATEWAY_MANUFACTURER_ID & 0xFF);
   manufacturerData[1] = (uint8_t)(GATEWAY_MANUFACTURER_ID >> 8);
   memcpy(manufacturerData + 2, packet, packetLength);
@@ -88,10 +88,12 @@ void initializeBle() {
   xiaoCharacteristic.setMaxLen(32);
   xiaoCharacteristic.setWriteCallback(gatewayAckCallback);
   xiaoCharacteristic.begin();
-  const char initialPacket[] = "S:1,E:0,T:0.0,A:0,V:0";
+  const uint8_t initialPacket[] = {
+    0xA5, 1, SEAL_ID, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  };
   xiaoCharacteristic.write(
-    (const uint8_t *)initialPacket,
-    sizeof(initialPacket) - 1
+    initialPacket,
+    sizeof(initialPacket)
   );
 
   Bluefruit.Advertising.addFlags(
@@ -99,7 +101,7 @@ void initializeBle() {
   );
   Bluefruit.Advertising.addTxPower();
   Bluefruit.Advertising.addService(xiaoService);
-  addGatewayManufacturerData(initialPacket, sizeof(initialPacket) - 1);
+  addGatewayManufacturerData(initialPacket, sizeof(initialPacket));
   Bluefruit.ScanResponse.addName();
   Bluefruit.Advertising.restartOnDisconnect(true);
   Bluefruit.Advertising.setInterval(32, 244);
@@ -132,25 +134,38 @@ void publishGatewayAdvertisement(
     return;
   }
 
-  char packet[24];
-  const int packetLength = snprintf(
-    packet,
-    sizeof(packet),
-    "S:%d,E:%lu,T:%.1f,A:%d,V:%.2f",
-    SEAL_ID,
-    static_cast<unsigned long>(sequence),
-    temperatureC,
-    temperatureC < 2.0f || temperatureC > 8.0f ? 1 : 0,
-    vibrationVoltage
-  );
-  if (packetLength <= 0 || packetLength >= (int)sizeof(packet)) {
-    Serial.println("WARNING: Gateway BLE packet is too long.");
+  if (temperatureC < -3276.8f || temperatureC > 3276.7f ||
+      vibrationVoltage < 0.0f || vibrationVoltage > 655.35f) {
+    Serial.println("WARNING: Sensor value is outside BLE packet range.");
     return;
   }
 
-  xiaoCharacteristic.write((const uint8_t *)packet, packetLength);
+  const int16_t temperatureTenths = static_cast<int16_t>(
+    lroundf(temperatureC * 10.0f)
+  );
+  const uint16_t vibrationHundredths = static_cast<uint16_t>(
+    lroundf(vibrationVoltage * 100.0f)
+  );
+  const uint8_t packet[12] = {
+    0xA5,
+    1,
+    static_cast<uint8_t>(SEAL_ID),
+    static_cast<uint8_t>(sequence & 0xFF),
+    static_cast<uint8_t>((sequence >> 8) & 0xFF),
+    static_cast<uint8_t>((sequence >> 16) & 0xFF),
+    static_cast<uint8_t>((sequence >> 24) & 0xFF),
+    static_cast<uint8_t>(temperatureTenths & 0xFF),
+    static_cast<uint8_t>((temperatureTenths >> 8) & 0xFF),
+    static_cast<uint8_t>(
+      temperatureC < 2.0f || temperatureC > 8.0f ? 1 : 0
+    ),
+    static_cast<uint8_t>(vibrationHundredths & 0xFF),
+    static_cast<uint8_t>((vibrationHundredths >> 8) & 0xFF)
+  };
+
+  xiaoCharacteristic.write(packet, sizeof(packet));
   if (deviceConnected) {
-    xiaoCharacteristic.notify((const uint8_t *)packet, packetLength);
+    xiaoCharacteristic.notify(packet, sizeof(packet));
   }
 
   Bluefruit.Advertising.stop();
@@ -160,12 +175,21 @@ void publishGatewayAdvertisement(
   );
   Bluefruit.Advertising.addTxPower();
   Bluefruit.Advertising.addService(xiaoService);
-  addGatewayManufacturerData(packet, packetLength);
+  addGatewayManufacturerData(packet, sizeof(packet));
   Bluefruit.ScanResponse.clearData();
   Bluefruit.ScanResponse.addName();
   Bluefruit.Advertising.start(0);
   Serial.print("XIAO advertisement updated: ");
-  Serial.println(packet);
+  Serial.print("S:");
+  Serial.print(SEAL_ID);
+  Serial.print(",E:");
+  Serial.print(sequence);
+  Serial.print(",T:");
+  Serial.print(temperatureC, 1);
+  Serial.print(",A:");
+  Serial.print(temperatureC < 2.0f || temperatureC > 8.0f ? 1 : 0);
+  Serial.print(",V:");
+  Serial.println(vibrationVoltage, 2);
 }
 
 void updateGatewayAdvertisement(float temperatureC, float vibrationVoltage) {
