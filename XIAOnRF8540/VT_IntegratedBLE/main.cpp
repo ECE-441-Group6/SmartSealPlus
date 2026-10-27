@@ -13,10 +13,37 @@ int lastButtonReading = HIGH;
 int stableButtonState = HIGH;
 unsigned long lastDebounceTime = 0;
 unsigned long lastTempSampleTime = 0;
-unsigned long lastVibrationSampleTime = 0;
 unsigned long lastSerialPrintTime = 0;
 unsigned long lastAdvertisementTime = 0;
+uint32_t nextVibrationSampleMicros = 0;
 float latestTemperatureC = NAN;
+bool vibrationCalibrating = false;
+bool vibrationEventPending = false;
+uint16_t vibrationCalibrationCount = 0;
+double vibrationCalibrationMean = 0.0;
+double vibrationCalibrationM2 = 0.0;
+float vibrationBaseline = 0.0f;
+float vibrationNoiseStdDev = 0.0f;
+unsigned long vibrationWindowStartTime = 0;
+unsigned long vibrationLastAboveTime = 0;
+uint8_t vibrationThresholdCount = 0;
+bool vibrationEventActive = false;
+
+void startVibrationCalibration() {
+  vibrationCalibrating = true;
+  vibrationEventPending = false;
+  vibrationCalibrationCount = 0;
+  vibrationCalibrationMean = 0.0;
+  vibrationCalibrationM2 = 0.0;
+  vibrationBaseline = 0.0f;
+  vibrationNoiseStdDev = 0.0f;
+  vibrationWindowStartTime = millis();
+  vibrationLastAboveTime = vibrationWindowStartTime;
+  vibrationThresholdCount = 0;
+  vibrationEventActive = false;
+  nextVibrationSampleMicros = micros();
+  Serial.println("Vibration baseline calibration started; keep the seal still.");
+}
 
 void printPlotterValues(float temperatureC, float vibrationVoltage) {
   if (!SERIAL_PLOTTER_MODE) {
@@ -39,10 +66,10 @@ void startRecording() {
   recording = true;
   const unsigned long now = millis();
   lastTempSampleTime = now - TEMP_INTERVAL_MS;
-  lastVibrationSampleTime = now - VIBRATION_INTERVAL_MS;
   lastSerialPrintTime = now - SERIAL_INTERVAL_MS;
   lastAdvertisementTime = now - ADVERTISEMENT_INTERVAL_MS;
   latestTemperatureC = NAN;
+  startVibrationCalibration();
   Serial.println("Recording started.");
   sendBleMessage("START\n");
 }
@@ -83,35 +110,93 @@ void sampleTemperature(unsigned long now) {
   }
 }
 
-void sampleVibration(unsigned long now) {
-  if (now - lastVibrationSampleTime < VIBRATION_INTERVAL_MS) {
+void sampleVibration() {
+  const uint32_t nowMicros = micros();
+  if (static_cast<int32_t>(nowMicros - nextVibrationSampleMicros) < 0) {
     return;
   }
-  lastVibrationSampleTime = now;
+  nextVibrationSampleMicros =
+    nowMicros + VIBRATION_SAMPLE_INTERVAL_US;
 
-  int vibrationADC = 0;
-  const float vibrationVoltage = readVibrationVoltage(vibrationADC);
-  if (now - lastSerialPrintTime >= SERIAL_INTERVAL_MS) {
-    lastSerialPrintTime = now;
-    printPlotterValues(latestTemperatureC, vibrationVoltage);
+  const int vibrationADC = analogRead(VIBRATION_PIN);
+  const unsigned long now = millis();
+  if (vibrationCalibrating) {
+    ++vibrationCalibrationCount;
+    const double delta = vibrationADC - vibrationCalibrationMean;
+    vibrationCalibrationMean +=
+      delta / vibrationCalibrationCount;
+    const double deltaAfterMean =
+      vibrationADC - vibrationCalibrationMean;
+    vibrationCalibrationM2 += delta * deltaAfterMean;
+    if (vibrationCalibrationCount >= VIBRATION_CALIBRATION_SAMPLES) {
+      vibrationCalibrating = false;
+      vibrationBaseline = static_cast<float>(vibrationCalibrationMean);
+      vibrationNoiseStdDev = static_cast<float>(
+        sqrt(vibrationCalibrationM2 / vibrationCalibrationCount)
+      );
+      vibrationWindowStartTime = now;
+      vibrationLastAboveTime = now;
+      vibrationThresholdCount = 0;
+      Serial.print("Vibration calibration complete. Baseline ADC: ");
+      Serial.print(vibrationBaseline, 1);
+      Serial.print(", noise standard deviation ADC: ");
+      Serial.println(vibrationNoiseStdDev, 1);
+    }
+    return;
   }
 
-  char packet[21];
-  const int packetLength = snprintf(
-    packet,
-    sizeof(packet),
-    "D,%lu,%d,%.1f",
-    now,
-    vibrationADC,
-    latestTemperatureC
+  if (now - vibrationWindowStartTime >=
+      VIBRATION_CONFIRMATION_WINDOW_MS) {
+    vibrationWindowStartTime = now;
+    vibrationThresholdCount = 0;
+  }
+
+  const float deviation =
+    fabsf(static_cast<float>(vibrationADC) - vibrationBaseline);
+  const float vibrationThreshold = fmaxf(
+    static_cast<float>(VIBRATION_THRESHOLD_COUNTS),
+    vibrationNoiseStdDev * VIBRATION_NOISE_MULTIPLIER
   );
-  if (packetLength > 0 && packetLength <= 20) {
-    sendBleMessage(packet);
+  const bool aboveThreshold = deviation >= vibrationThreshold;
+  if (aboveThreshold) {
+    vibrationLastAboveTime = now;
+  } else if (vibrationEventActive &&
+             now - vibrationLastAboveTime >=
+               VIBRATION_REARM_QUIET_MS) {
+    vibrationEventActive = false;
+  }
+
+  if (aboveThreshold &&
+      vibrationThresholdCount < VIBRATION_CONFIRMATION_SAMPLES) {
+    ++vibrationThresholdCount;
+    if (vibrationThresholdCount >= VIBRATION_CONFIRMATION_SAMPLES &&
+        !vibrationEventActive) {
+      vibrationEventActive = true;
+      vibrationEventPending = true;
+      Serial.print("Vibration event detected. ADC: ");
+      Serial.print(vibrationADC);
+      Serial.print(", baseline: ");
+      Serial.print(vibrationBaseline, 1);
+      Serial.print(", deviation: ");
+      Serial.println(deviation, 1);
+    }
+  }
+
+  if (now - lastSerialPrintTime >= SERIAL_INTERVAL_MS) {
+    lastSerialPrintTime = now;
+    printPlotterValues(
+      latestTemperatureC,
+      static_cast<float>(vibrationADC) * ADC_REFERENCE_VOLTAGE / ADC_MAX
+    );
   }
 
   if (now - lastAdvertisementTime >= ADVERTISEMENT_INTERVAL_MS) {
     lastAdvertisementTime = now;
-    updateGatewayAdvertisement(latestTemperatureC, vibrationVoltage);
+    if (updateGatewayAdvertisement(
+          latestTemperatureC, vibrationEventPending
+        )) {
+      vibrationEventPending = false;
+    }
   }
 }
 }
@@ -122,7 +207,6 @@ void setup() {
   while (!Serial && millis() - serialStart < 5000) {
     delay(10);
   }
-  delay(250);
   Serial.println();
   Serial.println("Starting VT_IntegratedBLE...");
   pinMode(RECORD_BUTTON_PIN, INPUT_PULLUP);
@@ -138,16 +222,14 @@ void setup() {
 void loop() {
   const unsigned long now = millis();
   updateButton(now);
-  if (!recording) {
+  if (recording) {
+    sampleVibration();
+  } else {
     static unsigned long lastIdleMessage = 0;
     if (now - lastIdleMessage >= 5000) {
       lastIdleMessage = now;
       Serial.println("Idle: waiting for record button.");
     }
-    delay(1);
-    return;
   }
   sampleTemperature(millis());
-  sampleVibration(millis());
-  delay(1);
 }

@@ -85,27 +85,24 @@ void sendBleMessage(const char *message) {
   dataCharacteristic.notify((const uint8_t *)message, length);
 }
 
-void publishGatewayAdvertisement(
+bool publishGatewayAdvertisement(
   float temperatureC,
-  float vibrationVoltage,
+  bool vibrationDetected,
   uint32_t sequence
 ) {
   if (!isfinite(temperatureC)) {
-    return;
+    return false;
   }
 
-  if (temperatureC < -3276.8f || temperatureC > 3276.7f ||
-      vibrationVoltage < 0.0f || vibrationVoltage > 655.35f) {
+  if (temperatureC < -3276.8f || temperatureC > 3276.7f) {
     Serial.println("WARNING: Sensor value is outside BLE packet range.");
-    return;
+    return false;
   }
 
   const int16_t temperatureTenths = static_cast<int16_t>(
     lroundf(temperatureC * 10.0f)
   );
-  const uint16_t vibrationHundredths = static_cast<uint16_t>(
-    lroundf(vibrationVoltage * 100.0f)
-  );
+  const uint16_t vibrationHundredths = vibrationDetected ? 100 : 0;
   const uint8_t packet[12] = {
     0xA5,
     1,
@@ -143,11 +140,19 @@ void publishGatewayAdvertisement(
   Serial.print(",A:");
   Serial.print(temperatureC < 2.0f || temperatureC > 8.0f ? 1 : 0);
   Serial.print(",V:");
-  Serial.println(vibrationVoltage, 2);
+  Serial.println(vibrationDetected ? 1 : 0);
+  return true;
 }
 
-void updateGatewayAdvertisement(float temperatureC, float vibrationVoltage) {
-  publishGatewayAdvertisement(temperatureC, vibrationVoltage, ++advertisedSequence);
+bool updateGatewayAdvertisement(float temperatureC, bool vibrationDetected) {
+  const uint32_t nextSequence = advertisedSequence + 1;
+  if (!publishGatewayAdvertisement(
+        temperatureC, vibrationDetected, nextSequence
+      )) {
+    return false;
+  }
+  advertisedSequence = nextSequence;
+  return true;
 }
 
 bool isBleClientConnected() {

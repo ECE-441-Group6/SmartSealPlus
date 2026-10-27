@@ -4,5 +4,5 @@
 
 void initializeBle();
 void sendBleMessage(const char *message);
-void updateGatewayAdvertisement(float temperatureC, float vibrationVoltage);
+bool updateGatewayAdvertisement(float temperatureC, bool vibrationDetected);
 bool isBleClientConnected();

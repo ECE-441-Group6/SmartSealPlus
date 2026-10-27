@@ -56,8 +56,21 @@ uses:
 - Temperature input: A0
 - Vibration input: A2
 - Temperature sampling: every 5 seconds
+- Piezo vibration sampling: approximately 1,000 samples per second while
+  recording
+- Vibration baseline calibration: first 1,000 samples (about one second) after
+  recording starts; keep the seal stationary during calibration
 - BLE sensor advertisement update: every 5 seconds while recording
 - Serial plotter output: every 5 seconds
+
+The firmware reports the calibrated baseline ADC and the calibration noise
+standard deviation in Serial Monitor. It detects vibration using the absolute
+ADC deviation from the baseline. The provisional threshold is at least 100 ADC
+counts, increased to four times the measured calibration noise standard
+deviation when that is higher. To reject isolated electrical spikes, at least
+three threshold-exceeding samples must occur within a 20 ms window. A further
+event is armed after 100 ms below threshold. Detected events are held until the
+next advertisement, without changing the existing five-second schedule.
 
 The advertisement includes a binary sensor packet in manufacturer data:
 
@@ -68,7 +81,7 @@ The advertisement includes a binary sensor packet in manufacturer data:
 | Event sequence | 4-byte little-endian unsigned integer |
 | Temperature | 2-byte little-endian signed integer, tenths of °C |
 | Tamper flag | 1 byte (gateway currently ignores it and records `false`) |
-| Vibration voltage | 2-byte little-endian unsigned integer, hundredths of volts |
+| Vibration event | 2-byte little-endian unsigned integer, `0` for no event or `100` for detected (gateway decodes as `0.00`/`1.00`) |
 
 The gateway accepts the packet using the manufacturer ID and packet format,
 not the advertised device name.

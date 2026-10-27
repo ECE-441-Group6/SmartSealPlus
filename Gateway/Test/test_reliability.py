@@ -7,6 +7,7 @@ from pathlib import Path
 
 from Gateway import database
 from Gateway import gateway_main
+from Gateway.alert_manager import process_alerts
 from Gateway.ble_scanner import parse_advertisement
 from Gateway.packet_parser import parse_packet
 
@@ -34,6 +35,26 @@ class ReliabilityTests(unittest.TestCase):
         self.assertEqual(critical["event_sequence"], 2)
         self.assertFalse(critical["tamper"])
         self.assertGreater(critical["temperature"], 8)
+
+    def test_binary_vibration_flag_decodes_as_zero_or_one_event(self):
+        packet_without_vibration = bytes([
+            0xA5, 1, 1, 7, 0, 0, 0, 0x32, 0, 0, 0, 0
+        ])
+        packet_with_vibration = bytes([
+            0xA5, 1, 1, 8, 0, 0, 0, 0x32, 0, 0, 100, 0
+        ])
+
+        normal = self.packet_from_binary(packet_without_vibration)
+        vibration = self.packet_from_binary(packet_with_vibration)
+
+        self.assertEqual(normal["vibration"], 0.0)
+        self.assertEqual(vibration["vibration"], 1.0)
+        self.assertNotIn("VIBRATION EVENT", process_alerts(normal))
+        self.assertIn("VIBRATION EVENT", process_alerts(vibration))
+
+    @staticmethod
+    def packet_from_binary(payload):
+        return parse_packet(parse_advertisement(payload))
 
     def test_retransmission_is_idempotent_and_seals_are_independent(self):
         first = self.packet(sequence=7)

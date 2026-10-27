@@ -1,4 +1,4 @@
-"""Receive SmartSeal sensor packets from the XIAO GATT characteristic."""
+"""Receive SmartSeal sensor packets from XIAO BLE advertisements."""
 
 import asyncio
 import os

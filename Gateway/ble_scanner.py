@@ -70,7 +70,7 @@ def simulated_packet():
 
 
 async def scan_real_ble():
-    """Scan ESP advertisements and read a packet from the XIAO GATT service."""
+    """Scan for SmartSeal packets in BLE manufacturer advertisements."""
     packets = []
     xiao_device = None
 
@@ -95,20 +95,18 @@ async def scan_real_ble():
         # The device name may be placed in a scan response or omitted when the
         # advertisement is full. The company ID and payload are the reliable
         # protocol identifiers, so do not require the name here.
-        packet = next(
-            (
-                parse_advertisement(payload)
-                for payload in payloads
-                if parse_advertisement(payload) is not None
-            ),
-            None,
-        )
+        packet = None
+        for payload in payloads:
+            packet = parse_advertisement(payload)
+            if packet is not None:
+                break
         if packet is not None:
             packets.append(packet)
-        else:
+        elif advertisement.manufacturer_data:
             print(
                 "Ignoring invalid manufacturer payload from "
-                f"{device.name or 'unnamed'}: {payload!r}"
+                f"{device.name or 'unnamed'}: "
+                f"{advertisement.manufacturer_data!r}"
             )
 
     scanner = BleakScanner(detection_callback=detection_callback)

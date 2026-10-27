@@ -15,9 +15,15 @@ constexpr int ADC_MAX = 4095;
 constexpr float ADC_REFERENCE_VOLTAGE = 3050.0f;
 
 constexpr unsigned long TEMP_INTERVAL_MS = 5000;
-constexpr unsigned long VIBRATION_INTERVAL_MS = 10;
 constexpr unsigned long SERIAL_INTERVAL_MS = 5000;
 constexpr unsigned long ADVERTISEMENT_INTERVAL_MS = 5000;
 constexpr unsigned long DEBOUNCE_MS = 40;
+constexpr uint32_t VIBRATION_SAMPLE_INTERVAL_US = 1000;
+constexpr uint16_t VIBRATION_CALIBRATION_SAMPLES = 1000;
+constexpr uint16_t VIBRATION_THRESHOLD_COUNTS = 100;
+constexpr float VIBRATION_NOISE_MULTIPLIER = 4.0f;
+constexpr uint8_t VIBRATION_CONFIRMATION_SAMPLES = 3;
+constexpr unsigned long VIBRATION_CONFIRMATION_WINDOW_MS = 20;
+constexpr unsigned long VIBRATION_REARM_QUIET_MS = 100;
 
 constexpr bool SERIAL_PLOTTER_MODE = true;
