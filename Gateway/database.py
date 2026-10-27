@@ -75,6 +75,25 @@ def insert_event(packet, image_filename=None, ai_analysis=None):
     return inserted
 
 
+def update_event_artifacts(packet, image_filename=None, ai_analysis=None):
+    conn = sqlite3.connect(DB_NAME)
+    conn.execute(
+        """
+        UPDATE events
+        SET image_path = ?, ai_analysis = ?
+        WHERE seal_id = ? AND event_sequence = ?
+        """,
+        (
+            image_filename,
+            ai_analysis,
+            packet["seal_id"],
+            packet["event_sequence"],
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
 def record_seen(packet):
     conn = sqlite3.connect(DB_NAME)
     conn.execute("""
@@ -94,13 +113,23 @@ def is_stale_sequence(packet):
         "SELECT last_event_sequence FROM seal_status WHERE seal_id = ?",
         (packet["seal_id"],),
     ).fetchone()
+    existing = conn.execute(
+        "SELECT 1 FROM events WHERE seal_id = ? AND event_sequence = ?",
+        (packet["seal_id"], packet["event_sequence"]),
+    ).fetchone()
     conn.close()
+    if existing is not None:
+        return True
     if row is None or row[0] is None:
         return False
     previous = int(row[0])
     current = packet["event_sequence"]
     distance = (current - previous) & 0xFFFFFFFF
-    return current != previous and distance > 0x7FFFFFFF
+    return (
+        current != previous
+        and distance > 0x7FFFFFFF
+        and current > previous
+    )
 
 
 def get_stale_seals(timeout_seconds):

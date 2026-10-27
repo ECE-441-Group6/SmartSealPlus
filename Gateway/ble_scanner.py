@@ -180,12 +180,22 @@ async def scan_real_ble():
 
 async def write_ack(device, characteristic_uuid, packet):
     """Write an identity-bound ACK after the gateway commits the event."""
-    async with BleakClient(device) as client:
-        await client.write_gatt_char(
-            characteristic_uuid,
-            ack_message(packet),
-            response=True,
-        )
+    acknowledgement = ack_message(packet)
+    last_error = None
+    for attempt in range(2):
+        try:
+            async with BleakClient(device) as client:
+                await client.write_gatt_char(
+                    characteristic_uuid,
+                    acknowledgement,
+                    response=True,
+                )
+            return
+        except (BleakError, OSError, asyncio.TimeoutError) as error:
+            last_error = error
+            if attempt == 0:
+                await asyncio.sleep(0.2)
+    raise last_error
 
 
 def scan_ble():

@@ -197,6 +197,7 @@ void updateGatewayAdvertisement(float temperatureC, float vibrationVoltage) {
 }
 
 void repeatGatewayAdvertisement(float temperatureC, float vibrationVoltage) {
+  gatewayAcknowledged = false;
   publishGatewayAdvertisement(temperatureC, vibrationVoltage, advertisedSequence);
 }
 
@@ -205,7 +206,6 @@ bool isBleClientConnected() {
 }
 
 bool waitForGatewayAcknowledgement() {
-  gatewayAcknowledged = false;
   const unsigned long start = millis();
   while (!gatewayAcknowledged &&
          millis() - start < ACK_TIMEOUT_MS) {

@@ -11,6 +11,7 @@ if __package__:
         insert_event,
         is_stale_sequence,
         record_seen,
+        update_event_artifacts,
     )
     from .alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
     from .ai_analyzer import analyze_image
@@ -25,6 +26,7 @@ else:
         insert_event,
         is_stale_sequence,
         record_seen,
+        update_event_artifacts,
     )
     from alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
     from ai_analyzer import analyze_image
@@ -55,6 +57,17 @@ def run_gateway(interval=5, scanner=scan_ble):
                         f"Stale event rejected: seal={packet['seal_id']} "
                         f"seq={packet['event_sequence']}"
                     )
+                    acknowledge = raw_packet.get("_acknowledge")
+                    if acknowledge is not None:
+                        try:
+                            acknowledge()
+                            print(
+                                f"ACK transmitted for stale event: "
+                                f"seal={packet['seal_id']} "
+                                f"seq={packet['event_sequence']}"
+                            )
+                        except Exception as error:
+                            print(f"Stale event ACK failed: {error}")
                     continue
                 record_seen(packet)
                 now = time.monotonic()
@@ -65,6 +78,23 @@ def run_gateway(interval=5, scanner=scan_ble):
                             f"last seen {last_seen}"
                         )
                     last_stale_check = now
+
+                inserted = insert_event(packet)
+                status = "recorded" if inserted else "duplicate ignored"
+                print(
+                    f"Event {status}: seal={packet['seal_id']} "
+                    f"seq={packet['event_sequence']}"
+                )
+                acknowledge = raw_packet.get("_acknowledge")
+                if acknowledge is not None:
+                    try:
+                        acknowledge()
+                        print(
+                            f"ACK transmitted: seal={packet['seal_id']} "
+                            f"seq={packet['event_sequence']}"
+                        )
+                    except Exception as error:
+                        print(f"ACK failed: {error}")
 
                 alerts = process_alerts(packet)
                 temperature_out_of_range = (
@@ -95,22 +125,7 @@ def run_gateway(interval=5, scanner=scan_ble):
                     else:
                         ai_analysis = "Alert detected; image unavailable."
 
-                try:
-                    inserted = insert_event(packet, image_filename, ai_analysis)
-                    status = "recorded" if inserted else "duplicate ignored"
-                    print(
-                        f"Event {status}: seal={packet['seal_id']} "
-                        f"seq={packet['event_sequence']}"
-                    )
-                    acknowledge = raw_packet.get("_acknowledge")
-                    if acknowledge is not None:
-                        acknowledge()
-                        print(
-                            f"ACK transmitted: seal={packet['seal_id']} "
-                            f"seq={packet['event_sequence']}"
-                        )
-                except Exception as error:
-                    print(f"Database write/ACK suppressed: {error}")
+                update_event_artifacts(packet, image_filename, ai_analysis)
 
                 print("\nPacket Received")
                 print(packet)
