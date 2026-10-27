@@ -17,7 +17,7 @@ constexpr float ADC_REFERENCE_VOLTAGE = 3050.0f;
 constexpr unsigned long TEMP_INTERVAL_MS = 5000;
 constexpr unsigned long VIBRATION_INTERVAL_MS = 10;
 constexpr unsigned long SERIAL_INTERVAL_MS = 5000;
-constexpr unsigned long ADVERTISEMENT_INTERVAL_MS = 1000;
+constexpr unsigned long ADVERTISEMENT_INTERVAL_MS = 5000;
 constexpr unsigned long DEBOUNCE_MS = 40;
 
 constexpr bool SERIAL_PLOTTER_MODE = true;
