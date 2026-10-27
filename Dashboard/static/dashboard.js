@@ -62,17 +62,22 @@ function vibrationStatus(value) {
 
 // Refresh events from the Flask API.
 let refreshInProgress = false;
+let refreshRequested = false;
+let selectedArchive = "live";
 
 async function refreshEvents() {
     if (refreshInProgress) {
+        refreshRequested = true;
         return;
     }
 
     refreshInProgress = true;
     const status = document.querySelector("#gateway-status");
     try {
-        // Request the newest database rows from Flask.
-        const response = await fetch("/api/events", { cache: "no-store" });
+        const endpoint = selectedArchive === "live"
+            ? "/api/events"
+            : `/api/archives/${encodeURIComponent(selectedArchive)}`;
+        const response = await fetch(endpoint, { cache: "no-store" });
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -129,18 +134,67 @@ async function refreshEvents() {
         });
 
         document.querySelector("#events").replaceChildren(...rows);
-        status.textContent =
-            `Synchronized with gateway at ${new Date().toLocaleTimeString()} ` +
-            `(${events.length} events)`;
+        status.textContent = selectedArchive === "live"
+            ? `Synchronized with gateway at ${new Date().toLocaleTimeString()} ` +
+                `(${events.length} events)`
+            : `Viewing ${selectedArchive} (${events.length} events)`;
 
     } catch (error) {
         console.error("SmartSeal dashboard refresh failed:", error);
         status.textContent = "Gateway sync failed; retrying...";
     } finally {
         refreshInProgress = false;
+        if (refreshRequested) {
+            refreshRequested = false;
+            refreshEvents();
+        }
     }
 }
 
-// Load immediately and refresh every two seconds.
+let archivesRequestInProgress = false;
+
+async function loadArchives() {
+    if (archivesRequestInProgress) {
+        return;
+    }
+
+    archivesRequestInProgress = true;
+    const selector = document.querySelector("#event-source");
+    try {
+        const response = await fetch("/api/archives", { cache: "no-store" });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const archives = await response.json();
+        for (const archive of archives) {
+            if ([...selector.options].some((option) => option.value === archive)) {
+                continue;
+            }
+            const option = document.createElement("option");
+            option.value = archive;
+            option.textContent = archive;
+            selector.appendChild(option);
+        }
+    } catch (error) {
+        console.error("Could not load gateway archives:", error);
+        document.querySelector("#gateway-status").textContent =
+            "Could not load archived event list.";
+    } finally {
+        archivesRequestInProgress = false;
+    }
+}
+
+document.querySelector("#event-source").addEventListener("change", (event) => {
+    selectedArchive = event.target.value;
+    refreshEvents();
+});
+
+// Keep live events synchronized; archived snapshots only refresh on selection.
+loadArchives();
 refreshEvents();
-setInterval(refreshEvents, 2000);
+setInterval(() => {
+    if (selectedArchive === "live") {
+        refreshEvents();
+    }
+}, 2000);
+setInterval(loadArchives, 10000);
