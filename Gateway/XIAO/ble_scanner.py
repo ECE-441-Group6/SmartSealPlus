@@ -7,9 +7,11 @@ from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 
 from Gateway.ble_scanner import (
+    MANUFACTURER_ID,
     SCAN_TIMEOUT,
     XIAO_CHARACTERISTIC_UUID,
     XIAO_DEVICE_NAME,
+    parse_advertisement,
     parse_xiao_message,
     simulated_packet,
     write_ack,
@@ -23,27 +25,45 @@ SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
 
 async def scan_real_ble():
-    """Find the XIAO and read its sensor packet over GATT."""
+    """Find the XIAO and receive its sensor packet over BLE."""
     xiao_device = None
+    advertised_packet = None
+    packet_received = asyncio.Event()
 
     def detection_callback(device, advertisement):
-        nonlocal xiao_device
+        nonlocal advertised_packet, xiao_device
         device_name = advertisement.local_name or device.name or ""
         service_uuids = {
             uuid.lower() for uuid in (advertisement.service_uuids or [])
         }
+        payload = advertisement.manufacturer_data.get(MANUFACTURER_ID)
+        packet = parse_advertisement(payload)
         if (
             device_name == XIAO_DEVICE_NAME
             or XIAO_SERVICE_UUIDS.intersection(service_uuids)
         ):
             xiao_device = device
+        if packet is not None:
+            advertised_packet = packet
+            xiao_device = device
+            packet_received.set()
 
     scanner = BleakScanner(detection_callback=detection_callback)
     await scanner.start()
     try:
-        await asyncio.sleep(SCAN_TIMEOUT)
+        try:
+            await asyncio.wait_for(packet_received.wait(), SCAN_TIMEOUT)
+        except asyncio.TimeoutError:
+            pass
     finally:
         await scanner.stop()
+
+    if advertised_packet is not None and xiao_device is not None:
+        print(f"XIAO BLE advertisement received: {advertised_packet}")
+        advertised_packet["_acknowledge"] = lambda: asyncio.run(
+            write_ack(xiao_device, XIAO_CHARACTERISTIC_UUID, advertised_packet)
+        )
+        return advertised_packet
 
     if xiao_device is None:
         try:
