@@ -1,4 +1,6 @@
 # Saves sensor readings and events so they can be reviewed later.
+import csv
+from datetime import datetime
 from pathlib import Path
 import sqlite3
 
@@ -46,6 +48,14 @@ def init_database():
     """)
 
     conn.commit()
+    conn.close()
+
+
+def clear_event_history():
+    conn = sqlite3.connect(DB_NAME)
+    with conn:
+        conn.execute("DELETE FROM events")
+        conn.execute("DELETE FROM seal_status")
     conn.close()
 
 
@@ -135,3 +145,39 @@ def get_latest_events():
     conn.close()
 
     return rows
+
+
+def archive_events():
+    archive_dir = DB_NAME.parent / "archives"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    archive_path = archive_dir / (
+        f"gateway-events-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.csv"
+    )
+
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        rows = conn.execute("""
+        SELECT id, timestamp, seal_id, event_sequence, temperature, tamper,
+               vibration, image_path, ai_analysis
+        FROM events
+        ORDER BY timestamp ASC, id ASC
+        """).fetchall()
+    finally:
+        conn.close()
+
+    with archive_path.open("w", newline="", encoding="utf-8") as archive_file:
+        writer = csv.writer(archive_file)
+        writer.writerow((
+            "id",
+            "timestamp",
+            "seal_id",
+            "event_sequence",
+            "temperature",
+            "tamper",
+            "vibration",
+            "image_path",
+            "ai_analysis",
+        ))
+        writer.writerows(rows)
+
+    return archive_path

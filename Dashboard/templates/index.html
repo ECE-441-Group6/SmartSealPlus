@@ -10,6 +10,9 @@
 <body>
 
 <h1>SmartSeal Dashboard</h1>
+<p id="gateway-status" role="status" aria-live="polite">
+    Connecting to gateway data...
+</p>
 
 <table>
     <thead>
@@ -97,7 +100,7 @@
 </table>
 
 <!-- Automatically refresh sensor readings -->
-<script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='dashboard.js', v='sync-2') }}"></script>
 
 </body>
 </html>

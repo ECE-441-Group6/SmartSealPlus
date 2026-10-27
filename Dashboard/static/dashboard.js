@@ -61,10 +61,18 @@ function vibrationStatus(value) {
 }
 
 // Refresh events from the Flask API.
+let refreshInProgress = false;
+
 async function refreshEvents() {
-try {
+    if (refreshInProgress) {
+        return;
+    }
+
+    refreshInProgress = true;
+    const status = document.querySelector("#gateway-status");
+    try {
         // Request the newest database rows from Flask.
-        const response = await fetch("/api/events");
+        const response = await fetch("/api/events", { cache: "no-store" });
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -121,9 +129,15 @@ try {
         });
 
         document.querySelector("#events").replaceChildren(...rows);
+        status.textContent =
+            `Synchronized with gateway at ${new Date().toLocaleTimeString()} ` +
+            `(${events.length} events)`;
 
     } catch (error) {
         console.error("SmartSeal dashboard refresh failed:", error);
+        status.textContent = "Gateway sync failed; retrying...";
+    } finally {
+        refreshInProgress = false;
     }
 }
 

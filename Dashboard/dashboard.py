@@ -4,13 +4,13 @@
 import sys
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, send_from_directory
+from flask import Flask, jsonify, make_response, render_template, send_from_directory
 
-GATEWAY_PATH = Path(__file__).resolve().parents[1] / "Gateway"
-sys.path.insert(0, str(GATEWAY_PATH))
+REPOSITORY_PATH = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPOSITORY_PATH))
 
-from database import get_latest_events
-from image_storage import IMAGE_FOLDER
+from Gateway.database import get_latest_events
+from Gateway.image_storage import IMAGE_FOLDER
 
 app = Flask(__name__)
 
@@ -20,16 +20,19 @@ def home():
     # Render the initial page with the latest events already loaded.
     events = get_latest_events()
 
-    return render_template(
-        "index.html",
-        events=events
+    response = make_response(
+        render_template("index.html", events=events)
     )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/api/events")
 def events_api():
     # Provide the same event data as JSON for JavaScript refreshes.
-    return jsonify(get_latest_events())
+    response = jsonify(get_latest_events())
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return response
 
 
 @app.route("/images/<path:filename>")

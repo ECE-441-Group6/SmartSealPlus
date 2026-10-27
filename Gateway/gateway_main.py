@@ -1,11 +1,15 @@
 """SmartSeal+ gateway with validation, idempotent storage, and delivery ACKs."""
 
+import csv
+import sqlite3
 import time
 
 if __package__:
     from .ble_scanner import scan_ble
     from .packet_parser import parse_packet
     from .database import (
+        archive_events,
+        clear_event_history,
         get_stale_seals,
         init_database,
         insert_event,
@@ -20,6 +24,8 @@ else:
     from ble_scanner import scan_ble
     from packet_parser import parse_packet
     from database import (
+        archive_events,
+        clear_event_history,
         get_stale_seals,
         init_database,
         insert_event,
@@ -34,7 +40,9 @@ else:
 
 def run_gateway(interval=5, scanner=scan_ble):
     init_database()
+    clear_event_history()
     print("SmartSeal+ gateway started.")
+    print("Previous dashboard events cleared.")
     last_stale_check = 0.0
 
     try:
@@ -107,7 +115,13 @@ def run_gateway(interval=5, scanner=scan_ble):
                 print(f"Gateway processing error: {error}")
                 time.sleep(interval)
     except KeyboardInterrupt:
-        print("\nSmartSeal+ gateway stopped safely.")
+        print("\nSmartSeal+ gateway stopped.")
+    finally:
+        try:
+            archive_path = archive_events()
+            print(f"Gateway event archive saved: {archive_path}")
+        except (OSError, sqlite3.Error, csv.Error) as error:
+            print(f"ERROR: Could not archive gateway events: {error}")
 
 
 if __name__ == "__main__":
