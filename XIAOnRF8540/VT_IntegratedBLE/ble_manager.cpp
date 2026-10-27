@@ -10,12 +10,14 @@ namespace {
 constexpr char DEVICE_NAME[] = "SmartSeal-XIAO";
 constexpr char SERVICE_UUID[] = "12345678-1234-1234-1234-1234567890ab";
 constexpr char CHARACTERISTIC_UUID[] = "12345678-1234-1234-1234-1234567890ac";
+constexpr char ACK_SERVICE_UUID[] = "12345678-1234-1234-1234-1234567890ad";
+constexpr char ACK_CHARACTERISTIC_UUID[] = "12345678-1234-1234-1234-1234567890ae";
 constexpr uint16_t GATEWAY_MANUFACTURER_ID = 0x5353;
 constexpr int SEAL_ID = 1;
 BLEService recordingService(SERVICE_UUID);
 BLECharacteristic dataCharacteristic(CHARACTERISTIC_UUID);
-BLEService xiaoService(0x180F);
-BLECharacteristic xiaoCharacteristic(0x2A19);
+BLEService xiaoService(ACK_SERVICE_UUID);
+BLECharacteristic xiaoCharacteristic(ACK_CHARACTERISTIC_UUID);
 bool deviceConnected = false;
 volatile bool gatewayAcknowledged = false;
 volatile uint32_t acknowledgedSequence = 0;

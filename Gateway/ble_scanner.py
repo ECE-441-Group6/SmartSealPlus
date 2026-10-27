@@ -11,7 +11,7 @@ from bleak.exc import BleakError
 MANUFACTURER_ID = 0x5353
 ESP_DEVICE_NAMES = {"SmartSeal-01"}
 XIAO_DEVICE_NAME = "SmartSeal-XIAO"
-XIAO_CHARACTERISTIC_UUID = "00002a19-0000-1000-8000-00805f9b34fb"
+XIAO_CHARACTERISTIC_UUID = "12345678-1234-1234-1234-1234567890ae"
 ESP32_ACK_CHARACTERISTIC_UUID = "12345678-1234-1234-1234-1234567890ad"
 
 
@@ -184,6 +184,7 @@ async def write_ack(device, characteristic_uuid, packet):
         await client.write_gatt_char(
             characteristic_uuid,
             ack_message(packet),
+            response=True,
         )
 
 

@@ -18,8 +18,7 @@ from Gateway.ble_scanner import (
 )
 
 XIAO_SERVICE_UUIDS = {
-    "0000180f-0000-1000-8000-00805f9b34fb",
-    "180f",
+    "12345678-1234-1234-1234-1234567890ad",
 }
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
