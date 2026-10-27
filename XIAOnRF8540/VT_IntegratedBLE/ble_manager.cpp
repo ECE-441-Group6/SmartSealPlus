@@ -21,29 +21,27 @@ volatile bool gatewayAcknowledged = false;
 volatile uint32_t acknowledgedSequence = 0;
 uint32_t advertisedSequence = 0;
 
-class GatewayAckCallbacks : public BLECharacteristicCallbacks {
-  void onWrite(
-    uint16_t connHandle,
-    BLECharacteristic *characteristic,
-    uint8_t *data,
-    uint16_t len
-  ) override {
-    (void)connHandle;
-    (void)characteristic;
-    unsigned int sealId = 0;
-    unsigned long sequence = 0;
-    char ack[24] = {};
-    if (len >= sizeof(ack)) {
-      return;
-    }
-    memcpy(ack, data, len);
-    if (sscanf(ack, "ACK:S:%u,E:%lu", &sealId, &sequence) == 2 &&
-        sealId == SEAL_ID && sequence == advertisedSequence) {
-      acknowledgedSequence = static_cast<uint32_t>(sequence);
-      gatewayAcknowledged = true;
-    }
+void gatewayAckCallback(
+  uint16_t connHandle,
+  BLECharacteristic *characteristic,
+  uint8_t *data,
+  uint16_t len
+) {
+  (void)connHandle;
+  (void)characteristic;
+  unsigned int sealId = 0;
+  unsigned long sequence = 0;
+  char ack[24] = {};
+  if (len >= sizeof(ack)) {
+    return;
   }
-};
+  memcpy(ack, data, len);
+  if (sscanf(ack, "ACK:S:%u,E:%lu", &sealId, &sequence) == 2 &&
+      sealId == SEAL_ID && sequence == advertisedSequence) {
+    acknowledgedSequence = static_cast<uint32_t>(sequence);
+    gatewayAcknowledged = true;
+  }
+}
 
 void connectCallback(uint16_t connHandle) {
   (void)connHandle;
@@ -88,7 +86,7 @@ void initializeBle() {
   );
   xiaoCharacteristic.setPermission(SECMODE_OPEN, SECMODE_OPEN);
   xiaoCharacteristic.setMaxLen(32);
-  xiaoCharacteristic.setWriteCallback(new GatewayAckCallbacks());
+  xiaoCharacteristic.setWriteCallback(gatewayAckCallback);
   xiaoCharacteristic.begin();
   const char initialPacket[] = "S:1,E:0,T:0.0,A:0,V:0";
   xiaoCharacteristic.write(
