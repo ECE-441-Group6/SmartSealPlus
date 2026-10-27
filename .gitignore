@@ -24,7 +24,7 @@ camera_test/
 *.jpg
 *.png
 events/
-archive/
+archives/
 
 # Arduino / PlatformIO build output
 .pio/
