@@ -47,7 +47,7 @@ def events_api():
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return response
 
-
+#passes back list of valid archive file names
 @app.route("/api/archives")
 def archives_api():
     if not ARCHIVE_DIRECTORY.is_dir():
@@ -65,7 +65,7 @@ def archives_api():
     response.headers["Cache-Control"] = "no-store"
     return response
 
-
+#passes csv headers to front end, assumes csv has these headers only (check csv header and info creation)
 @app.route("/api/archives/<filename>")
 def archive_events_api(filename):
     path = _archive_path(filename)
@@ -91,7 +91,7 @@ def archive_events_api(filename):
     response.headers["Cache-Control"] = "no-store"
     return response
 
-
+#gets image file
 @app.route("/images/<path:filename>")
 def images(filename):
     # Serve captured or simulated evidence images from the gateway storage.
