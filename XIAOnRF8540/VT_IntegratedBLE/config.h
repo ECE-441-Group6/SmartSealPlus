@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 
-constexpr int RECORD_BUTTON_PIN = D4;
+constexpr int RECORD_BUTTON_PIN = D6;
 constexpr int TEMP_PIN = A0;
 constexpr int VIBRATION_PIN = A2;
 
@@ -16,7 +16,7 @@ constexpr float ADC_REFERENCE_VOLTAGE = 3050.0f;
 
 constexpr unsigned long TEMP_INTERVAL_MS = 5000;
 constexpr unsigned long SERIAL_INTERVAL_MS = 5000;
-constexpr unsigned long ADVERTISEMENT_INTERVAL_MS = 5000;
+constexpr unsigned long BLE_TRANSMISSION_INTERVAL_MS = 100;
 constexpr unsigned long DEBOUNCE_MS = 40;
 constexpr uint32_t VIBRATION_SAMPLE_INTERVAL_US = 1000;
 constexpr uint16_t VIBRATION_CALIBRATION_SAMPLES = 1000;

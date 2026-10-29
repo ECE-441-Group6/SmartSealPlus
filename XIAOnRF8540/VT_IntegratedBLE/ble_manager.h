@@ -3,6 +3,12 @@
 #include <Arduino.h>
 
 void initializeBle();
-void sendBleMessage(const char *message);
-bool updateGatewayAdvertisement(float temperatureC, bool vibrationDetected);
-bool isBleClientConnected();
+bool sendSensorPacket(
+  uint32_t sealId,
+  uint32_t eventSequence,
+  float temperature,
+  bool tamper,
+  float vibration
+);
+void sendHeartbeat();
+bool getAcknowledgment(uint32_t *sequence);

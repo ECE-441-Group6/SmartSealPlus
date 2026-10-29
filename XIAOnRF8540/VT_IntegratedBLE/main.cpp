@@ -14,8 +14,9 @@ int stableButtonState = HIGH;
 unsigned long lastDebounceTime = 0;
 unsigned long lastTempSampleTime = 0;
 unsigned long lastSerialPrintTime = 0;
-unsigned long lastAdvertisementTime = 0;
+unsigned long lastBleTransmissionTime = 0;
 uint32_t nextVibrationSampleMicros = 0;
+uint32_t eventSequence = 0;
 float latestTemperatureC = NAN;
 bool vibrationCalibrating = false;
 bool vibrationEventPending = false;
@@ -67,11 +68,10 @@ void startRecording() {
   const unsigned long now = millis();
   lastTempSampleTime = now - TEMP_INTERVAL_MS;
   lastSerialPrintTime = now - SERIAL_INTERVAL_MS;
-  lastAdvertisementTime = now - ADVERTISEMENT_INTERVAL_MS;
+  lastBleTransmissionTime = now - BLE_TRANSMISSION_INTERVAL_MS;
   latestTemperatureC = NAN;
   startVibrationCalibration();
   Serial.println("Recording started.");
-  sendBleMessage("START\n");
 }
 
 void stopRecording() {
@@ -80,7 +80,6 @@ void stopRecording() {
   }
   recording = false;
   Serial.println("Recording stopped.");
-  sendBleMessage("STOP\n");
 }
 
 void updateButton(unsigned long now) {
@@ -190,13 +189,29 @@ void sampleVibration() {
     );
   }
 
-  if (now - lastAdvertisementTime >= ADVERTISEMENT_INTERVAL_MS) {
-    lastAdvertisementTime = now;
-    if (updateGatewayAdvertisement(
-          latestTemperatureC, vibrationEventPending
+  if (now - lastBleTransmissionTime >=
+      BLE_TRANSMISSION_INTERVAL_MS &&
+      isfinite(latestTemperatureC)) {
+    lastBleTransmissionTime = now;
+    const float vibrationVoltage =
+      static_cast<float>(vibrationADC) *
+      ADC_REFERENCE_VOLTAGE / ADC_MAX;
+    if (sendSensorPacket(
+          1,
+          eventSequence,
+          latestTemperatureC,
+          vibrationEventPending,
+          vibrationVoltage
         )) {
+      ++eventSequence;
       vibrationEventPending = false;
     }
+  }
+
+  uint32_t acknowledgedSequence = 0;
+  if (getAcknowledgment(&acknowledgedSequence)) {
+    Serial.print("Pi acknowledged sequence: ");
+    Serial.println(acknowledgedSequence);
   }
 }
 }
@@ -216,12 +231,13 @@ void setup() {
   Serial.println("Initializing BLE...");
   initializeBle();
   Serial.println("XIAO nRF52840 recorder ready.");
-  Serial.println("Press the record button on D4 to start sampling.");
+  Serial.println("Press the record button on D6 to start sampling.");
 }
 
 void loop() {
   const unsigned long now = millis();
   updateButton(now);
+  sendHeartbeat();
   if (recording) {
     sampleVibration();
   } else {
