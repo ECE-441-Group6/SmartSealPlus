@@ -220,12 +220,12 @@ async def run_connected_session():
 
                 raw_packet = decode_sensor_packet(raw_data)
 
-            if raw_packet is not None:
-                notification_queue.put_nowait(
-                    ("sensor", raw_packet)
-                )
-            else:
-                print("Invalid complete sensor packet.")
+                if raw_packet is not None:
+                    notification_queue.put_nowait(
+                        ("sensor", raw_packet)
+                    )
+                else:
+                    print("Invalid complete sensor packet.")
         
 
         def heartbeat_callback(sender, data):
