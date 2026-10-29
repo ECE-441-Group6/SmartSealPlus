@@ -8,11 +8,12 @@ import asyncio
 from bleak import BleakScanner
 from bleak.exc import BleakError
 
-MANUFACTURER_ID = 0x5353
-ESP_DEVICE_NAMES = {"SmartSeal-01"}
+
+MANUFACTURER_ID = 0x5353   #when to use????
+ESP_DEVICE_NAMES = {"SmartSeal-01"} 
 XIAO_DEVICE_NAME = "SmartSeal-XIAO"
 SCAN_TIMEOUT = 5.0
-SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
+SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"  #where to set simulation_mode?
 
 
 def parse_advertisement(payload):
@@ -90,7 +91,7 @@ async def scan_real_ble():
 
         payloads = advertisement.manufacturer_data.values()
         if is_xiao:
-            return
+            return   #code below wont run
 
         # The device name may be placed in a scan response or omitted when the
         # advertisement is full. The company ID and payload are the reliable
@@ -116,6 +117,7 @@ async def scan_real_ble():
     finally:
         await scanner.stop()
 
+    #tries to scan for xiao again
     if xiao_device is None and not packets:
         try:
             xiao_device = await BleakScanner.find_device_by_name(
@@ -125,6 +127,7 @@ async def scan_real_ble():
         except (BleakError, OSError, asyncio.TimeoutError) as error:
             print(f"XIAO BLE discovery error: {error}")
 
+    #but packets list will always be empty since code below line 94 wont run? also this will only return the most recent packet, not all of the packets received
     if packets:
         packet = packets[-1]
         print(f"BLE packet received: {packet}")

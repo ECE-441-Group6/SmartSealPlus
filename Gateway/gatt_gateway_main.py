@@ -10,7 +10,7 @@ from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 
 if __package__:
-    from .ble_scanner import (
+    from .gatt_ble_scanner import (
         XIAO_DEVICE_NAME,
         SCAN_TIMEOUT,
         SENSOR_SERVICE_UUID,
@@ -35,7 +35,7 @@ if __package__:
     from .camera_manager import capture_image
     from .image_storage import image_path
 else:
-    from ble_scanner import (
+    from gatt_ble_scanner import (
         XIAO_DEVICE_NAME,
         SCAN_TIMEOUT,
         SENSOR_SERVICE_UUID,
