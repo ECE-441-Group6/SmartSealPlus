@@ -218,7 +218,7 @@ async def run_connected_session():
             for raw_data in extract_complete_json_packets(sensor_buffer):
                 print(f"Complete JSON received: {raw_data!r}")
 
-            raw_packet = decode_sensor_packet(raw_data)
+                raw_packet = decode_sensor_packet(raw_data)
 
             if raw_packet is not None:
                 notification_queue.put_nowait(
