@@ -15,9 +15,9 @@ XIAO nRF52840 Sense
             └─ Flask dashboard and CSV session archives
 ```
 
-The XIAO-to-gateway sensor path uses a persistent BLE GATT connection. The
-gateway subscribes to JSON sensor notifications and heartbeats, and
-acknowledges each sensor event.
+The XIAO-to-gateway sensor path uses BLE manufacturer advertisements. The
+gateway scans for the SmartSeal manufacturer ID and decodes each binary sensor
+packet without opening a GATT connection.
 The dashboard communicates with the gateway's local SQLite database through
 Flask HTTP endpoints; it does not use BLE.
 
@@ -61,8 +61,7 @@ uses:
   recording
 - Vibration baseline calibration: first 1,000 samples (about one second) after
   recording starts; keep the seal stationary during calibration
-- BLE sensor notification: every 100 milliseconds while recording
-- BLE heartbeat notification: every 2 seconds while connected
+- BLE manufacturer advertisement update: every 5 seconds while recording
 - Serial plotter output: every 5 seconds
 
 The firmware reports the calibrated baseline ADC and the calibration noise
@@ -74,18 +73,16 @@ three threshold-exceeding samples must occur within a 20 ms window. A further
 event is armed after 100 ms below threshold. Detected events are held until the
 next advertisement, without changing the existing five-second schedule.
 
-The GATT sensor notification contains a JSON packet with these fields:
+The manufacturer advertisement contains a binary sensor packet:
 
-| Field | Type |
+| Field | Encoding |
 |---|---|
-| `seal_id` | Integer |
-| `event_sequence` | 32-bit unsigned integer |
-| `temperature` | Number in °C |
-| `tamper` | Boolean vibration-event flag |
-| `vibration` | Number in volts |
-
-The gateway writes the acknowledged event sequence to the ACK characteristic
-using a 4-byte little-endian integer.
+| Header and version | `A5 01` |
+| Seal ID | 1 byte |
+| Event sequence | 4-byte little-endian unsigned integer |
+| Temperature | 2-byte little-endian signed integer, tenths of °C |
+| Tamper flag | 1 byte |
+| Vibration event | 2-byte little-endian unsigned integer (`0` or `100`) |
 
 The gateway accepts the packet using the manufacturer ID and packet format,
 not the advertised device name.
@@ -97,13 +94,13 @@ Run each program in a separate terminal from the repository root.
 Terminal 1 — XIAO BLE gateway:
 
 ```bash
-python3 Gateway/XIAO/gateway_main.py
+python3 Gateway/gateway_main.py
 ```
 
 Alternatively, run from the XIAO gateway directory:
 
 ```bash
-cd Gateway/XIAO
+cd Gateway
 python3 gateway_main.py
 ```
 
@@ -121,15 +118,15 @@ previously archived sessions.
 Set `SMARTSEAL_SIMULATION=1` to exercise the gateway without BLE hardware:
 
 ```bash
-SMARTSEAL_SIMULATION=1 python3 Gateway/XIAO/gateway_main.py
+SMARTSEAL_SIMULATION=1 python3 Gateway/gateway_main.py
 ```
 
 ## Event processing and storage
 
 The gateway:
 
-1. Finds the XIAO GATT service and subscribes to sensor and heartbeat
-   notifications.
+1. Scans for BLE manufacturer advertisements and parses valid SmartSeal
+   packets.
 2. Validates packet fields and preserves the tamper status.
 3. Stores events in `Gateway/smartseal.db`.
 4. Raises low-temperature alerts below 2 °C and high-temperature alerts
