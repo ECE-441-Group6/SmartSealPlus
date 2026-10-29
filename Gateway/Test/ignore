@@ -1,0 +1,179 @@
+A message handler raised an exception: cannot access local variable 'raw_data' where it is not associated with a value
+Traceback (most recent call last):
+  File "src/dbus_fast/message_bus.py", line 798, in dbus_fast.message_bus.BaseMessageBus._process_message
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/manager.py", line 1170, in _parse_msg
+    watcher.on_characteristic_value_changed(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        message_path, new_value
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/client.py", line 191, in on_value_changed
+    callback(bytearray(value))
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/group6ece441fa2026/SmartSealPlus/Gateway/gatt_gateway_main.py", line 221, in sensor_callback
+    raw_packet = decode_sensor_packet(raw_data)
+                                      ^^^^^^^^
+UnboundLocalError: cannot access local variable 'raw_data' where it is not associated with a value
+A message handler raised an exception: cannot access local variable 'raw_data' where it is not associated with a value
+Traceback (most recent call last):
+  File "src/dbus_fast/message_bus.py", line 798, in dbus_fast.message_bus.BaseMessageBus._process_message
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/manager.py", line 1170, in _parse_msg
+    watcher.on_characteristic_value_changed(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        message_path, new_value
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/client.py", line 191, in on_value_changed
+    callback(bytearray(value))
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/group6ece441fa2026/SmartSealPlus/Gateway/gatt_gateway_main.py", line 221, in sensor_callback
+    raw_packet = decode_sensor_packet(raw_data)
+                                      ^^^^^^^^
+UnboundLocalError: cannot access local variable 'raw_data' where it is not associated with a value
+A message handler raised an exception: cannot access local variable 'raw_data' where it is not associated with a value
+Traceback (most recent call last):
+  File "src/dbus_fast/message_bus.py", line 798, in dbus_fast.message_bus.BaseMessageBus._process_message
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/manager.py", line 1170, in _parse_msg
+    watcher.on_characteristic_value_changed(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        message_path, new_value
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/client.py", line 191, in on_value_changed
+    callback(bytearray(value))
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/group6ece441fa2026/SmartSealPlus/Gateway/gatt_gateway_main.py", line 221, in sensor_callback
+    raw_packet = decode_sensor_packet(raw_data)
+                                      ^^^^^^^^
+UnboundLocalError: cannot access local variable 'raw_data' where it is not associated with a value
+A message handler raised an exception: cannot access local variable 'raw_data' where it is not associated with a value
+Traceback (most recent call last):
+  File "src/dbus_fast/message_bus.py", line 798, in dbus_fast.message_bus.BaseMessageBus._process_message
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/manager.py", line 1170, in _parse_msg
+    watcher.on_characteristic_value_changed(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        message_path, new_value
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/client.py", line 191, in on_value_changed
+    callback(bytearray(value))
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/group6ece441fa2026/SmartSealPlus/Gateway/gatt_gateway_main.py", line 221, in sensor_callback
+    raw_packet = decode_sensor_packet(raw_data)
+                                      ^^^^^^^^
+UnboundLocalError: cannot access local variable 'raw_data' where it is not associated with a value
+Complete JSON received: b'{"seal_id":1,"event_sequence":31,"temperature":68.48,"tamper":false,"vibration":0.000}'
+Event recorded: seal=1 seq=31
+
+Packet Received
+{'seal_id': 1, 'event_sequence': 31, 'temperature': 68.48, 'tamper': False, 'vibration': 0.0}
+ALERT: HIGH TEMPERATURE
+Analysis: Temperature out of bounds; image capture skipped.
+A message handler raised an exception: cannot access local variable 'raw_data' where it is not associated with a value
+Traceback (most recent call last):
+  File "src/dbus_fast/message_bus.py", line 798, in dbus_fast.message_bus.BaseMessageBus._process_message
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/manager.py", line 1170, in _parse_msg
+    watcher.on_characteristic_value_changed(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        message_path, new_value
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/client.py", line 191, in on_value_changed
+    callback(bytearray(value))
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/group6ece441fa2026/SmartSealPlus/Gateway/gatt_gateway_main.py", line 221, in sensor_callback
+    raw_packet = decode_sensor_packet(raw_data)
+                                      ^^^^^^^^
+UnboundLocalError: cannot access local variable 'raw_data' where it is not associated with a value
+ACK sent for event 31.
+A message handler raised an exception: cannot access local variable 'raw_data' where it is not associated with a value
+Traceback (most recent call last):
+  File "src/dbus_fast/message_bus.py", line 798, in dbus_fast.message_bus.BaseMessageBus._process_message
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/manager.py", line 1170, in _parse_msg
+    watcher.on_characteristic_value_changed(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        message_path, new_value
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/client.py", line 191, in on_value_changed
+    callback(bytearray(value))
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/group6ece441fa2026/SmartSealPlus/Gateway/gatt_gateway_main.py", line 221, in sensor_callback
+    raw_packet = decode_sensor_packet(raw_data)
+                                      ^^^^^^^^
+UnboundLocalError: cannot access local variable 'raw_data' where it is not associated with a value
+A message handler raised an exception: cannot access local variable 'raw_data' where it is not associated with a value
+Traceback (most recent call last):
+  File "src/dbus_fast/message_bus.py", line 798, in dbus_fast.message_bus.BaseMessageBus._process_message
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/manager.py", line 1170, in _parse_msg
+    watcher.on_characteristic_value_changed(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        message_path, new_value
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/client.py", line 191, in on_value_changed
+    callback(bytearray(value))
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/group6ece441fa2026/SmartSealPlus/Gateway/gatt_gateway_main.py", line 221, in sensor_callback
+    raw_packet = decode_sensor_packet(raw_data)
+                                      ^^^^^^^^
+UnboundLocalError: cannot access local variable 'raw_data' where it is not associated with a value
+A message handler raised an exception: cannot access local variable 'raw_data' where it is not associated with a value
+Traceback (most recent call last):
+  File "src/dbus_fast/message_bus.py", line 798, in dbus_fast.message_bus.BaseMessageBus._process_message
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/manager.py", line 1170, in _parse_msg
+    watcher.on_characteristic_value_changed(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        message_path, new_value
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/client.py", line 191, in on_value_changed
+    callback(bytearray(value))
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/group6ece441fa2026/SmartSealPlus/Gateway/gatt_gateway_main.py", line 221, in sensor_callback
+    raw_packet = decode_sensor_packet(raw_data)
+                                      ^^^^^^^^
+UnboundLocalError: cannot access local variable 'raw_data' where it is not associated with a value
+Complete JSON received: b'{"seal_id":1,"event_sequence":32,"temperature":69.31,"tamper":false,"vibration":0.001}'
+Event recorded: seal=1 seq=32
+Image captured: /home/group6ece441fa2026/SmartSealPlus/Gateway/images/seal_1_20261029T084739635612Z.jpg
+
+Packet Received
+{'seal_id': 1, 'event_sequence': 32, 'temperature': 69.31, 'tamper': False, 'vibration': 0.001}
+ALERT: HIGH TEMPERATURE
+ALERT: VIBRATION EVENT
+Analysis: movement or impact detected; temperature too high (69.31 C)
+A message handler raised an exception: cannot access local variable 'raw_data' where it is not associated with a value
+Traceback (most recent call last):
+  File "src/dbus_fast/message_bus.py", line 798, in dbus_fast.message_bus.BaseMessageBus._process_message
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/manager.py", line 1170, in _parse_msg
+    watcher.on_characteristic_value_changed(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        message_path, new_value
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/client.py", line 191, in on_value_changed
+    callback(bytearray(value))
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/group6ece441fa2026/SmartSealPlus/Gateway/gatt_gateway_main.py", line 221, in sensor_callback
+    raw_packet = decode_sensor_packet(raw_data)
+                                      ^^^^^^^^
+UnboundLocalError: cannot access local variable 'raw_data' where it is not associated with a value
+A message handler raised an exception: cannot access local variable 'raw_data' where it is not associated with a value
+Traceback (most recent call last):
+  File "src/dbus_fast/message_bus.py", line 798, in dbus_fast.message_bus.BaseMessageBus._process_message
+  File "/home/group6ece441fa2026/.local/lib/python3.13/site-packages/bleak/backends/bluezdbus/manager.py", line 1170, in _parse_msg
+    watcher.on_characteristic_value_changed(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        message_path, new_value
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    )
