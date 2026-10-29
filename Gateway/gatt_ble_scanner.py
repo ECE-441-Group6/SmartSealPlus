@@ -83,13 +83,19 @@ def decode_sensor_packet(data):
         if not isinstance(packet["tamper"], bool):
             return None
 
-        return {
+        decoded_packet = {
             "seal_id": packet["seal_id"],
             "event_sequence": packet["event_sequence"],
             "temperature": packet["temperature"],
             "tamper": packet["tamper"],
             "vibration": packet["vibration"],
         }
+
+        # Preserve the HMAC tag for secure packet validation.
+        if "hmac" in packet:
+            decoded_packet["hmac"] = packet["hmac"]
+
+        return decoded_packet
 
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
         print("Could not decode sensor packet.")

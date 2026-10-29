@@ -22,6 +22,7 @@ if __package__:
         extract_complete_json_packets,
     )
     from .packet_parser import parse_packet
+    from .secure_packet_validator import SecurePacketValidator
     from .database import (
         archive_events,
         clear_event_history,
@@ -65,6 +66,11 @@ else:
 
 HEARTBEAT_TIMEOUT = 15.0
 RECONNECT_DELAY = 3.0
+# Development compatibility mode only.
+# Set to True when the XIAO firmware supports authenticated packets.
+SECURITY_ENFORCED = False
+
+security_validator = SecurePacketValidator()
 
 
 def find_smartseal(device, advertisement):
@@ -85,6 +91,13 @@ def find_smartseal(device, advertisement):
 
 def process_sensor_packet(raw_packet):
     """Validate, store, and process one sensor event."""
+
+    if SECURITY_ENFORCED:
+        valid, reason = security_validator.validate_packet(raw_packet)
+
+        if not valid:
+            print(f"SECURITY: Packet rejected — {reason}")
+            return None
 
     packet = parse_packet(raw_packet)
 
