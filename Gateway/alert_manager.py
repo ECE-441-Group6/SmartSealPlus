@@ -1,7 +1,7 @@
 # Determines whether incoming information should trigger an alert.
 
-TEMP_HIGH = 8.0
-TEMP_LOW = 2.0
+TEMP_HIGH = 8 #85   #temp values in f so it does always trigger an alert when the temp above room temp
+TEMP_LOW = 2   #40
 
 def process_alerts(packet):
     alerts = []
