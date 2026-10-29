@@ -28,6 +28,91 @@ ACK_CHARACTERISTIC_UUID = "12345678-1234-1234-1234-1234567890af"
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
 
+
+import json
+import math
+
+def decode_sensor_packet(data):
+    """Decode and validate the JSON sensor packet."""
+
+    try:
+        # Diagnostic output: inspect exactly what arrived over BLE.
+        print(f"Raw sensor notification ({len(data)} bytes): {data!r}")
+
+        text = data.decode("utf-8")
+        packet = json.loads(text)
+
+        required_fields = {
+            "seal_id",
+            "event_sequence",
+            "temperature",
+            "tamper",
+            "vibration",
+        }
+
+        if not isinstance(packet, dict):
+            print("Invalid packet: JSON is not an object.")
+            return None
+
+        if not required_fields.issubset(packet):
+            print("Missing fields:", required_fields - packet.keys())
+            return None
+
+        if (
+            not isinstance(packet["seal_id"], int)
+            or isinstance(packet["seal_id"], bool)
+            or packet["seal_id"] < 1
+        ):
+            print("Invalid seal_id.")
+            return None
+
+        if (
+            not isinstance(packet["event_sequence"], int)
+            or isinstance(packet["event_sequence"], bool)
+            or not 0 <= packet["event_sequence"] <= 0xFFFFFFFF
+        ):
+            print("Invalid event_sequence.")
+            return None
+
+        # The XIAO sends null when the thermistor reading is invalid.
+        temperature = packet["temperature"]
+
+        if temperature is not None and (
+            not isinstance(temperature, (int, float))
+            or isinstance(temperature, bool)
+            or not math.isfinite(temperature)
+        ):
+            print("Invalid temperature.")
+            return None
+
+        vibration = packet["vibration"]
+
+        if (
+            not isinstance(vibration, (int, float))
+            or isinstance(vibration, bool)
+            or not math.isfinite(vibration)
+            or vibration < 0
+        ):
+            print("Invalid vibration.")
+            return None
+
+        if not isinstance(packet["tamper"], bool):
+            print("Invalid tamper value.")
+            return None
+
+        return {
+            "seal_id": packet["seal_id"],
+            "event_sequence": packet["event_sequence"],
+            "temperature": temperature,
+            "tamper": packet["tamper"],
+            "vibration": vibration,
+        }
+
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as error:
+        print(f"Sensor packet decode error: {error}")
+        return None
+
+"""
 def decode_sensor_packet(data):
     """Decode and validate the JSON sensor packet."""
 
@@ -90,7 +175,7 @@ def decode_sensor_packet(data):
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
         print("Could not decode sensor packet.")
         return None
-
+"""
 
 async def scan_real_ble():
     """Find the XIAO, connect, subscribe, and receive one sensor packet."""
