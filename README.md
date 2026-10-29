@@ -44,13 +44,13 @@ The requirements are Flask, Pillow, and Bleak.
 
 ## Upload the XIAO firmware
 
-1. Open `XIAOnRF8540/VT_IntegratedBLE/VT_IntegratedBLE.ino` in Arduino IDE.
+1. Open `XIAOnRF8540/Advertising/Advertising.ino` in Arduino IDE.
 2. Select the Seeed XIAO nRF52840 Sense board and its serial port.
 3. Upload the sketch.
 4. Open Serial Monitor at 115200 baud.
 5. Press the record button on D6 to start sampling.
 
-The current firmware configuration in `XIAOnRF8540/VT_IntegratedBLE/config.h`
+The current firmware configuration in `XIAOnRF8540/Advertising/config.h`
 uses:
 
 - Record button: D6
@@ -171,7 +171,7 @@ event-history clearing, CSV export, and archiving on gateway shutdown.
 ## Main project paths
 
 ```text
-XIAOnRF8540/VT_IntegratedBLE/   XIAO Arduino sketch and firmware modules
+XIAOnRF8540/Advertising/         XIAO Arduino sketch and firmware modules
 Gateway/XIAO/                   XIAO BLE advertisement scanner and launcher
 Gateway/                         Shared packet handling, alerts, storage, camera
 Gateway/archives/                Timestamped CSV archives after gateway shutdown
