@@ -16,6 +16,7 @@ unsigned long lastTempSampleTime = 0;
 unsigned long lastSerialPrintTime = 0;
 unsigned long lastBleTransmissionTime = 0;
 uint32_t nextVibrationSampleMicros = 0;
+uint32_t eventSequence = 0;
 float latestTemperatureC = NAN;
 bool vibrationCalibrating = false;
 bool vibrationEventPending = false;
@@ -67,7 +68,7 @@ void startRecording() {
   const unsigned long now = millis();
   lastTempSampleTime = now - TEMP_INTERVAL_MS;
   lastSerialPrintTime = now - SERIAL_INTERVAL_MS;
-  lastBleTransmissionTime = now - ADVERTISEMENT_INTERVAL_MS;
+  lastBleTransmissionTime = now - BLE_TRANSMISSION_INTERVAL_MS;
   latestTemperatureC = NAN;
   startVibrationCalibration();
   Serial.println("Recording started.");
@@ -189,14 +190,28 @@ void sampleVibration() {
   }
 
   if (now - lastBleTransmissionTime >=
-      ADVERTISEMENT_INTERVAL_MS) {
+      BLE_TRANSMISSION_INTERVAL_MS &&
+      isfinite(latestTemperatureC)) {
     lastBleTransmissionTime = now;
-    if (updateGatewayAdvertisement(
+    const float vibrationVoltage =
+      static_cast<float>(vibrationADC) *
+      ADC_REFERENCE_VOLTAGE / ADC_MAX;
+    if (sendSensorPacket(
+          1,
+          eventSequence,
           latestTemperatureC,
-          vibrationEventPending
+          vibrationEventPending,
+          vibrationVoltage
         )) {
+      ++eventSequence;
       vibrationEventPending = false;
     }
+  }
+
+  uint32_t acknowledgedSequence = 0;
+  if (getAcknowledgment(&acknowledgedSequence)) {
+    Serial.print("Pi acknowledged sequence: ");
+    Serial.println(acknowledgedSequence);
   }
 }
 }
@@ -222,6 +237,7 @@ void setup() {
 void loop() {
   const unsigned long now = millis();
   updateButton(now);
+  sendHeartbeat();
   if (recording) {
     sampleVibration();
   } else {
