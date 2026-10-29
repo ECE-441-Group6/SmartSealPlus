@@ -116,6 +116,16 @@ def record_seen(packet):
     conn.commit()
     conn.close()
 
+#TEST RECORD_HEARTBEAR
+def record_heartbeat(seal_id):
+    conn = sqlite3.connect(DB_NAME)
+    conn.execute("""
+        UPDATE seal_status
+        SET last_seen = CURRENT_TIMESTAMP
+        WHERE seal_id = ?
+    """, (seal_id,))
+    conn.commit()
+    conn.close()
 
 def get_stale_seals(timeout_seconds):
     conn = sqlite3.connect(DB_NAME)

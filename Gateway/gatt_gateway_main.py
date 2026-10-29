@@ -29,6 +29,7 @@ if __package__:
         init_database,
         insert_event,
         record_seen,
+        record_heartbeat,      #TEST 
         update_event_artifacts,
     )
     from .alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
@@ -55,6 +56,7 @@ else:
         init_database,
         insert_event,
         record_seen,
+        record_heartbeat,        #TEST
         update_event_artifacts,
     )
     from alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
@@ -267,6 +269,7 @@ async def run_connected_session():
                     kind, data = None, None
 
                 if kind == "heartbeat":
+                    record_heartbeat(seal_id)        #TEST
                     print(f"Heartbeat received: {data.hex()}")
 
                 elif kind == "sensor":
