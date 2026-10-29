@@ -19,6 +19,7 @@ if __package__:
         HEARTBEAT_CHARACTERISTIC_UUID,
         ACK_CHARACTERISTIC_UUID,
         decode_sensor_packet,
+        extract_complete_json_packets,
     )
     from .packet_parser import parse_packet
     from .database import (
@@ -44,6 +45,7 @@ else:
         HEARTBEAT_CHARACTERISTIC_UUID,
         ACK_CHARACTERISTIC_UUID,
         decode_sensor_packet,
+        extract_complete_json_packets,
     )
     from packet_parser import parse_packet
     from database import (
@@ -175,6 +177,7 @@ async def run_connected_session():
 
     # Queue entries distinguish sensor events from heartbeat messages.
     notification_queue = asyncio.Queue()
+    sensor_buffer = bytearray()
 
     async with BleakClient(device, timeout=10.0) as client:
         print("GATT connected.")
@@ -205,19 +208,25 @@ async def run_connected_session():
             "last_received": time.monotonic(),
             "received_any": False,
         }
-
+        
+        
         def sensor_callback(sender, data):
-            """Queue sensor data without blocking the BLE callback."""
+            """Reassemble BLE fragments before decoding sensor packets."""
 
-            raw_packet = decode_sensor_packet(bytes(data))
+            sensor_buffer.extend(bytes(data))
 
-            if raw_packet is None:
-                print("Invalid GATT sensor notification.")
-                return
+            for raw_data in extract_complete_json_packets(sensor_buffer):
+                print(f"Complete JSON received: {raw_data!r}")
 
-            notification_queue.put_nowait(
-                ("sensor", raw_packet)
-            )
+            raw_packet = decode_sensor_packet(raw_data)
+
+            if raw_packet is not None:
+                notification_queue.put_nowait(
+                    ("sensor", raw_packet)
+                )
+            else:
+                print("Invalid complete sensor packet.")
+        
 
         def heartbeat_callback(sender, data):
             """Record that the XIAO is still communicating."""

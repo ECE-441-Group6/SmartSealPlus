@@ -33,359 +33,8 @@ import json
 import math
 
 def decode_sensor_packet(data):
-    """Decode and validate the JSON sensor packet."""
-
-    try:
-        # Diagnostic output: inspect exactly what arrived over BLE.
-        print(f"Raw sensor notification ({len(data)} bytes): {data!r}")
-
-        text = data.decode("utf-8")
-        packet = json.loads(text)
-
-        required_fields = {
-            "seal_id",
-            "event_sequence",
-            "temperature",
-            "tamper",
-            "vibration",
-        }
-
-        if not isinstance(packet, dict):
-            print("Invalid packet: JSON is not an object.")
-            return None
-
-        if not required_fields.issubset(packet):
-            print("Missing fields:", required_fields - packet.keys())
-            return None
-
-        if (
-            not isinstance(packet["seal_id"], int)
-            or isinstance(packet["seal_id"], bool)
-            or packet["seal_id"] < 1
-        ):
-            print("Invalid seal_id.")
-            return None
-
-        if (
-            not isinstance(packet["event_sequence"], int)
-            or isinstance(packet["event_sequence"], bool)
-            or not 0 <= packet["event_sequence"] <= 0xFFFFFFFF
-        ):
-            print("Invalid event_sequence.")
-            return None
-
-        # The XIAO sends null when the thermistor reading is invalid.
-        temperature = packet["temperature"]
-
-        if temperature is not None and (
-            not isinstance(temperature, (int, float))
-            or isinstance(temperature, bool)
-            or not math.isfinite(temperature)
-        ):
-            print("Invalid temperature.")
-            return None
-
-        vibration = packet["vibration"]
-
-        if (
-            not isinstance(vibration, (int, float))
-            or isinstance(vibration, bool)
-            or not math.isfinite(vibration)
-            or vibration < 0
-        ):
-            print("Invalid vibration.")
-            return None
-
-        if not isinstance(packet["tamper"], bool):
-            print("Invalid tamper value.")
-            return None
-
-        return {
-            "seal_id": packet["seal_id"],
-            "event_sequence": packet["event_sequence"],
-            "temperature": temperature,
-            "tamper": packet["tamper"],
-            "vibration": vibration,
-        }
-
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as error:
-        print(f"Sensor packet decode error: {error}")
-        return None
-
-
-"""Decode and validate the JSON sensor packet."""
-
-
-"""
-group6ece441fa2026@raspberrypi:~/SmartSealPlus/Gateway $ python gatt_gateway_main.py
-SmartSeal+ gateway started.
-Previous dashboard events cleared.
-Searching for SmartSeal XIAO...
-XIAO not found. Will retry.
-Retrying connection in 3.0 seconds...
-Searching for SmartSeal XIAO...
-Found XIAO: SmartSeal-XIAO
-Connecting...
-GATT connected.
-Subscribed to sensor notifications.
-Subscribed to heartbeat notifications.
-Waiting for live sensor data...
-Heartbeat received: 01000000
-Heartbeat received: 02000000
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":0,"tempera'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ture":69.58,"tamper"'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b':false,"vibration":0'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (5 bytes): b'.006}'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":1,"tempera'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ture":70.39,"tamper"'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b':false,"vibration":0'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (5 bytes): b'.007}'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":2,"tempera'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ture":69.85,"tamper"'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b':false,"vibration":0'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (5 bytes): b'.028}'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Heartbeat received: 03000000
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":3,"tempera'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ture":69.58,"tamper"'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b':false,"vibration":0'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (5 bytes): b'.023}'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":4,"tempera'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ture":69.31,"tamper"'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b':false,"vibration":0'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (5 bytes): b'.036}'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":5,"tempera'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ture":69.03,"tamper"'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b':false,"vibration":0'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (5 bytes): b'.026}'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":6,"tempera'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ture":68.90,"tamper"'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b':false,"vibration":0'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (5 bytes): b'.030}'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":7,"tempera'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ture":69.17,"tamper"'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b':false,"vibration":0'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (5 bytes): b'.036}'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":8,"tempera'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ture":69.03,"tamper"'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b':false,"vibration":0'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (5 bytes): b'.014}'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":9,"tempera'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ture":69.99,"tamper"'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b':false,"vibration":0'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (5 bytes): b'.000}'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":10,"temper'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ature":69.44,"tamper'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'":false,"vibration":'
-Sensor packet decode error: Extra data: line 1 column 10 (char 9)
-Invalid GATT sensor notification.
-Raw sensor notification (6 bytes): b'0.039}'
-Sensor packet decode error: Extra data: line 1 column 6 (char 5)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":11,"temper'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ature":69.71,"tamper'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'":false,"vibration":'
-Sensor packet decode error: Extra data: line 1 column 10 (char 9)
-Invalid GATT sensor notification.
-Raw sensor notification (6 bytes): b'0.023}'
-Sensor packet decode error: Extra data: line 1 column 6 (char 5)
-Invalid GATT sensor notification.
-Heartbeat received: 04000000
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":12,"temper'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ature":69.58,"tamper'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'":false,"vibration":'
-Sensor packet decode error: Extra data: line 1 column 10 (char 9)
-Invalid GATT sensor notification.
-Raw sensor notification (6 bytes): b'0.026}'
-Sensor packet decode error: Extra data: line 1 column 6 (char 5)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":13,"temper'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ature":69.71,"tamper'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'":false,"vibration":'
-Sensor packet decode error: Extra data: line 1 column 10 (char 9)
-Invalid GATT sensor notification.
-Raw sensor notification (6 bytes): b'0.039}'
-Sensor packet decode error: Extra data: line 1 column 6 (char 5)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":14,"temper'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ature":69.17,"tamper'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'":false,"vibration":'
-Sensor packet decode error: Extra data: line 1 column 10 (char 9)
-Invalid GATT sensor notification.
-Raw sensor notification (6 bytes): b'0.028}'
-Sensor packet decode error: Extra data: line 1 column 6 (char 5)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'{"seal_id":1,"event_'
-Sensor packet decode error: Unterminated string starting at: line 1 column 14 (char 13)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'sequence":15,"temper'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'ature":69.99,"tamper'
-Sensor packet decode error: Expecting value: line 1 column 1 (char 0)
-Invalid GATT sensor notification.
-Raw sensor notification (20 bytes): b'":false,"vibration":'
-Sensor packet decode error: Extra data: line 1 column 10 (char 9)
-Invalid GATT sensor notification.
-Raw sensor notification (6 bytes): b'0.031}'
-Sensor packet decode error: Extra data: line 1 column 6 (char 5)
-Invalid GATT sensor notification.
-Heartbeat received: 05000000
-Heartbeat received: 06000000
-Heartbeat received: 07000000
-Heartbeat received: 08000000
-^CGateway event archive saved: /home/group6ece441fa2026/SmartSealPlus/Gateway/archives/gateway-events-20261029-024437-062369.csv
-"""
-
-
-"""
-def decode_sensor_packet(data):
     
-
+    """Decode and validate the JSON sensor packet."""
     try:
         packet = json.loads(data.decode("utf-8"))
 
@@ -445,7 +94,53 @@ def decode_sensor_packet(data):
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
         print("Could not decode sensor packet.")
         return None
-"""
+
+def extract_complete_json_packets(buffer):
+    """Extract complete JSON objects from a buffer of BLE notifications."""
+    packets = []
+
+    while buffer:
+        # Discard any bytes before the start of a JSON object.
+        if buffer[0] != ord("{"):
+            del buffer[0]
+            continue
+
+        depth = 0
+        in_string = False
+        escaped = False
+        packet_end = None
+
+        for i, byte in enumerate(buffer):
+            char = chr(byte)
+
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+
+                if depth == 0:
+                    packet_end = i + 1
+                    break
+
+        # Wait for the remaining bytes if the JSON is incomplete.
+        if packet_end is None:
+            break
+
+        packets.append(bytes(buffer[:packet_end]))
+        del buffer[:packet_end]
+
+    return packets
 
 async def scan_real_ble():
     """Find the XIAO, connect, subscribe, and receive one sensor packet."""
