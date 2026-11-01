@@ -7,13 +7,23 @@ import re
 import asyncio
 from bleak import BleakScanner
 from bleak.exc import BleakError
+from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
 
 MANUFACTURER_ID = 0x5353   #when to use????
 ESP_DEVICE_NAMES = {"SmartSeal-01"} 
 XIAO_DEVICE_NAME = "SmartSeal-XIAO"
+ENCRYPTED_PACKET_VERSION = 2
+ENCRYPTED_PACKET_LENGTH = 24
+ENCRYPTION_KEY = os.getenv(
+    "SMARTSEAL_ENCRYPTION_KEY",
+    "0123456789ABCDEF",
+).encode("ascii")
 SCAN_TIMEOUT = 5.0
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"  #where to set simulation_mode?
+
+if len(ENCRYPTION_KEY) != 16:
+    raise ValueError("SMARTSEAL_ENCRYPTION_KEY must be exactly 16 ASCII bytes")
 
 
 def parse_advertisement(payload):
@@ -26,6 +36,37 @@ def parse_advertisement(payload):
         # that expose the raw manufacturer field.
         if payload.startswith(b"\x53\x53"):
             payload = payload[2:]
+        if (
+            len(payload) == ENCRYPTED_PACKET_LENGTH
+            and payload[0] == ENCRYPTED_PACKET_VERSION
+        ):
+            nonce = payload[1:8]
+            ciphertext_and_tag = payload[8:]
+            try:
+                plaintext = AESCCM(
+                    ENCRYPTION_KEY,
+                    tag_length=6,
+                ).decrypt(
+                    nonce,
+                    ciphertext_and_tag,
+                    payload[:1],
+                )
+            except Exception:
+                return None
+
+            if len(plaintext) != 10:
+                return None
+            return {
+                "seal_id": plaintext[0],
+                "event_sequence": int.from_bytes(plaintext[1:5], "little"),
+                "temperature": int.from_bytes(
+                    plaintext[5:7], "little", signed=True
+                ) / 10.0,
+                "tamper": bool(plaintext[7]),
+                "vibration": int.from_bytes(
+                    plaintext[8:10], "little"
+                ) / 100.0,
+            }
         if len(payload) == 12 and payload[0] == 0xA5 and payload[1] == 1:
             sequence = int.from_bytes(payload[3:7], "little")
             temperature = int.from_bytes(
@@ -90,9 +131,6 @@ async def scan_real_ble():
             xiao_device = device
 
         payloads = advertisement.manufacturer_data.values()
-        if is_xiao:
-            return   #code below wont run
-
         # The device name may be placed in a scan response or omitted when the
         # advertisement is full. The company ID and payload are the reliable
         # protocol identifiers, so do not require the name here.

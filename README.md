@@ -90,6 +90,21 @@ using a 4-byte little-endian integer.
 The gateway accepts the packet using the manufacturer ID and packet format,
 not the advertised device name.
 
+The XIAO `Advertising` firmware encrypts its manufacturer payload with
+AES-CCM. Before deployment, replace `SMARTSEAL_ENCRYPTION_KEY` in
+`XIAOnRF8540/Advertising/config.h` with a unique 16-byte key and provide the
+same value to the gateway:
+
+```bash
+SMARTSEAL_ENCRYPTION_KEY=your16bytekey python3 Gateway/gateway_main.py
+```
+
+Encrypted advertisements use manufacturer ID `0x5353`, version `2`, a
+7-byte random nonce, 10 bytes of encrypted sensor data, and a 6-byte
+authentication tag. The gateway rejects packets that fail authentication.
+Legacy version-1 binary and plaintext packets remain accepted for migration,
+but they do not provide confidentiality.
+
 ## Run the gateway and dashboard
 
 Run each program in a separate terminal from the repository root.
