@@ -76,8 +76,11 @@ def run_gateway(interval=5, scanner=scan_ble):
                 )
                 alerts = process_alerts(packet)
                 temperature_out_of_range = (
-                    packet["temperature"] < TEMP_LOW
-                    or packet["temperature"] > TEMP_HIGH
+                    packet["temperature"] is not None
+                    and (
+                        packet["temperature"] < TEMP_LOW
+                        or packet["temperature"] > TEMP_HIGH
+                    )
                 )
                 capture_triggered = packet["tamper"] or packet["vibration"]
 

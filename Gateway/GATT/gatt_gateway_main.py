@@ -10,7 +10,7 @@ from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 
 if __package__:
-    from .GATT.ble_scanner import (
+    from .gatt_ble_scanner import (
         XIAO_DEVICE_NAME,
         SCAN_TIMEOUT,
         SENSOR_SERVICE_UUID,
@@ -21,8 +21,8 @@ if __package__:
         decode_sensor_packet,
         extract_complete_json_packets,
     )
-    from .packet_parser import parse_packet
-    from .database import (
+    from ..packet_parser import parse_packet
+    from ..database import (
         archive_events,
         clear_event_history,
         get_stale_seals,
@@ -32,12 +32,12 @@ if __package__:
         record_heartbeat,      #TEST 
         update_event_artifacts,
     )
-    from .alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
-    from .ai_analyzer import analyze_image
-    from .camera_manager import capture_image
-    from .image_storage import image_path
+    from ..alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
+    from ..ai_analyzer import analyze_image
+    from ..camera_manager import capture_image
+    from ..image_storage import image_path
 else:
-    from Gateway.GATT.ble_scanner import (
+    from Gateway.GATT.gatt_ble_scanner import (
         XIAO_DEVICE_NAME,
         SCAN_TIMEOUT,
         SENSOR_SERVICE_UUID,
@@ -111,8 +111,11 @@ def process_sensor_packet(raw_packet):
     alerts = process_alerts(packet)
 
     temperature_out_of_range = (
-        packet["temperature"] < TEMP_LOW
-        or packet["temperature"] > TEMP_HIGH
+        packet["temperature"] is not None
+        and (
+            packet["temperature"] < TEMP_LOW
+            or packet["temperature"] > TEMP_HIGH
+        )
     )
 
     capture_triggered = packet["tamper"] or packet["vibration"]
@@ -209,6 +212,7 @@ async def run_connected_session():
         heartbeat_state = {
             "last_received": time.monotonic(),
             "received_any": False,
+            "last_seal_id": None,
         }
         
         
@@ -269,13 +273,15 @@ async def run_connected_session():
                     kind, data = None, None
 
                 if kind == "heartbeat":
-                    record_heartbeat(seal_id)        #TEST
+                    if heartbeat_state["last_seal_id"] is not None:
+                        record_heartbeat(heartbeat_state["last_seal_id"])
                     print(f"Heartbeat received: {data.hex()}")
 
                 elif kind == "sensor":
                     packet = process_sensor_packet(data)
 
                     if packet is not None:
+                        heartbeat_state["last_seal_id"] = packet["seal_id"]
                         # Acknowledge the event sequence number only
                         # after processing the received packet.
                         sequence = packet["event_sequence"]

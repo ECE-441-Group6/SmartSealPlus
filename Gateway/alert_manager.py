@@ -11,11 +11,12 @@ def process_alerts(packet):
         alerts.append("TAMPER DETECTED")
 
     # Check for temperatures outside the allowed range.
-    if packet["temperature"] > TEMP_HIGH:
-        alerts.append("HIGH TEMPERATURE")
+    if packet["temperature"] is not None:
+        if packet["temperature"] > TEMP_HIGH:
+            alerts.append("HIGH TEMPERATURE")
 
-    if packet["temperature"] < TEMP_LOW:
-        alerts.append("LOW TEMPERATURE")
+        if packet["temperature"] < TEMP_LOW:
+            alerts.append("LOW TEMPERATURE")
 
     # Check for vibration events.
     if packet["vibration"]:

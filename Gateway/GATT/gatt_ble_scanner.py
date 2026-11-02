@@ -29,7 +29,6 @@ SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
 
 
-import json
 import math
 
 def decode_sensor_packet(data):
@@ -68,9 +67,11 @@ def decode_sensor_packet(data):
         ):
             return None
 
-        if (
-            not isinstance(packet["temperature"], (int, float))
-            or isinstance(packet["temperature"], bool)
+        temperature = packet["temperature"]
+        if temperature is not None and (
+            not isinstance(temperature, (int, float))
+            or isinstance(temperature, bool)
+            or not math.isfinite(temperature)
         ):
             return None
 

@@ -162,7 +162,7 @@ void setup() {
     Serial.println("SmartSeal recorder ready.");
     Serial.println("A0: Thermistor");
     Serial.println("A2: Vibration sensor");
-    Serial.println("D4: Record button");
+    Serial.println("D6: Record button");
     Serial.print("Sensor sampling interval: ");
     Serial.print(SENSOR_SAMPLING_INTERVAL_MS);
     Serial.println(" ms");
@@ -213,10 +213,10 @@ static void sampleAllSensors(unsigned long now) {
     // Both sensor readings now belong to this update.
     Serial.print("Sample time: ");
     Serial.print(latestReadings.timestampMs);
-    Serial.print(" ms | Temp F: ");
+    Serial.print(" ms | Temp C: ");
 
     if (latestReadings.temperatureValid) {
-        Serial.print(latestReadings.temperatureF, 2);
+        Serial.print(latestReadings.temperatureC, 2);
     } else {
         Serial.print("invalid");
     }
@@ -240,7 +240,7 @@ static void transmitLatestReadings() {
         SEAL_ID,
         eventSequence,
         latestReadings.temperatureValid
-            ? latestReadings.temperatureF
+            ? latestReadings.temperatureC
             : NAN,
         tamperDetected,
         latestReadings.vibrationVoltage

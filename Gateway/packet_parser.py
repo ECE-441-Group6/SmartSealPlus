@@ -30,7 +30,7 @@ def parse_packet(packet):
             raise ValueError("Invalid event sequence")
 
         # Validate the temperature.
-        if (
+        if temperature is not None and (
             not isinstance(temperature, Real)
             or isinstance(temperature, bool)
             or not isfinite(temperature)
