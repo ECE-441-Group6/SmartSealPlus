@@ -9,6 +9,8 @@ import time
 from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 
+from Gateway.database import DB_NAME
+
 if __package__:
     from .gatt_ble_scanner import (
         XIAO_DEVICE_NAME,
@@ -234,15 +236,29 @@ async def run_connected_session():
                     print("Invalid complete sensor packet.")
         
 
+#COMMENT OUT FOR NOW
+      #  def heartbeat_callback(sender, data):
+      #     """Record that the XIAO is still communicating."""
+
+       #     heartbeat_state["last_received"] = time.monotonic()
+       #     heartbeat_state["received_any"] = True
+
+        #    notification_queue.put_nowait(
+        #        ("heartbeat", bytes(data))
+         #   )
+
         def heartbeat_callback(sender, data):
-            """Record that the XIAO is still communicating."""
+            """Update the last-seen timestamp when a heartbeat arrives."""
+            conn = sqlite3.connect(DB_NAME)
+            conn.execute("""
+                INSERT INTO seal_status(seal_id, last_seen)
+                VALUES (?, CURRENT_TIMESTAMP)
+                ON CONFLICT(seal_id) DO UPDATE SET
+                last_seen = CURRENT_TIMESTAMP
+            """, (SEAL_ID,))
 
-            heartbeat_state["last_received"] = time.monotonic()
-            heartbeat_state["received_any"] = True
-
-            notification_queue.put_nowait(
-                ("heartbeat", bytes(data))
-            )
+            conn.commit()
+            conn.close()
 
         await client.start_notify(
             SENSOR_CHARACTERISTIC_UUID,
