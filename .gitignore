@@ -17,6 +17,8 @@ venv/
 .vscode/
 .env
 .env.*
+Gateway/keys.json
+XIAOnRF8540/Advertising/secrets.h
 
 # Generated media and test output
 images/

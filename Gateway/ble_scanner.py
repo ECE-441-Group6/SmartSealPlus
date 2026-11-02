@@ -9,24 +9,50 @@ from bleak import BleakScanner
 from bleak.exc import BleakError
 from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
+try:
+    from .key_registry import KeyRegistryError, load_key_registry
+except ImportError:
+    from key_registry import KeyRegistryError, load_key_registry
 
-MANUFACTURER_ID = 0x5353   #when to use????
+MANUFACTURER_ID = 0x5353
 ESP_DEVICE_NAMES = {"SmartSeal-01"} 
 XIAO_DEVICE_NAME = "SmartSeal-XIAO"
 ENCRYPTED_PACKET_VERSION = 2
 ENCRYPTED_PACKET_LENGTH = 24
-ENCRYPTION_KEY = os.getenv(
-    "SMARTSEAL_ENCRYPTION_KEY",
-    "0123456789ABCDEF",
-).encode("ascii")
 SCAN_TIMEOUT = 5.0
-SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"  #where to set simulation_mode?
-
-if len(ENCRYPTION_KEY) != 16:
-    raise ValueError("SMARTSEAL_ENCRYPTION_KEY must be exactly 16 ASCII bytes")
+SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
 
-def parse_advertisement(payload):
+def _decrypt_encrypted_packet(payload, keys_by_seal):
+    nonce = payload[1:8]
+    ciphertext_and_tag = payload[8:]
+    for seal_id, key in keys_by_seal.items():
+        try:
+            plaintext = AESCCM(key, tag_length=6).decrypt(
+                nonce,
+                ciphertext_and_tag,
+                payload[:1],
+            )
+        except Exception:
+            continue
+
+        if len(plaintext) != 10 or plaintext[0] != seal_id:
+            continue
+        return {
+            "seal_id": seal_id,
+            "event_sequence": int.from_bytes(plaintext[1:5], "little"),
+            "temperature": int.from_bytes(
+                plaintext[5:7], "little", signed=True
+            ) / 10.0,
+            "tamper": bool(plaintext[7]),
+            "vibration": int.from_bytes(
+                plaintext[8:10], "little"
+            ) / 100.0,
+        }
+    return None
+
+
+def parse_advertisement(payload, keys_by_seal=None):
     """Convert an ESP32 or XIAO manufacturer payload into a gateway packet."""
     if payload is None:
         return None
@@ -40,46 +66,35 @@ def parse_advertisement(payload):
             len(payload) == ENCRYPTED_PACKET_LENGTH
             and payload[0] == ENCRYPTED_PACKET_VERSION
         ):
-            nonce = payload[1:8]
-            ciphertext_and_tag = payload[8:]
             try:
-                plaintext = AESCCM(
-                    ENCRYPTION_KEY,
-                    tag_length=6,
-                ).decrypt(
-                    nonce,
-                    ciphertext_and_tag,
-                    payload[:1],
+                keys_by_seal = (
+                    load_key_registry()
+                    if keys_by_seal is None
+                    else keys_by_seal
                 )
-            except Exception:
+            except KeyRegistryError as error:
+                print(f"BLE key registry error: {error}")
                 return None
-
-            if len(plaintext) != 10:
-                return None
-            return {
-                "seal_id": plaintext[0],
-                "event_sequence": int.from_bytes(plaintext[1:5], "little"),
-                "temperature": int.from_bytes(
-                    plaintext[5:7], "little", signed=True
-                ) / 10.0,
-                "tamper": bool(plaintext[7]),
-                "vibration": int.from_bytes(
-                    plaintext[8:10], "little"
-                ) / 100.0,
-            }
+            return _decrypt_encrypted_packet(payload, keys_by_seal)
         if len(payload) == 12 and payload[0] == 0xA5 and payload[1] == 1:
             sequence = int.from_bytes(payload[3:7], "little")
             temperature = int.from_bytes(
                 payload[7:9], "little", signed=True
             ) / 10.0
             vibration = int.from_bytes(payload[10:12], "little") / 100.0
-            return {
+            packet = {
                 "seal_id": payload[2],
                 "event_sequence": sequence,
                 "temperature": temperature,
                 "tamper": bool(payload[9]),
                 "vibration": vibration,
             }
+            if keys_by_seal is None:
+                try:
+                    keys_by_seal = load_key_registry()
+                except KeyRegistryError:
+                    return None
+            return packet if packet["seal_id"] in keys_by_seal else None
         payload = payload.decode("ascii", errors="ignore")
 
     match = re.fullmatch(
@@ -90,13 +105,19 @@ def parse_advertisement(payload):
         return None
 
     seal_id, event_sequence, temperature, tamper, vibration_voltage = match.groups()
-    return {
+    packet = {
         "seal_id": int(seal_id),
         "event_sequence": int(event_sequence),
         "temperature": float(temperature),
         "tamper": tamper == "1",
         "vibration": float(vibration_voltage),
     }
+    if keys_by_seal is None:
+        try:
+            keys_by_seal = load_key_registry()
+        except KeyRegistryError:
+            return None
+    return packet if packet["seal_id"] in keys_by_seal else None
 
 
 def simulated_packet():
@@ -130,7 +151,11 @@ async def scan_real_ble():
         if is_xiao:
             xiao_device = device
 
-        payloads = advertisement.manufacturer_data.values()
+        payloads = (
+            payload
+            for company_id, payload in advertisement.manufacturer_data.items()
+            if company_id == MANUFACTURER_ID
+        )
         # The device name may be placed in a scan response or omitted when the
         # advertisement is full. The company ID and payload are the reliable
         # protocol identifiers, so do not require the name here.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "secrets.h"
 
 constexpr int RECORD_BUTTON_PIN = D6;
 constexpr int TEMP_PIN = A0;
@@ -27,6 +28,3 @@ constexpr unsigned long VIBRATION_CONFIRMATION_WINDOW_MS = 20;
 constexpr unsigned long VIBRATION_REARM_QUIET_MS = 100;
 
 constexpr bool SERIAL_PLOTTER_MODE = true;
-
-// Replace this placeholder with the same 16-byte key configured on the gateway.
-constexpr char SMARTSEAL_ENCRYPTION_KEY[] = "0123456789ABCDEF";

@@ -19,7 +19,7 @@ constexpr size_t PLAINTEXT_LENGTH = 10;
 constexpr size_t TAG_LENGTH = 6;
 constexpr size_t ENCRYPTED_PACKET_LENGTH =
   1 + NONCE_LENGTH + PLAINTEXT_LENGTH + TAG_LENGTH;
-static_assert(sizeof(SMARTSEAL_ENCRYPTION_KEY) - 1 == 16,
+static_assert(sizeof(SMARTSEAL_ENCRYPTION_KEY) == 16,
               "SMARTSEAL_ENCRYPTION_KEY must be exactly 16 bytes");
 
 uint32_t advertisementSequence = 0;
@@ -80,7 +80,7 @@ bool encryptPacket(
   int result = mbedtls_ccm_setkey(
     &context,
     MBEDTLS_CIPHER_ID_AES,
-    reinterpret_cast<const unsigned char *>(SMARTSEAL_ENCRYPTION_KEY),
+    SMARTSEAL_ENCRYPTION_KEY,
     128
   );
   if (result == 0) {

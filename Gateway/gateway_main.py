@@ -7,6 +7,7 @@ import time
 if __package__:
     from .ble_scanner import scan_ble
     from .packet_parser import parse_packet
+    from .key_registry import load_key_registry
     from .database import (
         archive_events,
         clear_event_history,
@@ -23,6 +24,7 @@ if __package__:
 else:
     from ble_scanner import scan_ble
     from packet_parser import parse_packet
+    from key_registry import load_key_registry
     from database import (
         archive_events,
         clear_event_history,
@@ -39,6 +41,7 @@ else:
 
 
 def run_gateway(interval=5, scanner=scan_ble):
+    load_key_registry()
     init_database()
     clear_event_history()
     print("SmartSeal+ gateway started.")

@@ -1,5 +1,8 @@
 import csv
+import base64
 import io
+import json
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -18,14 +21,28 @@ class ReliabilityTests(unittest.TestCase):
         self.old_db_name = database.DB_NAME
         database.DB_NAME = Path(self.temp_dir.name) / "smartseal.db"
         database.init_database()
+        self.old_registry = os.environ.get("SMARTSEAL_KEY_REGISTRY")
+        self.registry_path = Path(self.temp_dir.name) / "keys.json"
+        self.registry_path.write_text(json.dumps({
+            "seals": {
+                "1": {"key": base64.b64encode(b"test-key-1234567").decode()},
+                "2": {"key": base64.b64encode(b"test-key-7654321").decode()},
+            }
+        }), encoding="utf-8")
+        os.environ["SMARTSEAL_KEY_REGISTRY"] = str(self.registry_path)
 
     def tearDown(self):
+        if self.old_registry is None:
+            os.environ.pop("SMARTSEAL_KEY_REGISTRY", None)
+        else:
+            os.environ["SMARTSEAL_KEY_REGISTRY"] = self.old_registry
         database.DB_NAME = self.old_db_name
         self.temp_dir.cleanup()
 
     def packet(self, seal_id=1, sequence=1, temperature=5.0, tamper=False):
         return parse_packet(parse_advertisement(
-            f"S:{seal_id},E:{sequence},T:{temperature},A:{int(tamper)},V:0"
+            f"S:{seal_id},E:{sequence},T:{temperature},A:{int(tamper)},V:0",
+            keys_by_seal={1: b"test-key-1234567", 2: b"test-key-7654321"},
         ))
 
     def test_normal_and_critical_packets_are_parsed(self):
@@ -54,7 +71,10 @@ class ReliabilityTests(unittest.TestCase):
 
     @staticmethod
     def packet_from_binary(payload):
-        return parse_packet(parse_advertisement(payload))
+        return parse_packet(parse_advertisement(
+            payload,
+            keys_by_seal={1: b"test-key-1234567"},
+        ))
 
     def test_retransmission_is_idempotent_and_seals_are_independent(self):
         first = self.packet(sequence=7)
