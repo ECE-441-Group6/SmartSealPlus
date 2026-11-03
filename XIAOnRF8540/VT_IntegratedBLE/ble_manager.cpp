@@ -1,4 +1,6 @@
 #include "ble_manager.h"
+#include "hmac_auth.h"
+#include "device_secrets.h"
 
 #include <bluefruit.h>
 #include <math.h>
@@ -112,36 +114,87 @@ bool sendSensorPacket(
   bool tamper,
   float vibration
 ) {
-  if (!Bluefruit.connected() || !isfinite(temperature) ||
-      !isfinite(vibration) || vibration < 0.0f) {
+  if (!Bluefruit.connected() ||
+      !isfinite(temperature) ||
+      !isfinite(vibration) ||
+      vibration < 0.0f) {
     return false;
   }
 
-  char jsonPacket[128];
+  char authMessage[160];
+
+  if (!formatAuthenticationMessage(
+        sealId,
+        eventSequence,
+        temperature,
+        tamper,
+        vibration,
+        authMessage,
+        sizeof(authMessage))) {
+    Serial.println("BLE: Authentication formatting failed.");
+    return false;
+  }
+
+  char hmacHex[65];
+
+  if (!generatePacketHmac(
+        reinterpret_cast<const uint8_t *>(authMessage),
+        strlen(authMessage),
+        SMARTSEAL_HMAC_KEY,
+        sizeof(SMARTSEAL_HMAC_KEY),
+        hmacHex)) {
+    Serial.println("BLE: HMAC generation failed.");
+    return false;
+  }
+
+  char jsonPacket[256];
+
   const int packetLength = snprintf(
     jsonPacket,
     sizeof(jsonPacket),
     "{\"seal_id\":%lu,\"event_sequence\":%lu,"
-    "\"temperature\":%.2f,\"tamper\":%s,\"vibration\":%.3f}",
+    "\"temperature\":%.2f,\"tamper\":%s,"
+    "\"vibration\":%.3f,\"hmac\":\"%s\"}",
     static_cast<unsigned long>(sealId),
     static_cast<unsigned long>(eventSequence),
-    temperature,
+    static_cast<double>(temperature),
     tamper ? "true" : "false",
-    vibration
+    static_cast<double>(vibration),
+    hmacHex
   );
 
   if (packetLength <= 0 ||
       packetLength >= static_cast<int>(sizeof(jsonPacket))) {
-    Serial.println("BLE: Sensor packet formatting failed.");
+    Serial.println("BLE: Authenticated packet too large.");
     return false;
   }
 
-  return sensorCharacteristic.notify(
-    reinterpret_cast<const uint8_t *>(jsonPacket),
-    static_cast<uint16_t>(packetLength)
-  );
-}
+  constexpr size_t FRAGMENT_SIZE = 20;
 
+  for (size_t offset = 0;
+       offset < static_cast<size_t>(packetLength);
+       offset += FRAGMENT_SIZE) {
+
+    const size_t remaining =
+      static_cast<size_t>(packetLength) - offset;
+
+    const uint16_t fragmentLength =
+      static_cast<uint16_t>(
+        remaining < FRAGMENT_SIZE
+          ? remaining
+          : FRAGMENT_SIZE
+      );
+
+    if (!sensorCharacteristic.notify(
+          reinterpret_cast<const uint8_t *>(jsonPacket + offset),
+          fragmentLength)) {
+      Serial.println("BLE: Fragment transmission failed.");
+      return false;
+    }
+  }
+
+  return true;
+}
 void sendHeartbeat() {
   const unsigned long now = millis();
   if (!Bluefruit.connected() ||
