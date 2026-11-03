@@ -24,6 +24,7 @@ if __package__:
     from .packet_parser import parse_packet
     from .secure_packet_validator import SecurePacketValidator
     from .database import (
+        DB_NAME,
         archive_events,
         clear_event_history,
         get_stale_seals,
@@ -49,7 +50,9 @@ else:
         extract_complete_json_packets,
     )
     from packet_parser import parse_packet
+    from secure_packet_validator import SecurePacketValidator
     from database import (
+        DB_NAME,
         archive_events,
         clear_event_history,
         get_stale_seals,
@@ -70,7 +73,7 @@ RECONNECT_DELAY = 3.0
 # Set to True when the XIAO firmware supports authenticated packets.
 SECURITY_ENFORCED = False
 
-security_validator = SecurePacketValidator()
+security_validator = SecurePacketValidator(db_path=DB_NAME)
 
 
 def find_smartseal(device, advertisement):

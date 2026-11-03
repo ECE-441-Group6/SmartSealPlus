@@ -8,8 +8,8 @@ from Gateway.replay_protection import ReplayProtector
 class SecurePacketValidator:
     """Authenticate sensor packets and reject replayed events."""
 
-    def __init__(self):
-        self.replay_protector = ReplayProtector()
+    def __init__(self, db_path=None):
+        self.replay_protector = ReplayProtector(db_path=db_path)
 
     def validate_packet(self, packet):
         """
