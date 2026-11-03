@@ -6,6 +6,7 @@
 #include "ble_manager.h"
 #include "config.h"
 #include "sensor_manager.h"
+#include "sequence_storage.h"
 
 namespace {
 bool recording = false;
@@ -16,7 +17,7 @@ unsigned long lastTempSampleTime = 0;
 unsigned long lastSerialPrintTime = 0;
 unsigned long lastBleTransmissionTime = 0;
 uint32_t nextVibrationSampleMicros = 0;
-uint32_t eventSequence = 0;
+bool sequenceStorageReady = false;
 float latestTemperatureC = NAN;
 bool vibrationCalibrating = false;
 bool vibrationEventPending = false;
@@ -196,6 +197,13 @@ void sampleVibration() {
     const float vibrationVoltage =
       static_cast<float>(vibrationADC) *
       ADC_REFERENCE_VOLTAGE / ADC_MAX;
+    uint32_t eventSequence = 0;
+    if (!sequenceStorageReady ||
+        !getNextPersistentSequence(&eventSequence)) {
+      Serial.println("SECURITY: Persistent sequence unavailable; packet blocked.");
+      return;
+    }
+
     if (sendSensorPacket(
           1,
           eventSequence,
@@ -203,7 +211,6 @@ void sampleVibration() {
           vibrationEventPending,
           vibrationVoltage
         )) {
-      ++eventSequence;
       vibrationEventPending = false;
     }
   }
@@ -228,6 +235,10 @@ void setup() {
   pinMode(TEMP_PIN, INPUT);
   pinMode(VIBRATION_PIN, INPUT);
   analogReadResolution(12);
+  sequenceStorageReady = initializeSequenceStorage();
+  if (!sequenceStorageReady) {
+    Serial.println("SECURITY: Persistent sequence storage unavailable.");
+  }
   Serial.println("Initializing BLE...");
   initializeBle();
   Serial.println("XIAO nRF52840 recorder ready.");
