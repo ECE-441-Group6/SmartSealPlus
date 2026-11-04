@@ -106,9 +106,8 @@ Encrypted advertisements use manufacturer ID `0x5353`, version `2`, a
 authentication tag. The gateway rejects packets that fail authentication.
 The gateway rejects version-2 packets for unknown seal IDs and requires the
 authenticated seal ID to match the key that successfully decrypts the packet.
-Legacy version-1 binary and plaintext packets are accepted only for registered
-seal IDs and do not provide confidentiality; disable them before production
-deployment.
+Legacy version-1 binary and plaintext packets are rejected because they do not
+provide authentication or confidentiality.
 
 ## Run the gateway and dashboard
 

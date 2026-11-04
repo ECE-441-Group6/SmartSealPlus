@@ -2,7 +2,6 @@
 
 import os
 import random
-import re
 
 import asyncio
 from bleak import BleakScanner
@@ -76,48 +75,7 @@ def parse_advertisement(payload, keys_by_seal=None):
                 print(f"BLE key registry error: {error}")
                 return None
             return _decrypt_encrypted_packet(payload, keys_by_seal)
-        if len(payload) == 12 and payload[0] == 0xA5 and payload[1] == 1:
-            sequence = int.from_bytes(payload[3:7], "little")
-            temperature = int.from_bytes(
-                payload[7:9], "little", signed=True
-            ) / 10.0
-            vibration = int.from_bytes(payload[10:12], "little") / 100.0
-            packet = {
-                "seal_id": payload[2],
-                "event_sequence": sequence,
-                "temperature": temperature,
-                "tamper": bool(payload[9]),
-                "vibration": vibration,
-            }
-            if keys_by_seal is None:
-                try:
-                    keys_by_seal = load_key_registry()
-                except KeyRegistryError:
-                    return None
-            return packet if packet["seal_id"] in keys_by_seal else None
-        payload = payload.decode("ascii", errors="ignore")
-
-    match = re.fullmatch(
-        r"S:(\d+),E:(\d+),T:([-+]?\d+(?:\.\d+)?),A:([01]),V:([-+]?\d+(?:\.\d+)?)",
-        payload.strip("\x00 \r\n"),
-    )
-    if not match:
-        return None
-
-    seal_id, event_sequence, temperature, tamper, vibration_voltage = match.groups()
-    packet = {
-        "seal_id": int(seal_id),
-        "event_sequence": int(event_sequence),
-        "temperature": float(temperature),
-        "tamper": tamper == "1",
-        "vibration": float(vibration_voltage),
-    }
-    if keys_by_seal is None:
-        try:
-            keys_by_seal = load_key_registry()
-        except KeyRegistryError:
-            return None
-    return packet if packet["seal_id"] in keys_by_seal else None
+    return None
 
 
 def simulated_packet():
