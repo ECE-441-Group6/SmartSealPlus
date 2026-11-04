@@ -8,6 +8,8 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
+from cryptography.hazmat.primitives.ciphers.aead import AESCCM
+
 from Gateway import database
 from Gateway import gateway_main
 from Gateway.alert_manager import process_alerts
@@ -39,9 +41,33 @@ class ReliabilityTests(unittest.TestCase):
         database.DB_NAME = self.old_db_name
         self.temp_dir.cleanup()
 
-    def packet(self, seal_id=1, sequence=1, temperature=5.0, tamper=False):
+    def packet(
+        self,
+        seal_id=1,
+        sequence=1,
+        temperature=5.0,
+        tamper=False,
+        vibration=0.0,
+    ):
+        key = {
+            1: b"test-key-1234567",
+            2: b"test-key-7654321",
+        }[seal_id]
+        plaintext = (
+            bytes([seal_id])
+            + sequence.to_bytes(4, "little")
+            + int(temperature * 10).to_bytes(2, "little", signed=True)
+            + bytes([int(tamper)])
+            + int(vibration * 100).to_bytes(2, "little")
+        )
+        nonce = sequence.to_bytes(7, "little")
+        payload = bytes([2]) + nonce + AESCCM(key, tag_length=6).encrypt(
+            nonce,
+            plaintext,
+            b"\x02",
+        )
         return parse_packet(parse_advertisement(
-            f"S:{seal_id},E:{sequence},T:{temperature},A:{int(tamper)},V:0",
+            payload,
             keys_by_seal={1: b"test-key-1234567", 2: b"test-key-7654321"},
         ))
 
@@ -53,28 +79,14 @@ class ReliabilityTests(unittest.TestCase):
         self.assertFalse(critical["tamper"])
         self.assertGreater(critical["temperature"], 8)
 
-    def test_binary_vibration_flag_decodes_as_zero_or_one_event(self):
-        packet_without_vibration = bytes([
-            0xA5, 1, 1, 7, 0, 0, 0, 0x32, 0, 0, 0, 0
-        ])
-        packet_with_vibration = bytes([
-            0xA5, 1, 1, 8, 0, 0, 0, 0x32, 0, 0, 100, 0
-        ])
-
-        normal = self.packet_from_binary(packet_without_vibration)
-        vibration = self.packet_from_binary(packet_with_vibration)
+    def test_authenticated_vibration_value_triggers_event(self):
+        normal = self.packet(sequence=7)
+        vibration = self.packet(sequence=8, vibration=1.0)
 
         self.assertEqual(normal["vibration"], 0.0)
         self.assertEqual(vibration["vibration"], 1.0)
         self.assertNotIn("VIBRATION EVENT", process_alerts(normal))
         self.assertIn("VIBRATION EVENT", process_alerts(vibration))
-
-    @staticmethod
-    def packet_from_binary(payload):
-        return parse_packet(parse_advertisement(
-            payload,
-            keys_by_seal={1: b"test-key-1234567"},
-        ))
 
     def test_retransmission_is_idempotent_and_seals_are_independent(self):
         first = self.packet(sequence=7)
