@@ -112,6 +112,16 @@ python3 Gateway/provision_seal_key.py 1 \
 SMARTSEAL_KEY_REGISTRY=Gateway/keys.json python3 Gateway/gateway_main.py
 ```
 
+In PowerShell, set the environment variable this way:
+
+```powershell
+python3 Gateway/provision_seal_key.py 1 `
+  --registry Gateway/keys.json `
+  --firmware-header XIAOnRF8540/Advertising/secrets.h
+$env:SMARTSEAL_KEY_REGISTRY = "Gateway/keys.json"
+python3 Gateway/gateway_main.py
+```
+
 Encrypted advertisements use manufacturer ID `0x5353`, version `2`, a
 7-byte random nonce, 10 bytes of encrypted sensor data, and a 6-byte
 authentication tag. The gateway rejects packets that fail authentication.
@@ -128,6 +138,13 @@ Terminal 1 — encrypted advertisement gateway:
 
 ```bash
 SMARTSEAL_KEY_REGISTRY=Gateway/keys.json python3 Gateway/gateway_main.py
+```
+
+PowerShell:
+
+```powershell
+$env:SMARTSEAL_KEY_REGISTRY = "Gateway/keys.json"
+python3 Gateway/gateway_main.py
 ```
 
 For the alternate GATT gateway, run:
@@ -151,6 +168,13 @@ Set `SMARTSEAL_SIMULATION=1` to exercise the gateway without BLE hardware:
 
 ```bash
 SMARTSEAL_SIMULATION=1 python3 Gateway/gateway_main.py
+```
+
+In PowerShell:
+
+```powershell
+$env:SMARTSEAL_SIMULATION = "1"
+python3 Gateway/gateway_main.py
 ```
 
 Simulation generates gateway packets in memory and does not require a key
