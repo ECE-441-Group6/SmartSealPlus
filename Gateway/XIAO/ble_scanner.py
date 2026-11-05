@@ -4,12 +4,12 @@ import asyncio
 import os
 
 from bleak import BleakScanner
+from bleak.exc import BleakError
 
 from Gateway.ble_scanner import (
     MANUFACTURER_ID,
     SCAN_TIMEOUT,
     XIAO_DEVICE_NAME,
-    XIAO_DEVICE_NAMES,
     parse_advertisement,
     simulated_packet,
 )
@@ -21,62 +21,20 @@ async def scan_real_ble():
     """Find the XIAO and receive its sensor packet over BLE."""
     xiao_device = None
     advertised_packet = None
-    advertisements_seen = 0
-    manufacturer_packets_seen = 0
-    packet_candidates_seen = 0
-    raw_payload_logged = False
-    xiao_advertisement_logged = False
     packet_received = asyncio.Event()
 
     def detection_callback(device, advertisement):
-        nonlocal advertised_packet, xiao_device, advertisements_seen
-        nonlocal manufacturer_packets_seen, packet_candidates_seen
-        nonlocal raw_payload_logged, xiao_advertisement_logged
-        advertisements_seen += 1
+        nonlocal advertised_packet, xiao_device
         device_name = advertisement.local_name or device.name or ""
-        if (
-            device_name in XIAO_DEVICE_NAMES
-            and not xiao_advertisement_logged
-        ):
-            manufacturer_data = {
-                f"0x{company_id:04X}": bytes(payload).hex()
-                for company_id, payload
-                in (advertisement.manufacturer_data or {}).items()
-            }
-            service_data = {
-                uuid: bytes(payload).hex()
-                for uuid, payload
-                in (advertisement.service_data or {}).items()
-            }
-            print(
-                "XIAO advertisement details: "
-                f"manufacturer_data={manufacturer_data}, "
-                f"service_data={service_data}"
-            )
-            xiao_advertisement_logged = True
         packet = None
         for manufacturer_id, payload in advertisement.manufacturer_data.items():
             if manufacturer_id == MANUFACTURER_ID:
-                manufacturer_packets_seen += 1
-                if not raw_payload_logged:
-                    print(
-                        "SmartSeal BLE manufacturer data observed: "
-                        f"name={device_name or 'unknown'}, "
-                        f"id=0x{manufacturer_id:04X}, "
-                        f"length={len(payload)}, "
-                        f"hex={bytes(payload).hex()}"
-                    )
-                    raw_payload_logged = True
-                if (
-                    isinstance(payload, (bytes, bytearray))
-                    and len(payload) == 11
-                    and payload[0] == 1
-                ):
-                    packet_candidates_seen += 1
+                packet = parse_advertisement(payload)
+            if packet is None and isinstance(payload, (bytes, bytearray)):
                 packet = parse_advertisement(payload)
             if packet is not None:
                 break
-        if device_name in XIAO_DEVICE_NAMES:
+        if device_name == XIAO_DEVICE_NAME:
             xiao_device = device
         if packet is not None:
             advertised_packet = packet
@@ -98,36 +56,21 @@ async def scan_real_ble():
         return advertised_packet
 
     if xiao_device is None:
-        if advertisements_seen == 0:
-            print(
-                "No BLE advertisements were received. Check that the adapter "
-                "is enabled and accessible to this user."
+        try:
+            xiao_device = await BleakScanner.find_device_by_name(
+                XIAO_DEVICE_NAME,
+                timeout=SCAN_TIMEOUT,
             )
-        elif manufacturer_packets_seen == 0:
-            print(
-                f"Received {advertisements_seen} BLE advertisements, but none "
-                f"used SmartSeal manufacturer ID 0x{MANUFACTURER_ID:04X}. "
-                "Check the firmware build and upload."
-            )
-        elif packet_candidates_seen == 0:
-            print(
-                f"Received {manufacturer_packets_seen} SmartSeal manufacturer "
-                "payload(s), but none had the expected 11-byte version-1 "
-                "sensor format. Press D6 to start recording and check the "
-                "uploaded firmware."
-            )
-        else:
-            print(
-                "Received SmartSeal manufacturer data, but no valid packet "
-                "was accepted. Check packet version and length."
-            )
+        except (BleakError, OSError, asyncio.TimeoutError) as error:
+            print(f"XIAO BLE discovery error: {error}")
+
+    if xiao_device is None:
+        print("No valid BLE packet received from SmartSeal-XIAO.")
         return None
 
     print(
-        f"Found {XIAO_DEVICE_NAME}, but no valid SmartSeal packet arrived in "
-        f"{SCAN_TIMEOUT:g} seconds. Press D6 to start recording. "
-        f"Manufacturer payloads seen: {manufacturer_packets_seen}; "
-        f"version-1 candidates: {packet_candidates_seen}."
+        "XIAO was found, but no SmartSeal manufacturer advertisement "
+        "was received. Ensure the updated firmware is uploaded."
     )
     return None
 

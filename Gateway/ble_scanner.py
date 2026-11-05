@@ -2,53 +2,59 @@
 
 import os
 import random
+import re
 
 import asyncio
 from bleak import BleakScanner
 from bleak.exc import BleakError
 
-MANUFACTURER_ID = 0x5353
+
+MANUFACTURER_ID = 0x5353   #when to use????
 ESP_DEVICE_NAMES = {"SmartSeal-01"} 
-XIAO_DEVICE_NAME = "Xiao_Recorder"
-XIAO_DEVICE_NAMES = {XIAO_DEVICE_NAME, "SmartSeal-XIAO"}
-ADVERTISEMENT_PACKET_VERSION = 1
-ADVERTISEMENT_PACKET_LENGTH = 11
-SCAN_TIMEOUT = 15.0
-SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
+XIAO_DEVICE_NAME = "SmartSeal-XIAO"
+SCAN_TIMEOUT = 5.0
+SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"  #where to set simulation_mode?
 
 
 def parse_advertisement(payload):
-    """Decode the version-1 plaintext sensor manufacturer payload."""
-    if not isinstance(payload, (bytes, bytearray)):
+    """Convert an ESP32 or XIAO manufacturer payload into a gateway packet."""
+    if payload is None:
         return None
 
-    # Bleak normally strips the company identifier from manufacturer data.
-    # Some backends return it with the payload instead.
-    if payload.startswith(b"\x53\x53"):
-        payload = payload[2:]
-    if (
-        len(payload) != ADVERTISEMENT_PACKET_LENGTH
-        or payload[0] != ADVERTISEMENT_PACKET_VERSION
-    ):
-        return None
+    if isinstance(payload, (bytes, bytearray)):
+        # Bleak normally removes the company ID. Accept it too for backends
+        # that expose the raw manufacturer field.
+        if payload.startswith(b"\x53\x53"):
+            payload = payload[2:]
+        if len(payload) == 12 and payload[0] == 0xA5 and payload[1] == 1:
+            sequence = int.from_bytes(payload[3:7], "little")
+            temperature = int.from_bytes(
+                payload[7:9], "little", signed=True
+            ) / 10.0
+            vibration = int.from_bytes(payload[10:12], "little") / 100.0
+            return {
+                "seal_id": payload[2],
+                "event_sequence": sequence,
+                "temperature": temperature,
+                "tamper": bool(payload[9]),
+                "vibration": vibration,
+            }
+        payload = payload.decode("ascii", errors="ignore")
 
-    seal_id = payload[1]
-    sequence = int.from_bytes(payload[2:6], "little")
-    temperature_tenths = int.from_bytes(payload[6:8], "little", signed=True)
-    tamper = payload[8]
-    if seal_id < 1 or tamper not in (0, 1):
-        return None
-
-    temperature = (
-        None if temperature_tenths == 0x7FFF
-        else temperature_tenths / 10.0
+    match = re.fullmatch(
+        r"S:(\d+),E:(\d+),T:([-+]?\d+(?:\.\d+)?),A:([01]),V:([-+]?\d+(?:\.\d+)?)",
+        payload.strip("\x00 \r\n"),
     )
+    if not match:
+        return None
+
+    seal_id, event_sequence, temperature, tamper, vibration_voltage = match.groups()
     return {
-        "seal_id": seal_id,
-        "event_sequence": sequence,
-        "temperature": temperature,
-        "tamper": bool(tamper),
-        "vibration": int.from_bytes(payload[9:11], "little") / 100.0,
+        "seal_id": int(seal_id),
+        "event_sequence": int(event_sequence),
+        "temperature": float(temperature),
+        "tamper": tamper == "1",
+        "vibration": float(vibration_voltage),
     }
 
 
@@ -76,18 +82,17 @@ async def scan_real_ble():
             uuid.lower() for uuid in (advertisement.service_uuids or [])
         }
         is_xiao = (
-            device_name in XIAO_DEVICE_NAMES
+            device_name == XIAO_DEVICE_NAME
             or "0000180f-0000-1000-8000-00805f9b34fb" in service_uuids
             or "180f" in service_uuids
         )
         if is_xiao:
             xiao_device = device
 
-        payloads = (
-            payload
-            for company_id, payload in advertisement.manufacturer_data.items()
-            if company_id == MANUFACTURER_ID
-        )
+        payloads = advertisement.manufacturer_data.values()
+        if is_xiao:
+            return   #code below wont run
+
         # The device name may be placed in a scan response or omitted when the
         # advertisement is full. The company ID and payload are the reliable
         # protocol identifiers, so do not require the name here.
@@ -130,11 +135,11 @@ async def scan_real_ble():
 
     print(
         "No valid BLE packet received from "
-        f"{', '.join(sorted(ESP_DEVICE_NAMES | XIAO_DEVICE_NAMES))}."
+        f"{', '.join(sorted(ESP_DEVICE_NAMES | {XIAO_DEVICE_NAME}))}."
     )
     print(
-        "Check that the XIAO is advertising the 0x5353 manufacturer data "
-        "and press D6 to start live sensor updates."
+        "Check that the XIAO is advertising and that the integrated sketch "
+        "is uploaded; press D4 to start live sensor updates."
     )
     return None
 

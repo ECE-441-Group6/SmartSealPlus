@@ -31,10 +31,10 @@ class ReliabilityTests(unittest.TestCase):
         vibration=0.0,
     ):
         temperature_tenths = (
-            0x7FFF if temperature is None else int(temperature * 10)
+            int(temperature * 10)
         )
         payload = (
-            bytes([1, seal_id])
+            bytes([0xA5, 1, seal_id])
             + sequence.to_bytes(4, "little")
             + temperature_tenths.to_bytes(2, "little", signed=True)
             + bytes([int(tamper)])

@@ -214,12 +214,9 @@ void setup() {
   pinMode(VIBRATION_PIN, INPUT);
   analogReadResolution(12);
   Serial.println("Initializing BLE...");
-  if (initializeBle()) {
-    Serial.println("XIAO nRF52840 recorder ready.");
-    Serial.println("Press the record button on D6 to start sampling.");
-  } else {
-    Serial.println("ERROR: BLE startup failed; no sensor packets will be sent.");
-  }
+  initializeBle();
+  Serial.println("XIAO nRF52840 recorder ready.");
+  Serial.println("Press the record button on D6 to start sampling.");
 }
 
 void loop() {

@@ -103,15 +103,13 @@ The advertising gateway identifies packets by manufacturer ID `0x5353`; it
 does not require a key registry. The advertising firmware's device name is
 `Xiao_Recorder`.
 
-The scan response carries manufacturer ID `0x5353` and a plaintext version-1
-sensor payload alongside the XIAO name. Keeping the sensor data in the scan
-response lets the Pi's active BLE scanner receive it with the advertised name.
-The payload is one version byte, one
-seal-ID byte, a 4-byte little-endian event sequence, a signed 2-byte
-temperature in tenths of a degree Celsius (`0x7FFF` means unavailable), one
-tamper byte, and a 2-byte little-endian vibration value in hundredths of a
-volt. The advertisement is non-connectable; sensor values are visible to
-nearby BLE scanners and are not authenticated.
+The primary advertisement carries manufacturer ID `0x5353` and a plaintext
+version-1 sensor payload; the scan response carries the XIAO name. The 12-byte
+payload contains the `0xA5` marker, one version byte, one seal-ID byte, a
+4-byte little-endian event sequence, a signed 2-byte temperature in tenths of
+a degree Celsius, one tamper byte, and a 2-byte little-endian vibration value
+in hundredths of a volt. The advertisement is non-connectable; sensor values
+are visible to nearby BLE scanners and are not authenticated.
 
 In Arduino IDE, open `XIAOnRF8540/Advertising/Advertising.ino`, build, and
 upload it to the XIAO. Open Serial Monitor at 115200 baud and press D6; the
@@ -138,8 +136,9 @@ python3 Gateway/XIAO/gateway_main.py
 The scanner listens for up to 15 seconds per attempt. Press D6 to start
 recording, then wait for the next advertisement. If it receives no packet,
 its output distinguishes no BLE traffic, missing manufacturer data, and an
-unexpected packet format. Make sure Bluetooth is enabled and available to the
-account running Python.
+unexpected packet format. Make sure the XIAO is running the matching
+`XIAOnRF8540/Advertising/Advertising.ino` firmware, Bluetooth is enabled, and
+the adapter is available to the account running Python.
 
 For the alternate GATT gateway, run:
 
@@ -179,7 +178,7 @@ use this simulation mode.
 The advertisement gateway:
 
 1. Scans BLE manufacturer advertisements for company ID `0x5353`.
-2. Decodes version-1 plaintext sensor packets.
+2. Decodes 12-byte `0xA5`-marked version-1 plaintext sensor packets.
 3. Validates packet fields and stores events in `Gateway/smartseal.db`.
 4. Raises low-temperature alerts below 2 °C and high-temperature alerts
    above 8 °C.
@@ -221,7 +220,7 @@ python3 -m py_compile Gateway/packet_parser.py Gateway/ble_scanner.py \
 
 The reliability tests cover packet decoding, duplicate storage,
 event-history clearing, vibration alerts, CSV export, and archiving on gateway
-shutdown. The BLE advertisement tests cover the version-1 plaintext format,
+shutdown. The BLE advertisement tests cover the pre-security packet format,
 malformed packets, and receipt by the gateway scanners. `py_compile` only
 checks Python syntax; it does not execute the gateway or tests.
 
