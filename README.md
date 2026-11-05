@@ -94,7 +94,9 @@ is invalid. Simulation mode does not load real keys.
 1. Open the XIAO firmware sketch you want to use in Arduino IDE:
    `XIAOnRF8540/Advertising/Advertising.ino` for BLE advertising, or
    `XIAOnRF8540/VT_IntegratedBLE.cpp` for the integrated/GATT experiment.
-2. In Arduino IDE Library Manager, install **Crypto** by Rhys Weatherley.
+2. The Seeed nRF52 board package includes Adafruit nRFCrypto; the sketch uses
+   its CryptoCell AES-CCM and random-number APIs. No separate `AES.h` or
+   `CCM.h` library is required.
 3. Generate the private `secrets.h` as described above; do not use the
    all-zero example key.
 4. Select the Seeed XIAO nRF52840 Sense board and its serial port.
@@ -139,9 +141,11 @@ The gateway writes the acknowledged event sequence to the ACK characteristic
 using a 4-byte little-endian integer.
 
 The encrypted advertising gateway accepts manufacturer ID `0x5353` and
-version-2 packets only. The advertisement's 26-byte payload is version `2`,
-a 7-byte hardware-random nonce, 10 bytes of AES-CCM ciphertext, and an
-8-byte authentication tag. The encrypted plaintext contains the seal ID,
+version-2 packets only. The advertisement's 29-byte payload is version `2`,
+a 10-byte hardware-random nonce, 10 bytes of AES-CCM ciphertext, and an
+8-byte authentication tag. Together with the 2-byte company ID, this fills a
+31-byte legacy BLE advertisement, so the device name is sent separately in
+the scan response. The encrypted plaintext contains the seal ID,
 4-byte little-endian event sequence, signed temperature in tenths of a degree
 Celsius, tamper byte, and 2-byte little-endian vibration in hundredths of a
 volt. The version byte is authenticated as additional data. The seal ID is

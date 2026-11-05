@@ -1,9 +1,8 @@
 #include "ble_manager.h"
 
 #include <bluefruit.h>
-#include <AES.h>
-#include <CCM.h>
-#include <Crypto.h>
+#include <Adafruit_nRFCrypto.h>
+#include <nrf_cc310/include/crys_aesccm.h>
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
@@ -15,39 +14,21 @@ namespace {
 constexpr char DEVICE_NAME[] = "SmartSeal-XIAO";
 constexpr uint16_t GATEWAY_MANUFACTURER_ID = 0x5353;
 constexpr uint8_t PACKET_VERSION = 2;
-constexpr size_t NONCE_LENGTH = 7;
+constexpr size_t NONCE_LENGTH = 10;
 constexpr size_t PLAINTEXT_LENGTH = 10;
 constexpr size_t TAG_LENGTH = 8;
 constexpr size_t ENCRYPTED_PACKET_LENGTH =
   1 + NONCE_LENGTH + PLAINTEXT_LENGTH + TAG_LENGTH;
 static_assert(sizeof(SMARTSEAL_ENCRYPTION_KEY) == 16, "AES-128 key required");
 static_assert(
-  ENCRYPTED_PACKET_LENGTH + 4 <= 31,
+  ENCRYPTED_PACKET_LENGTH + 2 <= 31,
   "Encrypted manufacturer data must fit in a BLE advertisement"
 );
 
 uint32_t advertisementSequence = 0;
 
 bool generateNonce(uint8_t *nonce) {
-  NRF_RNG->TASKS_STOP = 1;
-  NRF_RNG->CONFIG = 1;
-  NRF_RNG->EVENTS_VALRDY = 0;
-  NRF_RNG->TASKS_START = 1;
-
-  for (size_t i = 0; i < NONCE_LENGTH; ++i) {
-    const unsigned long waitStart = millis();
-    while (NRF_RNG->EVENTS_VALRDY == 0) {
-      if (millis() - waitStart >= 100) {
-        NRF_RNG->TASKS_STOP = 1;
-        return false;
-      }
-    }
-    NRF_RNG->EVENTS_VALRDY = 0;
-    nonce[i] = static_cast<uint8_t>(NRF_RNG->VALUE);
-  }
-
-  NRF_RNG->TASKS_STOP = 1;
-  return true;
+  return nRFCrypto.Random.generate(nonce, NONCE_LENGTH);
 }
 
 bool encryptPacket(
@@ -59,17 +40,49 @@ bool encryptPacket(
     return false;
   }
 
-  CCM<AES128> ccm;
-  ccm.setKey(SMARTSEAL_ENCRYPTION_KEY, sizeof(SMARTSEAL_ENCRYPTION_KEY));
-  ccm.setIV(packet + 1, NONCE_LENGTH);
-  ccm.setAuthData(packet, 1);
-  ccm.encrypt(
-    packet + 1 + NONCE_LENGTH,
-    plaintext,
-    PLAINTEXT_LENGTH
-  );
-  ccm.computeTag(
+  CRYS_AESCCM_Key_t key = {};
+  memcpy(key, SMARTSEAL_ENCRYPTION_KEY, sizeof(SMARTSEAL_ENCRYPTION_KEY));
+  CRYS_AESCCM_UserContext_t context = {};
+  CRYS_AESCCM_Mac_Res_t tag = {};
+  uint8_t plaintextBuffer[PLAINTEXT_LENGTH];
+  memcpy(plaintextBuffer, plaintext, sizeof(plaintextBuffer));
+  uint8_t tagLength = TAG_LENGTH;
+  uint8_t authenticatedVersion = PACKET_VERSION;
+
+  if (CRYS_AESCCM_Init(
+        &context,
+        SASI_AES_ENCRYPT,
+        key,
+        CRYS_AES_Key128BitSize,
+        sizeof(authenticatedVersion),
+        PLAINTEXT_LENGTH,
+        packet + 1,
+        NONCE_LENGTH,
+        TAG_LENGTH
+      ) != CRYS_OK) {
+    return false;
+  }
+  if (CRYS_AESCCM_BlockAdata(
+        &context,
+        &authenticatedVersion,
+        sizeof(authenticatedVersion)
+      ) != CRYS_OK) {
+    return false;
+  }
+  if (CRYS_AESCCM_Finish(
+        &context,
+        plaintextBuffer,
+        PLAINTEXT_LENGTH,
+        packet + 1 + NONCE_LENGTH,
+        tag,
+        &tagLength
+      ) != CRYS_OK ||
+      tagLength != TAG_LENGTH) {
+    return false;
+  }
+  memcpy(
     packet + 1 + NONCE_LENGTH + PLAINTEXT_LENGTH,
+    tag,
     TAG_LENGTH
   );
   return true;
@@ -99,6 +112,10 @@ void setEncryptedAdvertisement(const uint8_t *packet) {
 bool initializeBle() {
   Bluefruit.begin();
   Bluefruit.setName(DEVICE_NAME);
+  if (!nRFCrypto.begin()) {
+    Serial.println("ERROR: nRF CryptoCell initialization failed.");
+    return false;
+  }
 
   const uint8_t initialPlaintext[PLAINTEXT_LENGTH] = {
     SMARTSEAL_SEAL_ID,

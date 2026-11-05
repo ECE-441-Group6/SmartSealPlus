@@ -18,7 +18,7 @@ from Gateway.key_registry import KeyRegistryError, load_key_registry
 
 
 KEY = bytes(range(16))
-NONCE = bytes(range(7))
+NONCE = bytes(range(10))
 KEYS = {1: KEY}
 
 
