@@ -1,9 +1,10 @@
 #include "ble_manager.h"
 
 #include <bluefruit.h>
+#include <Adafruit_nRFCrypto.h>
 #include <math.h>
-#include <mbedtls/ccm.h>
 #include <nrf.h>
+#include <nrf_cc310/include/crys_aesccm.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -75,34 +76,40 @@ bool encryptPacket(
   encryptedPacket[0] = PACKET_VERSION;
   memcpy(encryptedPacket + 1, nonce, sizeof(nonce));
 
-  mbedtls_ccm_context context;
-  mbedtls_ccm_init(&context);
-  int result = mbedtls_ccm_setkey(
-    &context,
-    MBEDTLS_CIPHER_ID_AES,
-    SMARTSEAL_ENCRYPTION_KEY,
-    128
+  CRYS_AESCCM_Key_t key;
+  memcpy(key, SMARTSEAL_ENCRYPTION_KEY, sizeof(key));
+  uint8_t tag[CRYS_AESCCM_MAC_MAX_SIZE_BYTES] = {};
+  const CRYSError_t result = CRYS_AESCCM(
+    SASI_AES_ENCRYPT,
+    key,
+    CRYS_AES_Key128BitSize,
+    nonce,
+    sizeof(nonce),
+    encryptedPacket,
+    1,
+    plaintext,
+    sizeof(plaintext),
+    encryptedPacket + 1 + NONCE_LENGTH,
+    TAG_LENGTH,
+    tag
   );
-  if (result == 0) {
-    result = mbedtls_ccm_encrypt_and_tag(
-      &context,
-      sizeof(plaintext),
-      nonce,
-      sizeof(nonce),
-      &encryptedPacket[0],
-      1,
-      plaintext,
-      encryptedPacket + 1 + NONCE_LENGTH,
-      encryptedPacket + 1 + NONCE_LENGTH + sizeof(plaintext),
-      TAG_LENGTH
-    );
+  if (result != CRYS_OK) {
+    return false;
   }
-  mbedtls_ccm_free(&context);
-  return result == 0;
+  memcpy(
+    encryptedPacket + 1 + NONCE_LENGTH + sizeof(plaintext),
+    tag,
+    TAG_LENGTH
+  );
+  return true;
 }
 }
 
 void initializeBle() {
+  if (!nRFCrypto.begin()) {
+    Serial.println("BLE encryption library initialization failed.");
+    return;
+  }
   Bluefruit.begin();
   Bluefruit.setName(DEVICE_NAME);
 
