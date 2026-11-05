@@ -248,16 +248,33 @@ async def run_connected_session():
 
         def heartbeat_callback(sender, data):
             """Update the last-seen timestamp when a heartbeat arrives."""
+
+            if len(data) != 8:
+                print("Invalid heartbeat packet length")
+                return
+
+            # Extract seal ID (first 4 bytes).
+            seal_id = int.from_bytes(data[0:4], byteorder="little")
+
+            # Extract heartbeat counter (last 4 bytes).
+            heartbeat_counter = int.from_bytes(data[4:8], byteorder="little")
+
             conn = sqlite3.connect(DB_NAME)
+
             conn.execute("""
                 INSERT INTO seal_status(seal_id, last_seen)
                 VALUES (?, CURRENT_TIMESTAMP)
                 ON CONFLICT(seal_id) DO UPDATE SET
                 last_seen = CURRENT_TIMESTAMP
-            """, (SEAL_ID,))
+                """, (seal_id,))
 
             conn.commit()
             conn.close()
+
+            print(
+                f"Heartbeat received: Seal ID={seal_id}, "
+                f"Counter={heartbeat_counter}"
+            )
 
         await client.start_notify(
             SENSOR_CHARACTERISTIC_UUID,
