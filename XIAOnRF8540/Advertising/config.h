@@ -5,6 +5,7 @@
 constexpr int RECORD_BUTTON_PIN = D6;
 constexpr int TEMP_PIN = A0;
 constexpr int VIBRATION_PIN = A2;
+#define SMARTSEAL_SEAL_ID 1
 
 constexpr float R25 = 10000.0f;
 constexpr float BETA = 3950.0f;
