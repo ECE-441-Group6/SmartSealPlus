@@ -353,7 +353,7 @@ async def run_connected_session():
 
                 if heartbeat_age >= HEARTBEAT_TIMEOUT:
                     print(
-                        "WARNING: No heartbeat received for "
+                        f"WARNING: No heartbeat from seal {seal_id} received for "
                         f"{heartbeat_age:.1f} seconds."
                     )
                     print("Closing session and reconnecting.")

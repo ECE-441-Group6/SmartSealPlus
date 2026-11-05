@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 
-void initializeBle();
+bool initializeBle();
 bool updateGatewayAdvertisement(
   float temperatureC,
   bool vibrationDetected

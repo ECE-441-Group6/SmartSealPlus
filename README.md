@@ -19,8 +19,10 @@ Python gateway + SQLite
   └─ Flask dashboard and CSV session archives
 ```
 
-The default gateway path is plaintext BLE manufacturer advertising. An
-alternate GATT gateway is available
+The default XIAO advertisement path encrypts sensor packets with AES-128-CCM
+using a distinct key per seal. The optional GATT gateway is a separate
+prototype and does not use this advertisement encryption.
+An alternate GATT gateway is available
 for firmware that exposes the UUIDs in `Gateway/GATT/gatt_ble_scanner.py`; it
 receives JSON notifications, monitors heartbeats, and acknowledges sensor
 events.
@@ -48,20 +50,57 @@ environment and avoids PEP 668's blocked system-wide `pip` installs:
 
 ```bash
 sudo apt update
-sudo apt install python3-bleak python3-flask python3-pil
+sudo apt install python3-bleak python3-flask python3-pil python3-cryptography
 ```
 
-The requirements are Flask, Pillow, and Bleak.
+The Python requirements are Flask, Pillow, Bleak, and Cryptography.
+
+## Provision encryption keys
+
+Generate a fresh 128-bit key for each seal from the repository root:
+
+```bash
+python3 -m Gateway.provision_seal_key 1
+```
+
+This writes the gateway registry to `Gateway/keys.json` and the matching
+firmware header to `XIAOnRF8540/Advertising/secrets.h`. Both files are ignored
+by Git and written with owner-only permissions. Do not copy their contents
+into source files, commit them, or reuse a key for another seal. The command
+can also use custom locations:
+
+```bash
+python3 -m Gateway.provision_seal_key 1 \
+  --registry /secure/path/keys.json \
+  --firmware-header /secure/path/secrets.h
+```
+
+Set the gateway environment variable to the same registry in the terminal
+that will run the gateway. Use an absolute path, especially when starting the
+gateway from `Gateway/XIAO`:
+
+```bash
+export SMARTSEAL_KEY_REGISTRY="/absolute/path/to/SmartSealPlus/Gateway/keys.json"
+```
+
+The registry must be a non-empty JSON object mapping decimal seal IDs to
+Base64-encoded 16-byte keys, and on POSIX systems it must not be readable by
+group or other users (`chmod 600 Gateway/keys.json`). Real BLE scanning fails
+closed if the environment variable, file, permissions, encoding, or key length
+is invalid. Simulation mode does not load real keys.
 
 ## Upload the XIAO firmware
 
 1. Open the XIAO firmware sketch you want to use in Arduino IDE:
    `XIAOnRF8540/Advertising/Advertising.ino` for BLE advertising, or
    `XIAOnRF8540/VT_IntegratedBLE.cpp` for the integrated/GATT experiment.
-2. Select the Seeed XIAO nRF52840 Sense board and its serial port.
-3. Upload the sketch.
-4. Open Serial Monitor at 115200 baud.
-5. Press the record button on D6 to start sampling.
+2. In Arduino IDE Library Manager, install **Crypto** by Rhys Weatherley.
+3. Generate the private `secrets.h` as described above; do not use the
+   all-zero example key.
+4. Select the Seeed XIAO nRF52840 Sense board and its serial port.
+5. Upload the sketch.
+6. Open Serial Monitor at 115200 baud.
+7. Press the record button on D6 to start sampling.
 
 The current firmware configuration in `XIAOnRF8540/Advertising/config.h`
 uses:
@@ -99,17 +138,21 @@ The GATT sensor notification contains a JSON packet with these fields:
 The gateway writes the acknowledged event sequence to the ACK characteristic
 using a 4-byte little-endian integer.
 
-The advertising gateway identifies packets by manufacturer ID `0x5353`; it
-does not require a key registry. The advertising firmware's device name is
-`Xiao_Recorder`.
+The encrypted advertising gateway accepts manufacturer ID `0x5353` and
+version-2 packets only. The advertisement's 26-byte payload is version `2`,
+a 7-byte hardware-random nonce, 10 bytes of AES-CCM ciphertext, and an
+8-byte authentication tag. The encrypted plaintext contains the seal ID,
+4-byte little-endian event sequence, signed temperature in tenths of a degree
+Celsius, tamper byte, and 2-byte little-endian vibration in hundredths of a
+volt. The version byte is authenticated as additional data. The seal ID is
+inside the ciphertext and is checked against the key that successfully
+authenticated the packet. Plaintext, legacy, malformed, tampered, unknown-seal,
+and unauthenticated packets are rejected.
 
-The primary advertisement carries manufacturer ID `0x5353` and a plaintext
-version-1 sensor payload; the scan response carries the XIAO name. The 12-byte
-payload contains the `0xA5` marker, one version byte, one seal-ID byte, a
-4-byte little-endian event sequence, a signed 2-byte temperature in tenths of
-a degree Celsius, one tamper byte, and a 2-byte little-endian vibration value
-in hundredths of a volt. The advertisement is non-connectable; sensor values
-are visible to nearby BLE scanners and are not authenticated.
+The ciphertext and authentication tag fit in a BLE manufacturer data field;
+the XIAO name is sent in the scan response. Encryption protects sensor
+contents and authenticates packets, but does not hide the device's presence or
+prevent replay of a previously captured valid packet.
 
 In Arduino IDE, open `XIAOnRF8540/Advertising/Advertising.ino`, build, and
 upload it to the XIAO. Open Serial Monitor at 115200 baud and press D6; the
@@ -133,7 +176,7 @@ Or run it from the project root:
 python3 Gateway/XIAO/gateway_main.py
 ```
 
-The scanner listens for up to 15 seconds per attempt. Press D6 to start
+The scanner listens for up to 5 seconds per attempt. Press D6 to start
 recording, then wait for the next advertisement. If it receives no packet,
 its output distinguishes no BLE traffic, missing manufacturer data, and an
 unexpected packet format. Make sure the XIAO is running the matching
@@ -178,7 +221,8 @@ use this simulation mode.
 The advertisement gateway:
 
 1. Scans BLE manufacturer advertisements for company ID `0x5353`.
-2. Decodes 12-byte `0xA5`-marked version-1 plaintext sensor packets.
+2. Requires the version-2 AES-CCM packet, validates its tag, and checks its
+   authenticated seal ID against the matching registered key.
 3. Validates packet fields and stores events in `Gateway/smartseal.db`.
 4. Raises low-temperature alerts below 2 °C and high-temperature alerts
    above 8 °C.
@@ -215,14 +259,17 @@ From the repository root:
 python3 -m unittest Gateway.Test.test_reliability -v
 python3 -m unittest tests.test_ble_advertisements -v
 python3 -m py_compile Gateway/packet_parser.py Gateway/ble_scanner.py \
+  Gateway/key_registry.py Gateway/provision_seal_key.py \
   Gateway/database.py Gateway/gateway_main.py Dashboard/dashboard.py
 ```
 
 The reliability tests cover packet decoding, duplicate storage,
 event-history clearing, vibration alerts, CSV export, and archiving on gateway
-shutdown. The BLE advertisement tests cover the pre-security packet format,
-malformed packets, and receipt by the gateway scanners. `py_compile` only
-checks Python syntax; it does not execute the gateway or tests.
+shutdown. The BLE advertisement tests cover registered and incorrect keys,
+unknown and forged seal IDs, registry errors, tampered tags, malformed packets,
+plaintext and legacy rejection, and receipt by both gateway scanners.
+`py_compile` only checks Python syntax; it does not execute the gateway or
+tests.
 
 ## Main project paths
 

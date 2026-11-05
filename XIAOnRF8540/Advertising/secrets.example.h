@@ -2,7 +2,8 @@
 
 #include <stdint.h>
 
-// Copy this file to secrets.h and replace every byte before uploading.
+// Template only. Generate a private secrets.h with Gateway/provision_seal_key.py.
+constexpr uint8_t SMARTSEAL_SEAL_ID = 1;
 constexpr uint8_t SMARTSEAL_ENCRYPTION_KEY[16] = {
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00

@@ -2,60 +2,73 @@
 
 import os
 import random
-import re
-
 import asyncio
+
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 from bleak import BleakScanner
 from bleak.exc import BleakError
 
+try:
+    from .key_registry import load_key_registry
+except ImportError:
+    from key_registry import load_key_registry
 
-MANUFACTURER_ID = 0x5353   #when to use????
-ESP_DEVICE_NAMES = {"SmartSeal-01"} 
+
+MANUFACTURER_ID = 0x5353
 XIAO_DEVICE_NAME = "SmartSeal-XIAO"
 SCAN_TIMEOUT = 5.0
-SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"  #where to set simulation_mode?
+SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
+PACKET_VERSION = 2
+NONCE_LENGTH = 7
+PLAINTEXT_LENGTH = 10
+TAG_LENGTH = 8
+PACKET_LENGTH = 1 + NONCE_LENGTH + PLAINTEXT_LENGTH + TAG_LENGTH
+PACKET_VERSION_AAD = bytes([PACKET_VERSION])
 
 
-def parse_advertisement(payload):
-    """Convert an ESP32 or XIAO manufacturer payload into a gateway packet."""
-    if payload is None:
+def parse_advertisement(payload, key_registry=None):
+    """Authenticate and decode a version-2 AES-CCM manufacturer payload."""
+    if not isinstance(payload, (bytes, bytearray)):
         return None
 
-    if isinstance(payload, (bytes, bytearray)):
-        # Bleak normally removes the company ID. Accept it too for backends
-        # that expose the raw manufacturer field.
-        if payload.startswith(b"\x53\x53"):
-            payload = payload[2:]
-        if len(payload) == 12 and payload[0] == 0xA5 and payload[1] == 1:
-            sequence = int.from_bytes(payload[3:7], "little")
-            temperature = int.from_bytes(
-                payload[7:9], "little", signed=True
-            ) / 10.0
-            vibration = int.from_bytes(payload[10:12], "little") / 100.0
-            return {
-                "seal_id": payload[2],
-                "event_sequence": sequence,
-                "temperature": temperature,
-                "tamper": bool(payload[9]),
-                "vibration": vibration,
-            }
-        payload = payload.decode("ascii", errors="ignore")
-
-    match = re.fullmatch(
-        r"S:(\d+),E:(\d+),T:([-+]?\d+(?:\.\d+)?),A:([01]),V:([-+]?\d+(?:\.\d+)?)",
-        payload.strip("\x00 \r\n"),
-    )
-    if not match:
+    payload = bytes(payload)
+    if payload.startswith(b"\x53\x53"):
+        payload = payload[2:]
+    if len(payload) != PACKET_LENGTH or payload[0] != PACKET_VERSION:
         return None
 
-    seal_id, event_sequence, temperature, tamper, vibration_voltage = match.groups()
-    return {
-        "seal_id": int(seal_id),
-        "event_sequence": int(event_sequence),
-        "temperature": float(temperature),
-        "tamper": tamper == "1",
-        "vibration": float(vibration_voltage),
-    }
+    keys = load_key_registry() if key_registry is None else key_registry
+    nonce = payload[1:1 + NONCE_LENGTH]
+    ciphertext_and_tag = payload[1 + NONCE_LENGTH:]
+    ciphertext = ciphertext_and_tag[:-TAG_LENGTH]
+    tag = ciphertext_and_tag[-TAG_LENGTH:]
+
+    for registered_seal_id, key in keys.items():
+        try:
+            plaintext = AESCCM(key, tag_length=TAG_LENGTH).decrypt(
+                nonce,
+                ciphertext + tag,
+                PACKET_VERSION_AAD,
+            )
+        except InvalidTag:
+            continue
+
+        seal_id = plaintext[0]
+        if seal_id != registered_seal_id or plaintext[7] not in (0, 1):
+            return None
+
+        return {
+            "seal_id": seal_id,
+            "event_sequence": int.from_bytes(plaintext[1:5], "little"),
+            "temperature": int.from_bytes(
+                plaintext[5:7], "little", signed=True
+            ) / 10.0,
+            "tamper": bool(plaintext[7]),
+            "vibration": int.from_bytes(plaintext[8:10], "little") / 100.0,
+        }
+
+    return None
 
 
 def simulated_packet():
@@ -72,42 +85,24 @@ def simulated_packet():
 
 async def scan_real_ble():
     """Scan for SmartSeal packets in BLE manufacturer advertisements."""
+    key_registry = load_key_registry()
     packets = []
     xiao_device = None
 
     def detection_callback(device, advertisement):
         nonlocal xiao_device
         device_name = advertisement.local_name or device.name or ""
-        service_uuids = {
-            uuid.lower() for uuid in (advertisement.service_uuids or [])
-        }
-        is_xiao = (
-            device_name == XIAO_DEVICE_NAME
-            or "0000180f-0000-1000-8000-00805f9b34fb" in service_uuids
-            or "180f" in service_uuids
-        )
-        if is_xiao:
+        if device_name == XIAO_DEVICE_NAME:
             xiao_device = device
 
-        payloads = advertisement.manufacturer_data.values()
-        if is_xiao:
-            return   #code below wont run
-
-        # The device name may be placed in a scan response or omitted when the
-        # advertisement is full. The company ID and payload are the reliable
-        # protocol identifiers, so do not require the name here.
-        packet = None
-        for payload in payloads:
-            packet = parse_advertisement(payload)
-            if packet is not None:
-                break
+        payload = advertisement.manufacturer_data.get(MANUFACTURER_ID)
+        packet = parse_advertisement(payload, key_registry) if payload else None
         if packet is not None:
             packets.append(packet)
-        elif advertisement.manufacturer_data:
+        elif payload:
             print(
-                "Ignoring invalid manufacturer payload from "
-                f"{device.name or 'unnamed'}: "
-                f"{advertisement.manufacturer_data!r}"
+                "Ignoring invalid or unauthenticated BLE packet from "
+                f"{device.name or 'unnamed'}."
             )
 
     scanner = BleakScanner(detection_callback=detection_callback)
@@ -117,7 +112,6 @@ async def scan_real_ble():
     finally:
         await scanner.stop()
 
-    #tries to scan for xiao again
     if xiao_device is None and not packets:
         try:
             xiao_device = await BleakScanner.find_device_by_name(
@@ -127,7 +121,6 @@ async def scan_real_ble():
         except (BleakError, OSError, asyncio.TimeoutError) as error:
             print(f"XIAO BLE discovery error: {error}")
 
-    #but packets list will always be empty since code below line 94 wont run? also this will only return the most recent packet, not all of the packets received
     if packets:
         packet = packets[-1]
         print(f"BLE packet received: {packet}")
@@ -135,11 +128,11 @@ async def scan_real_ble():
 
     print(
         "No valid BLE packet received from "
-        f"{', '.join(sorted(ESP_DEVICE_NAMES | {XIAO_DEVICE_NAME}))}."
+        f"{XIAO_DEVICE_NAME}."
     )
     print(
-        "Check that the XIAO is advertising and that the integrated sketch "
-        "is uploaded; press D4 to start live sensor updates."
+        "Check that the XIAO is advertising and has the provisioned "
+        "encrypted firmware uploaded."
     )
     return None
 
@@ -162,7 +155,7 @@ def scan_ble():
             print(f"RUNTIME ERROR DURING BLE SCAN: {error}")
         return None
 
-    except Exception as error:
+    except (BleakError, OSError, asyncio.TimeoutError) as error:
         print(f"BLE SCANNING ERROR: {type(error).__name__}: {error}")
         return None
 
