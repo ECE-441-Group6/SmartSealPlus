@@ -4,7 +4,6 @@ import asyncio
 import os
 
 from bleak import BleakScanner
-from bleak.exc import BleakError
 
 from Gateway.ble_scanner import (
     MANUFACTURER_ID,
@@ -22,15 +21,35 @@ async def scan_real_ble():
     """Find the XIAO and receive its sensor packet over BLE."""
     xiao_device = None
     advertised_packet = None
+    advertisements_seen = 0
+    manufacturer_packets_seen = 0
+    encrypted_candidates_seen = 0
+    authentication_failures = 0
     packet_received = asyncio.Event()
 
     def detection_callback(device, advertisement):
-        nonlocal advertised_packet, xiao_device
+        nonlocal advertised_packet, xiao_device, advertisements_seen
+        nonlocal manufacturer_packets_seen, encrypted_candidates_seen
+        nonlocal authentication_failures
+        advertisements_seen += 1
         device_name = advertisement.local_name or device.name or ""
         packet = None
         for manufacturer_id, payload in advertisement.manufacturer_data.items():
             if manufacturer_id == MANUFACTURER_ID:
+                manufacturer_packets_seen += 1
+                if (
+                    isinstance(payload, (bytes, bytearray))
+                    and len(payload) == 24
+                    and payload[0] == 2
+                ):
+                    encrypted_candidates_seen += 1
                 packet = parse_advertisement(payload)
+                if packet is None and (
+                    isinstance(payload, (bytes, bytearray))
+                    and len(payload) == 24
+                    and payload[0] == 2
+                ):
+                    authentication_failures += 1
             if packet is not None:
                 break
         if device_name in XIAO_DEVICE_NAMES:
@@ -55,26 +74,43 @@ async def scan_real_ble():
         return advertised_packet
 
     if xiao_device is None:
-        try:
-            xiao_device = await BleakScanner.find_device_by_filter(
-                lambda device, advertisement: (
-                    (advertisement.local_name or device.name or "")
-                    in XIAO_DEVICE_NAMES
-                ),
-                timeout=SCAN_TIMEOUT,
+        if advertisements_seen == 0:
+            print(
+                "No BLE advertisements were received. Check that the adapter "
+                "is enabled and accessible to this user."
             )
-        except (BleakError, OSError, asyncio.TimeoutError) as error:
-            print(f"XIAO BLE discovery error: {error}")
-
-    if xiao_device is None:
-        print("No valid BLE packet received from SmartSeal-XIAO.")
+        elif manufacturer_packets_seen == 0:
+            print(
+                f"Received {advertisements_seen} BLE advertisements, but none "
+                f"used SmartSeal manufacturer ID 0x{MANUFACTURER_ID:04X}. "
+                "Check the firmware build and upload."
+            )
+        elif encrypted_candidates_seen == 0:
+            print(
+                f"Received {manufacturer_packets_seen} SmartSeal manufacturer "
+                "payload(s), but none had the expected 24-byte version-2 "
+                "encrypted format. Press D6 to start recording and check the "
+                "uploaded firmware."
+            )
+        elif authentication_failures:
+            print(
+                f"Received {authentication_failures} version-2 packet(s), "
+                "but AES-CCM authentication failed. The firmware secret and "
+                "gateway key registry may not match."
+            )
+        else:
+            print(
+                "Received SmartSeal manufacturer data, but no valid packet "
+                "was accepted. Check packet version and length."
+            )
         return None
 
     print(
-        f"{XIAO_DEVICE_NAME} was found, but no valid SmartSeal manufacturer "
-        "packet was received. Confirm the firmware is advertising company "
-        "ID 0x5353, press D6 to start recording, and verify that the "
-        "gateway registry contains this seal's firmware key."
+        f"Found {XIAO_DEVICE_NAME}, but no valid SmartSeal packet arrived in "
+        f"{SCAN_TIMEOUT:g} seconds. Press D6 to start recording. "
+        f"Manufacturer payloads seen: {manufacturer_packets_seen}; "
+        f"version-2 candidates: {encrypted_candidates_seen}; "
+        f"authentication failures: {authentication_failures}."
     )
     return None
 

@@ -35,14 +35,17 @@ uint8_t randomByte() {
   return value;
 }
 
-void addManufacturerPacket(const uint8_t *packet, size_t packetLength) {
+bool addManufacturerPacket(const uint8_t *packet, size_t packetLength) {
+  if (!packet || packetLength != ENCRYPTED_PACKET_LENGTH) {
+    return false;
+  }
   uint8_t manufacturerData[2 + ENCRYPTED_PACKET_LENGTH];
   manufacturerData[0] =
     static_cast<uint8_t>(GATEWAY_MANUFACTURER_ID & 0xFF);
   manufacturerData[1] =
     static_cast<uint8_t>(GATEWAY_MANUFACTURER_ID >> 8);
   memcpy(manufacturerData + 2, packet, packetLength);
-  Bluefruit.Advertising.addManufacturerData(
+  return Bluefruit.Advertising.addManufacturerData(
     manufacturerData,
     packetLength + 2
   );
@@ -105,29 +108,36 @@ bool encryptPacket(
 }
 }
 
-void initializeBle() {
+bool initializeBle() {
   if (!nRFCrypto.begin()) {
-    Serial.println("BLE encryption library initialization failed.");
-    return;
+    Serial.println("ERROR: BLE encryption library initialization failed.");
+    return false;
   }
   Bluefruit.begin();
   Bluefruit.setName(DEVICE_NAME);
 
-  const uint8_t initialPacket[ENCRYPTED_PACKET_LENGTH] = {};
-
-  Bluefruit.Advertising.addFlags(
-    BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
+  Bluefruit.Advertising.setType(
+    BLE_GAP_ADV_TYPE_NONCONNECTABLE_SCANNABLE_UNDIRECTED
   );
-  addManufacturerPacket(initialPacket, sizeof(initialPacket));
-  Bluefruit.ScanResponse.addName();
-  Bluefruit.Advertising.restartOnDisconnect(true);
+  if (!Bluefruit.Advertising.addFlags(
+        BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
+      ) ||
+      !Bluefruit.ScanResponse.addName()) {
+    Serial.println("ERROR: Could not configure BLE advertisement data.");
+    return false;
+  }
   Bluefruit.Advertising.setInterval(32, 244);
   Bluefruit.Advertising.setFastTimeout(30);
-  Bluefruit.Advertising.start(0);
+  if (!Bluefruit.Advertising.start(0)) {
+    Serial.println("ERROR: Could not start BLE advertising.");
+    return false;
+  }
 
-  Serial.println("BLE manufacturer advertising started.");
+  Serial.println("Non-connectable BLE advertising started.");
   Serial.print("Device name: ");
   Serial.println(DEVICE_NAME);
+  Serial.println("Press D6 to start encrypted sensor broadcasts.");
+  return true;
 }
 
 bool updateGatewayAdvertisement(
@@ -152,15 +162,23 @@ bool updateGatewayAdvertisement(
     return false;
   }
 
-  Bluefruit.Advertising.stop();
+  if (Bluefruit.Advertising.isRunning() &&
+      !Bluefruit.Advertising.stop()) {
+    Serial.println("ERROR: Could not pause BLE advertising for update.");
+    return false;
+  }
   Bluefruit.Advertising.clearData();
-  Bluefruit.Advertising.addFlags(
-    BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
-  );
-  addManufacturerPacket(packet, sizeof(packet));
-  Bluefruit.ScanResponse.clearData();
-  Bluefruit.ScanResponse.addName();
-  Bluefruit.Advertising.start(0);
+  if (!Bluefruit.Advertising.addFlags(
+        BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
+      ) ||
+      !addManufacturerPacket(packet, sizeof(packet))) {
+    Serial.println("ERROR: Could not build encrypted BLE advertisement.");
+    return false;
+  }
+  if (!Bluefruit.Advertising.start(0)) {
+    Serial.println("ERROR: Could not resume BLE advertising.");
+    return false;
+  }
 
   Serial.print("Advertisement updated: sequence=");
   Serial.print(sequence);

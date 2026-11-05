@@ -126,8 +126,11 @@ repeat it for an already provisioned seal unless you intend to rebuild and
 re-upload its firmware with the new key.
 
 In Arduino IDE, open `XIAOnRF8540/Advertising/Advertising.ino`, build, and
-upload it to the XIAO. Open Serial Monitor and press D6; the firmware only
-updates the encrypted sensor advertisement after recording starts.
+upload it to the XIAO. Open Serial Monitor at 115200 baud and press D6; the
+firmware only sends encrypted sensor advertisements after recording starts.
+The advertisements are non-connectable because the gateway only receives
+broadcasts. The serial monitor reports BLE initialization, encryption, or
+advertisement-update failures.
 
 In PowerShell, set the environment variable this way:
 
@@ -154,15 +157,22 @@ Run each program in a separate terminal from the repository root.
 Terminal 1 — encrypted advertisement gateway:
 
 ```bash
-SMARTSEAL_KEY_REGISTRY=Gateway/keys.json python -m Gateway.gateway_main
+SMARTSEAL_KEY_REGISTRY=Gateway/keys.json python -m Gateway.XIAO.gateway_main
 ```
 
 PowerShell:
 
 ```powershell
 $env:SMARTSEAL_KEY_REGISTRY = "Gateway/keys.json"
-python -m Gateway.gateway_main
+python -m Gateway.XIAO.gateway_main
 ```
+
+The XIAO scanner listens for up to 15 seconds per scan. Press D6 to start
+recording, then wait for the next encrypted advertisement. If it receives no
+packet, its output distinguishes no BLE traffic, missing manufacturer data,
+an unexpected packet format, and AES-CCM authentication failures. On
+Raspberry Pi OS, run these commands from an activated `.venv` and make sure
+Bluetooth is enabled and available to the account running Python.
 
 For the alternate GATT gateway, run:
 
