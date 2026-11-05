@@ -9,7 +9,7 @@ import time
 from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 
-from Gateway.database import DB_NAME
+from database import DB_NAME
 
 if __package__:
     from .gatt_ble_scanner import (
@@ -39,7 +39,7 @@ if __package__:
     from ..camera_manager import capture_image
     from ..image_storage import image_path
 else:
-    from Gateway.GATT.gatt_ble_scanner import (
+    from gatt_ble_scanner import (
         XIAO_DEVICE_NAME,
         SCAN_TIMEOUT,
         SENSOR_SERVICE_UUID,
@@ -58,7 +58,6 @@ else:
         init_database,
         insert_event,
         record_seen,
-        record_heartbeat,        #TEST
         update_event_artifacts,
     )
     from alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
