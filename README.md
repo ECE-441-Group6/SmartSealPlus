@@ -8,7 +8,7 @@ dashboard.
 
 ```text
 XIAO nRF52840 Sense
-  ├─ Encrypted BLE manufacturer advertisements (company ID 0x5353)
+  ├─ BLE manufacturer advertisements (company ID 0x5353)
   │    └─ Gateway/ble_scanner.py → Gateway/gateway_main.py
   └─ Optional BLE GATT JSON notifications
        └─ Gateway/GATT/gatt_gateway_main.py
@@ -19,9 +19,8 @@ Python gateway + SQLite
   └─ Flask dashboard and CSV session archives
 ```
 
-The default gateway path is encrypted BLE manufacturer advertising. The
-gateway accepts only version-2 AES-CCM packets and rejects unauthenticated
-legacy binary and plaintext packets. An alternate GATT gateway is available
+The default gateway path is plaintext BLE manufacturer advertising. An
+alternate GATT gateway is available
 for firmware that exposes the UUIDs in `Gateway/GATT/gatt_ble_scanner.py`; it
 receives JSON notifications, monitors heartbeats, and acknowledges sensor
 events.
@@ -29,7 +28,7 @@ events.
 The dashboard communicates with the local SQLite database through Flask HTTP
 endpoints; it does not use BLE.
 
-The encrypted advertising firmware does not include a separate tamper sensor;
+The advertising firmware does not include a separate tamper sensor;
 its tamper field is always `false` and vibration is reported separately. The
 GATT firmware can provide a boolean `tamper` field. Temperature outside the
 2–8 °C range raises an alert but does not by itself trigger a photo. Tamper or
@@ -57,12 +56,12 @@ If `venv` is unavailable on Raspberry Pi OS, install it with
 `sudo apt install python3-venv` and retry. Keep the environment activated when
 running the gateway.
 
-The requirements are Flask, Pillow, Bleak, and cryptography.
+The requirements are Flask, Pillow, and Bleak.
 
 ## Upload the XIAO firmware
 
 1. Open the XIAO firmware sketch you want to use in Arduino IDE:
-   `XIAOnRF8540/Advertising/Advertising.ino` for encrypted advertising, or
+   `XIAOnRF8540/Advertising/Advertising.ino` for BLE advertising, or
    `XIAOnRF8540/VT_IntegratedBLE.cpp` for the integrated/GATT experiment.
 2. Select the Seeed XIAO nRF52840 Sense board and its serial port.
 3. Upload the sketch.
@@ -80,7 +79,7 @@ uses:
   recording
 - Vibration baseline calibration: first 1,000 samples (about one second) after
   recording starts; keep the seal stationary during calibration
-- Encrypted manufacturer advertisement: every 5 seconds
+- Manufacturer advertisement: every 5 seconds
 - Serial plotter output: every 5 seconds
 
 The firmware reports the calibrated baseline ADC and the calibration noise
@@ -105,72 +104,42 @@ The GATT sensor notification contains a JSON packet with these fields:
 The gateway writes the acknowledged event sequence to the ACK characteristic
 using a 4-byte little-endian integer.
 
-The advertising gateway identifies packets by manufacturer ID `0x5353` and
-authenticated packet format, not by the advertised device name. The
-advertising firmware's device name is `Xiao_Recorder`.
+The advertising gateway identifies packets by manufacturer ID `0x5353`; it
+does not require a key registry. The advertising firmware's device name is
+`Xiao_Recorder`.
 
-The XIAO `Advertising` firmware encrypts its manufacturer payload with
-AES-CCM. Generate a unique key for each seal and keep both the firmware
-secret and gateway registry outside source control. Build and upload the
-firmware after provisioning, so the uploaded firmware and gateway registry
-contain the same key:
-
-```bash
-python -m Gateway.provision_seal_key 1 \
-  --registry Gateway/keys.json \
-  --firmware-header XIAOnRF8540/Advertising/secrets.h
-```
-
-Provisioning generates a new key and replaces the key for that seal. Do not
-repeat it for an already provisioned seal unless you intend to rebuild and
-re-upload its firmware with the new key.
+The advertisement payload is plaintext version 1: one version byte, one
+seal-ID byte, a 4-byte little-endian event sequence, a signed 2-byte
+temperature in tenths of a degree Celsius (`0x7FFF` means unavailable), one
+tamper byte, and a 2-byte little-endian vibration value in hundredths of a
+volt. The advertisement is non-connectable; sensor values are visible to
+nearby BLE scanners and are not authenticated.
 
 In Arduino IDE, open `XIAOnRF8540/Advertising/Advertising.ino`, build, and
 upload it to the XIAO. Open Serial Monitor at 115200 baud and press D6; the
-firmware only sends encrypted sensor advertisements after recording starts.
-The advertisements are non-connectable because the gateway only receives
-broadcasts. The serial monitor reports BLE initialization, encryption, or
-advertisement-update failures.
-
-In PowerShell, set the environment variable this way:
-
-```powershell
-python3 Gateway/provision_seal_key.py 1 `
-  --registry Gateway/keys.json `
-  --firmware-header XIAOnRF8540/Advertising/secrets.h
-$env:SMARTSEAL_KEY_REGISTRY = "Gateway/keys.json"
-python3 Gateway/gateway_main.py
-```
-
-Encrypted advertisements use manufacturer ID `0x5353`, version `2`, a
-7-byte random nonce, 10 bytes of encrypted sensor data, and a 6-byte
-authentication tag. The gateway rejects packets that fail authentication.
-The gateway rejects version-2 packets for unknown seal IDs and requires the
-authenticated seal ID to match the key that successfully decrypts the packet.
-Legacy version-1 binary and plaintext packets are rejected because they do not
-provide authentication or confidentiality.
+firmware sends sensor advertisements after recording starts. The serial
+monitor reports BLE initialization or advertisement-update failures.
 
 ## Run the gateway and dashboard
 
 Run each program in a separate terminal from the repository root.
 
-Terminal 1 — encrypted advertisement gateway:
+Terminal 1 — XIAO advertisement gateway:
 
 ```bash
-SMARTSEAL_KEY_REGISTRY=Gateway/keys.json python -m Gateway.XIAO.gateway_main
+python -m Gateway.XIAO.gateway_main
 ```
 
 PowerShell:
 
 ```powershell
-$env:SMARTSEAL_KEY_REGISTRY = "Gateway/keys.json"
 python -m Gateway.XIAO.gateway_main
 ```
 
 The XIAO scanner listens for up to 15 seconds per scan. Press D6 to start
-recording, then wait for the next encrypted advertisement. If it receives no
-packet, its output distinguishes no BLE traffic, missing manufacturer data,
-an unexpected packet format, and AES-CCM authentication failures. On
+recording, then wait for the next advertisement. If it receives no packet,
+its output distinguishes no BLE traffic, missing manufacturer data, and an
+unexpected packet format. On
 Raspberry Pi OS, run these commands from an activated `.venv` and make sure
 Bluetooth is enabled and available to the account running Python.
 
@@ -204,15 +173,15 @@ $env:SMARTSEAL_SIMULATION = "1"
 python -m Gateway.gateway_main
 ```
 
-Simulation generates gateway packets in memory and does not require a key
-registry. The GATT gateway does not use this simulation mode.
+Simulation generates gateway packets in memory. The GATT gateway does not
+use this simulation mode.
 
 ## Event processing and storage
 
-The encrypted-advertisement gateway:
+The advertisement gateway:
 
 1. Scans BLE manufacturer advertisements for company ID `0x5353`.
-2. Authenticates and decrypts version-2 AES-CCM packets.
+2. Decodes version-1 plaintext sensor packets.
 3. Validates packet fields and stores events in `Gateway/smartseal.db`.
 4. Raises low-temperature alerts below 2 °C and high-temperature alerts
    above 8 °C.
@@ -247,21 +216,21 @@ From the repository root:
 
 ```bash
 python3 -m unittest Gateway.Test.test_reliability -v
-python3 -m unittest tests.test_encrypted_packets -v
+python3 -m unittest tests.test_ble_advertisements -v
 python3 -m py_compile Gateway/packet_parser.py Gateway/ble_scanner.py \
   Gateway/database.py Gateway/gateway_main.py Dashboard/dashboard.py
 ```
 
-The reliability tests cover authenticated packet decoding, duplicate storage,
+The reliability tests cover packet decoding, duplicate storage,
 event-history clearing, vibration alerts, CSV export, and archiving on gateway
-shutdown. The encrypted-packet tests cover valid keys, wrong keys, unknown
-seals, modified seal IDs, and missing key registries. `py_compile` only checks
-Python syntax; it does not execute the gateway or tests.
+shutdown. The BLE advertisement tests cover the version-1 plaintext format,
+malformed packets, and receipt by the gateway scanners. `py_compile` only
+checks Python syntax; it does not execute the gateway or tests.
 
 ## Main project paths
 
 ```text
-XIAOnRF8540/Advertising/         Encrypted XIAO advertising firmware
+XIAOnRF8540/Advertising/         XIAO manufacturer-advertising firmware
 XIAOnRF8540/VT_IntegratedBLE.cpp Integrated BLE/GATT firmware experiment
 Gateway/                         Shared packet handling, alerts, storage, camera
 Gateway/GATT/                    Persistent BLE GATT scanner and gateway

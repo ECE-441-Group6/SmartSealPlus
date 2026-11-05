@@ -23,14 +23,12 @@ async def scan_real_ble():
     advertised_packet = None
     advertisements_seen = 0
     manufacturer_packets_seen = 0
-    encrypted_candidates_seen = 0
-    authentication_failures = 0
+    packet_candidates_seen = 0
     packet_received = asyncio.Event()
 
     def detection_callback(device, advertisement):
         nonlocal advertised_packet, xiao_device, advertisements_seen
-        nonlocal manufacturer_packets_seen, encrypted_candidates_seen
-        nonlocal authentication_failures
+        nonlocal manufacturer_packets_seen, packet_candidates_seen
         advertisements_seen += 1
         device_name = advertisement.local_name or device.name or ""
         packet = None
@@ -39,17 +37,11 @@ async def scan_real_ble():
                 manufacturer_packets_seen += 1
                 if (
                     isinstance(payload, (bytes, bytearray))
-                    and len(payload) == 24
-                    and payload[0] == 2
+                    and len(payload) == 11
+                    and payload[0] == 1
                 ):
-                    encrypted_candidates_seen += 1
+                    packet_candidates_seen += 1
                 packet = parse_advertisement(payload)
-                if packet is None and (
-                    isinstance(payload, (bytes, bytearray))
-                    and len(payload) == 24
-                    and payload[0] == 2
-                ):
-                    authentication_failures += 1
             if packet is not None:
                 break
         if device_name in XIAO_DEVICE_NAMES:
@@ -85,18 +77,12 @@ async def scan_real_ble():
                 f"used SmartSeal manufacturer ID 0x{MANUFACTURER_ID:04X}. "
                 "Check the firmware build and upload."
             )
-        elif encrypted_candidates_seen == 0:
+        elif packet_candidates_seen == 0:
             print(
                 f"Received {manufacturer_packets_seen} SmartSeal manufacturer "
-                "payload(s), but none had the expected 24-byte version-2 "
-                "encrypted format. Press D6 to start recording and check the "
+                "payload(s), but none had the expected 11-byte version-1 "
+                "sensor format. Press D6 to start recording and check the "
                 "uploaded firmware."
-            )
-        elif authentication_failures:
-            print(
-                f"Received {authentication_failures} version-2 packet(s), "
-                "but AES-CCM authentication failed. The firmware secret and "
-                "gateway key registry may not match."
             )
         else:
             print(
@@ -109,8 +95,7 @@ async def scan_real_ble():
         f"Found {XIAO_DEVICE_NAME}, but no valid SmartSeal packet arrived in "
         f"{SCAN_TIMEOUT:g} seconds. Press D6 to start recording. "
         f"Manufacturer payloads seen: {manufacturer_packets_seen}; "
-        f"version-2 candidates: {encrypted_candidates_seen}; "
-        f"authentication failures: {authentication_failures}."
+        f"version-1 candidates: {packet_candidates_seen}."
     )
     return None
 

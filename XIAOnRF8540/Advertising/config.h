@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Arduino.h>
-#include "secrets.h"
 
 constexpr int RECORD_BUTTON_PIN = D6;
 constexpr int TEMP_PIN = A0;

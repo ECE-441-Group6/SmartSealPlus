@@ -12,6 +12,7 @@ def parse_packet(packet):
         seal_id = packet["seal_id"]
         event_sequence = packet["event_sequence"]
         temperature = packet["temperature"]
+        tamper = packet.get("tamper", False)
         vibration = packet["vibration"]
 
         # Validate the seal ID.
@@ -37,12 +38,15 @@ def parse_packet(packet):
         ):
             raise ValueError("Invalid temperature")
 
-        # Tamper detection hardware is not currently installed.
         if (
-            not isinstance(vibration, Real)
-            or isinstance(vibration, bool)
+            not isinstance(tamper, bool)
+        ):
+            raise ValueError("Invalid tamper status")
+
+        if (
+            not isinstance(vibration, (bool, Real))
             or not isfinite(vibration)
-            or vibration < 0
+            or (not isinstance(vibration, bool) and vibration < 0)
         ):
             raise ValueError("Invalid vibration voltage")
 
@@ -50,7 +54,7 @@ def parse_packet(packet):
             "seal_id": seal_id,
             "event_sequence": event_sequence,
             "temperature": temperature,
-            "tamper": False,
+            "tamper": tamper,
             "vibration": vibration
         }
 

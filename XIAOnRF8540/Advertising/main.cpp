@@ -208,7 +208,7 @@ void setup() {
     delay(10);
   }
   Serial.println();
-  Serial.println("Starting VT_IntegratedBLE...");
+  Serial.println("Starting SmartSeal BLE advertiser...");
   pinMode(RECORD_BUTTON_PIN, INPUT_PULLUP);
   pinMode(TEMP_PIN, INPUT);
   pinMode(VIBRATION_PIN, INPUT);

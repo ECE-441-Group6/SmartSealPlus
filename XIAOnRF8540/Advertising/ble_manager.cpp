@@ -1,10 +1,7 @@
 #include "ble_manager.h"
 
 #include <bluefruit.h>
-#include <Adafruit_nRFCrypto.h>
 #include <math.h>
-#include <nrf.h>
-#include <nrf_cc310/include/crys_aesccm.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -13,112 +10,69 @@
 namespace {
 constexpr char DEVICE_NAME[] = "Xiao_Recorder";
 constexpr uint16_t GATEWAY_MANUFACTURER_ID = 0x5353;
-constexpr uint8_t PACKET_VERSION = 2;
+constexpr uint8_t PACKET_VERSION = 1;
 constexpr uint8_t SEAL_ID = 1;
-constexpr size_t NONCE_LENGTH = 7;
-constexpr size_t PLAINTEXT_LENGTH = 10;
-constexpr size_t TAG_LENGTH = 6;
-constexpr size_t ENCRYPTED_PACKET_LENGTH =
-  1 + NONCE_LENGTH + PLAINTEXT_LENGTH + TAG_LENGTH;
-static_assert(sizeof(SMARTSEAL_ENCRYPTION_KEY) == 16,
-              "SMARTSEAL_ENCRYPTION_KEY must be exactly 16 bytes");
+constexpr size_t PACKET_LENGTH = 11;
+constexpr int16_t INVALID_TEMPERATURE = INT16_MAX;
 
 uint32_t advertisementSequence = 0;
 
-uint8_t randomByte() {
-  NRF_RNG->EVENTS_VALRDY = 0;
-  NRF_RNG->TASKS_START = 1;
-  while (NRF_RNG->EVENTS_VALRDY == 0) {
-  }
-  const uint8_t value = NRF_RNG->VALUE;
-  NRF_RNG->TASKS_STOP = 1;
-  return value;
-}
-
-bool addManufacturerPacket(const uint8_t *packet, size_t packetLength) {
-  if (!packet || packetLength != ENCRYPTED_PACKET_LENGTH) {
-    return false;
-  }
-  uint8_t manufacturerData[2 + ENCRYPTED_PACKET_LENGTH];
-  manufacturerData[0] =
-    static_cast<uint8_t>(GATEWAY_MANUFACTURER_ID & 0xFF);
-  manufacturerData[1] =
-    static_cast<uint8_t>(GATEWAY_MANUFACTURER_ID >> 8);
-  memcpy(manufacturerData + 2, packet, packetLength);
+bool addManufacturerPacket(const uint8_t *packet) {
+  uint8_t manufacturerData[2 + PACKET_LENGTH] = {
+    static_cast<uint8_t>(GATEWAY_MANUFACTURER_ID & 0xFF),
+    static_cast<uint8_t>(GATEWAY_MANUFACTURER_ID >> 8)
+  };
+  memcpy(manufacturerData + 2, packet, PACKET_LENGTH);
   return Bluefruit.Advertising.addManufacturerData(
     manufacturerData,
-    packetLength + 2
+    sizeof(manufacturerData)
   );
 }
 
-bool encryptPacket(
+bool makePacket(
   float temperatureC,
   bool vibrationDetected,
   uint32_t sequence,
-  uint8_t *encryptedPacket
+  uint8_t *packet
 ) {
-  const int16_t temperatureTenths =
-    static_cast<int16_t>(lroundf(temperatureC * 10.0f));
-  uint8_t plaintext[PLAINTEXT_LENGTH] = {
-    SEAL_ID,
-    static_cast<uint8_t>(sequence & 0xFF),
-    static_cast<uint8_t>((sequence >> 8) & 0xFF),
-    static_cast<uint8_t>((sequence >> 16) & 0xFF),
-    static_cast<uint8_t>((sequence >> 24) & 0xFF),
-    static_cast<uint8_t>(temperatureTenths & 0xFF),
-    static_cast<uint8_t>((temperatureTenths >> 8) & 0xFF),
-    0,
-    static_cast<uint8_t>(vibrationDetected ? 100 : 0),
-    0
-  };
-  uint8_t nonce[NONCE_LENGTH];
-  for (size_t index = 0; index < sizeof(nonce); ++index) {
-    nonce[index] = randomByte();
-  }
-
-  encryptedPacket[0] = PACKET_VERSION;
-  memcpy(encryptedPacket + 1, nonce, sizeof(nonce));
-
-  CRYS_AESCCM_Key_t key;
-  memcpy(key, SMARTSEAL_ENCRYPTION_KEY, sizeof(key));
-  uint8_t tag[CRYS_AESCCM_MAC_MAX_SIZE_BYTES] = {};
-  const CRYSError_t result = CRYS_AESCCM(
-    SASI_AES_ENCRYPT,
-    key,
-    CRYS_AES_Key128BitSize,
-    nonce,
-    sizeof(nonce),
-    encryptedPacket,
-    1,
-    plaintext,
-    sizeof(plaintext),
-    encryptedPacket + 1 + NONCE_LENGTH,
-    TAG_LENGTH,
-    tag
-  );
-  if (result != CRYS_OK) {
+  if (!packet) {
     return false;
   }
-  memcpy(
-    encryptedPacket + 1 + NONCE_LENGTH + sizeof(plaintext),
-    tag,
-    TAG_LENGTH
+
+  int16_t temperatureTenths = INVALID_TEMPERATURE;
+  if (isfinite(temperatureC)) {
+    if (temperatureC < -3276.8f || temperatureC > 3276.6f) {
+      return false;
+    }
+    temperatureTenths =
+      static_cast<int16_t>(lroundf(temperatureC * 10.0f));
+  }
+
+  packet[0] = PACKET_VERSION;
+  packet[1] = SEAL_ID;
+  packet[2] = static_cast<uint8_t>(sequence & 0xFF);
+  packet[3] = static_cast<uint8_t>((sequence >> 8) & 0xFF);
+  packet[4] = static_cast<uint8_t>((sequence >> 16) & 0xFF);
+  packet[5] = static_cast<uint8_t>((sequence >> 24) & 0xFF);
+  packet[6] = static_cast<uint8_t>(temperatureTenths & 0xFF);
+  packet[7] = static_cast<uint8_t>(
+    (static_cast<uint16_t>(temperatureTenths) >> 8) & 0xFF
   );
+  packet[8] = 0;
+  const uint16_t vibrationHundredths = vibrationDetected ? 100 : 0;
+  packet[9] = static_cast<uint8_t>(vibrationHundredths & 0xFF);
+  packet[10] = static_cast<uint8_t>(vibrationHundredths >> 8);
   return true;
 }
 }
 
 bool initializeBle() {
-  if (!nRFCrypto.begin()) {
-    Serial.println("ERROR: BLE encryption library initialization failed.");
-    return false;
-  }
   Bluefruit.begin();
   Bluefruit.setName(DEVICE_NAME);
-
   Bluefruit.Advertising.setType(
     BLE_GAP_ADV_TYPE_NONCONNECTABLE_SCANNABLE_UNDIRECTED
   );
+
   if (!Bluefruit.Advertising.addFlags(
         BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
       ) ||
@@ -136,7 +90,7 @@ bool initializeBle() {
   Serial.println("Non-connectable BLE advertising started.");
   Serial.print("Device name: ");
   Serial.println(DEVICE_NAME);
-  Serial.println("Press D6 to start encrypted sensor broadcasts.");
+  Serial.println("Press D6 to start sensor broadcasts.");
   return true;
 }
 
@@ -144,21 +98,10 @@ bool updateGatewayAdvertisement(
   float temperatureC,
   bool vibrationDetected
 ) {
-  if (!isfinite(temperatureC) ||
-      temperatureC < -3276.8f ||
-      temperatureC > 3276.7f) {
-    return false;
-  }
-
   const uint32_t sequence = ++advertisementSequence;
-  uint8_t packet[ENCRYPTED_PACKET_LENGTH];
-  if (!encryptPacket(
-        temperatureC,
-        vibrationDetected,
-        sequence,
-        packet
-      )) {
-    Serial.println("BLE encryption failed; advertisement not updated.");
+  uint8_t packet[PACKET_LENGTH];
+  if (!makePacket(temperatureC, vibrationDetected, sequence, packet)) {
+    Serial.println("ERROR: Sensor values do not fit BLE packet.");
     return false;
   }
 
@@ -171,8 +114,8 @@ bool updateGatewayAdvertisement(
   if (!Bluefruit.Advertising.addFlags(
         BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
       ) ||
-      !addManufacturerPacket(packet, sizeof(packet))) {
-    Serial.println("ERROR: Could not build encrypted BLE advertisement.");
+      !addManufacturerPacket(packet)) {
+    Serial.println("ERROR: Could not build BLE manufacturer packet.");
     return false;
   }
   if (!Bluefruit.Advertising.start(0)) {
@@ -180,10 +123,14 @@ bool updateGatewayAdvertisement(
     return false;
   }
 
-  Serial.print("Advertisement updated: sequence=");
+  Serial.print("BLE advertisement sent: sequence=");
   Serial.print(sequence);
   Serial.print(", temperature C=");
-  Serial.print(temperatureC, 1);
+  if (isfinite(temperatureC)) {
+    Serial.print(temperatureC, 1);
+  } else {
+    Serial.print("invalid");
+  }
   Serial.print(", vibration=");
   Serial.println(vibrationDetected ? 1 : 0);
   return true;

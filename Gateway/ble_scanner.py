@@ -6,77 +6,50 @@ import random
 import asyncio
 from bleak import BleakScanner
 from bleak.exc import BleakError
-from cryptography.hazmat.primitives.ciphers.aead import AESCCM
-
-try:
-    from .key_registry import KeyRegistryError, load_key_registry
-except ImportError:
-    from key_registry import KeyRegistryError, load_key_registry
 
 MANUFACTURER_ID = 0x5353
 ESP_DEVICE_NAMES = {"SmartSeal-01"} 
 XIAO_DEVICE_NAME = "Xiao_Recorder"
 XIAO_DEVICE_NAMES = {XIAO_DEVICE_NAME, "SmartSeal-XIAO"}
-ENCRYPTED_PACKET_VERSION = 2
-ENCRYPTED_PACKET_LENGTH = 24
+ADVERTISEMENT_PACKET_VERSION = 1
+ADVERTISEMENT_PACKET_LENGTH = 11
 SCAN_TIMEOUT = 15.0
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
 
-def _decrypt_encrypted_packet(payload, keys_by_seal):
-    nonce = payload[1:8]
-    ciphertext_and_tag = payload[8:]
-    for seal_id, key in keys_by_seal.items():
-        try:
-            plaintext = AESCCM(key, tag_length=6).decrypt(
-                nonce,
-                ciphertext_and_tag,
-                payload[:1],
-            )
-        except Exception:
-            continue
-
-        if len(plaintext) != 10 or plaintext[0] != seal_id:
-            continue
-        return {
-            "seal_id": seal_id,
-            "event_sequence": int.from_bytes(plaintext[1:5], "little"),
-            "temperature": int.from_bytes(
-                plaintext[5:7], "little", signed=True
-            ) / 10.0,
-            "tamper": bool(plaintext[7]),
-            "vibration": int.from_bytes(
-                plaintext[8:10], "little"
-            ) / 100.0,
-        }
-    return None
-
-
-def parse_advertisement(payload, keys_by_seal=None):
-    """Convert an ESP32 or XIAO manufacturer payload into a gateway packet."""
-    if payload is None:
+def parse_advertisement(payload):
+    """Decode the version-1 plaintext sensor manufacturer payload."""
+    if not isinstance(payload, (bytes, bytearray)):
         return None
 
-    if isinstance(payload, (bytes, bytearray)):
-        # Bleak normally removes the company ID. Accept it too for backends
-        # that expose the raw manufacturer field.
-        if payload.startswith(b"\x53\x53"):
-            payload = payload[2:]
-        if (
-            len(payload) == ENCRYPTED_PACKET_LENGTH
-            and payload[0] == ENCRYPTED_PACKET_VERSION
-        ):
-            try:
-                keys_by_seal = (
-                    load_key_registry()
-                    if keys_by_seal is None
-                    else keys_by_seal
-                )
-            except KeyRegistryError as error:
-                print(f"BLE key registry error: {error}")
-                return None
-            return _decrypt_encrypted_packet(payload, keys_by_seal)
-    return None
+    # Bleak normally strips the company identifier from manufacturer data.
+    # Some backends return it with the payload instead.
+    if payload.startswith(b"\x53\x53"):
+        payload = payload[2:]
+    if (
+        len(payload) != ADVERTISEMENT_PACKET_LENGTH
+        or payload[0] != ADVERTISEMENT_PACKET_VERSION
+    ):
+        return None
+
+    seal_id = payload[1]
+    sequence = int.from_bytes(payload[2:6], "little")
+    temperature_tenths = int.from_bytes(payload[6:8], "little", signed=True)
+    tamper = payload[8]
+    if seal_id < 1 or tamper not in (0, 1):
+        return None
+
+    temperature = (
+        None if temperature_tenths == 0x7FFF
+        else temperature_tenths / 10.0
+    )
+    return {
+        "seal_id": seal_id,
+        "event_sequence": sequence,
+        "temperature": temperature,
+        "tamper": bool(tamper),
+        "vibration": int.from_bytes(payload[9:11], "little") / 100.0,
+    }
 
 
 def simulated_packet():
@@ -160,9 +133,8 @@ async def scan_real_ble():
         f"{', '.join(sorted(ESP_DEVICE_NAMES | XIAO_DEVICE_NAMES))}."
     )
     print(
-        "Check that the XIAO is advertising the 0x5353 manufacturer data, "
-        "that a matching key is configured, and press D6 to start live "
-        "sensor updates."
+        "Check that the XIAO is advertising the 0x5353 manufacturer data "
+        "and press D6 to start live sensor updates."
     )
     return None
 

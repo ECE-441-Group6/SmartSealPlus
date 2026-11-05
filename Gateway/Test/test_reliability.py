@@ -1,14 +1,9 @@
 import csv
-import base64
 import io
-import json
-import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
-
-from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
 from Gateway import database
 from Gateway import gateway_main
@@ -23,21 +18,7 @@ class ReliabilityTests(unittest.TestCase):
         self.old_db_name = database.DB_NAME
         database.DB_NAME = Path(self.temp_dir.name) / "smartseal.db"
         database.init_database()
-        self.old_registry = os.environ.get("SMARTSEAL_KEY_REGISTRY")
-        self.registry_path = Path(self.temp_dir.name) / "keys.json"
-        self.registry_path.write_text(json.dumps({
-            "seals": {
-                "1": {"key": base64.b64encode(b"test-key-1234567").decode()},
-                "2": {"key": base64.b64encode(b"test-key-7654321").decode()},
-            }
-        }), encoding="utf-8")
-        os.environ["SMARTSEAL_KEY_REGISTRY"] = str(self.registry_path)
-
     def tearDown(self):
-        if self.old_registry is None:
-            os.environ.pop("SMARTSEAL_KEY_REGISTRY", None)
-        else:
-            os.environ["SMARTSEAL_KEY_REGISTRY"] = self.old_registry
         database.DB_NAME = self.old_db_name
         self.temp_dir.cleanup()
 
@@ -49,37 +30,27 @@ class ReliabilityTests(unittest.TestCase):
         tamper=False,
         vibration=0.0,
     ):
-        key = {
-            1: b"test-key-1234567",
-            2: b"test-key-7654321",
-        }[seal_id]
-        plaintext = (
-            bytes([seal_id])
+        temperature_tenths = (
+            0x7FFF if temperature is None else int(temperature * 10)
+        )
+        payload = (
+            bytes([1, seal_id])
             + sequence.to_bytes(4, "little")
-            + int(temperature * 10).to_bytes(2, "little", signed=True)
+            + temperature_tenths.to_bytes(2, "little", signed=True)
             + bytes([int(tamper)])
             + int(vibration * 100).to_bytes(2, "little")
         )
-        nonce = sequence.to_bytes(7, "little")
-        payload = bytes([2]) + nonce + AESCCM(key, tag_length=6).encrypt(
-            nonce,
-            plaintext,
-            b"\x02",
-        )
-        return parse_packet(parse_advertisement(
-            payload,
-            keys_by_seal={1: b"test-key-1234567", 2: b"test-key-7654321"},
-        ))
+        return parse_packet(parse_advertisement(payload))
 
     def test_normal_and_critical_packets_are_parsed(self):
         normal = self.packet()
         critical = self.packet(sequence=2, temperature=9.0, tamper=True)
         self.assertFalse(normal["tamper"])
         self.assertEqual(critical["event_sequence"], 2)
-        self.assertFalse(critical["tamper"])
+        self.assertTrue(critical["tamper"])
         self.assertGreater(critical["temperature"], 8)
 
-    def test_authenticated_vibration_value_triggers_event(self):
+    def test_vibration_value_triggers_event(self):
         normal = self.packet(sequence=7)
         vibration = self.packet(sequence=8, vibration=1.0)
 
