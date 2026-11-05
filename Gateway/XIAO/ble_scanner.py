@@ -10,6 +10,7 @@ from Gateway.ble_scanner import (
     MANUFACTURER_ID,
     SCAN_TIMEOUT,
     XIAO_DEVICE_NAME,
+    XIAO_DEVICE_NAMES,
     parse_advertisement,
     simulated_packet,
 )
@@ -30,11 +31,9 @@ async def scan_real_ble():
         for manufacturer_id, payload in advertisement.manufacturer_data.items():
             if manufacturer_id == MANUFACTURER_ID:
                 packet = parse_advertisement(payload)
-            if packet is None and isinstance(payload, (bytes, bytearray)):
-                packet = parse_advertisement(payload)
             if packet is not None:
                 break
-        if device_name == XIAO_DEVICE_NAME:
+        if device_name in XIAO_DEVICE_NAMES:
             xiao_device = device
         if packet is not None:
             advertised_packet = packet
@@ -57,8 +56,11 @@ async def scan_real_ble():
 
     if xiao_device is None:
         try:
-            xiao_device = await BleakScanner.find_device_by_name(
-                XIAO_DEVICE_NAME,
+            xiao_device = await BleakScanner.find_device_by_filter(
+                lambda device, advertisement: (
+                    (advertisement.local_name or device.name or "")
+                    in XIAO_DEVICE_NAMES
+                ),
                 timeout=SCAN_TIMEOUT,
             )
         except (BleakError, OSError, asyncio.TimeoutError) as error:
@@ -69,8 +71,10 @@ async def scan_real_ble():
         return None
 
     print(
-        "XIAO was found, but no SmartSeal manufacturer advertisement "
-        "was received. Ensure the updated firmware is uploaded."
+        f"{XIAO_DEVICE_NAME} was found, but no valid SmartSeal manufacturer "
+        "packet was received. Confirm the firmware is advertising company "
+        "ID 0x5353, press D6 to start recording, and verify that the "
+        "gateway registry contains this seal's firmware key."
     )
     return None
 

@@ -43,11 +43,19 @@ vibration events trigger a camera capture.
 - Raspberry Pi camera for real photographs (optional; Pillow creates a
   simulated image when camera hardware is unavailable)
 
-Install gateway and dashboard dependencies from the repository root:
+Install gateway and dashboard dependencies from a virtual environment. This
+avoids system-wide package changes and works on Raspberry Pi OS versions that
+enforce PEP 668:
 
 ```bash
-python3 -m pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
+
+If `venv` is unavailable on Raspberry Pi OS, install it with
+`sudo apt install python3-venv` and retry. Keep the environment activated when
+running the gateway.
 
 The requirements are Flask, Pillow, Bleak, and cryptography.
 
@@ -103,14 +111,23 @@ advertising firmware's device name is `Xiao_Recorder`.
 
 The XIAO `Advertising` firmware encrypts its manufacturer payload with
 AES-CCM. Generate a unique key for each seal and keep both the firmware
-secret and gateway registry outside source control:
+secret and gateway registry outside source control. Build and upload the
+firmware after provisioning, so the uploaded firmware and gateway registry
+contain the same key:
 
 ```bash
-python3 Gateway/provision_seal_key.py 1 \
+python -m Gateway.provision_seal_key 1 \
   --registry Gateway/keys.json \
   --firmware-header XIAOnRF8540/Advertising/secrets.h
-SMARTSEAL_KEY_REGISTRY=Gateway/keys.json python3 Gateway/gateway_main.py
 ```
+
+Provisioning generates a new key and replaces the key for that seal. Do not
+repeat it for an already provisioned seal unless you intend to rebuild and
+re-upload its firmware with the new key.
+
+In Arduino IDE, open `XIAOnRF8540/Advertising/Advertising.ino`, build, and
+upload it to the XIAO. Open Serial Monitor and press D6; the firmware only
+updates the encrypted sensor advertisement after recording starts.
 
 In PowerShell, set the environment variable this way:
 
@@ -137,26 +154,26 @@ Run each program in a separate terminal from the repository root.
 Terminal 1 — encrypted advertisement gateway:
 
 ```bash
-SMARTSEAL_KEY_REGISTRY=Gateway/keys.json python3 Gateway/gateway_main.py
+SMARTSEAL_KEY_REGISTRY=Gateway/keys.json python -m Gateway.gateway_main
 ```
 
 PowerShell:
 
 ```powershell
 $env:SMARTSEAL_KEY_REGISTRY = "Gateway/keys.json"
-python3 Gateway/gateway_main.py
+python -m Gateway.gateway_main
 ```
 
 For the alternate GATT gateway, run:
 
 ```bash
-python3 -m Gateway.GATT.gatt_gateway_main
+python -m Gateway.GATT.gatt_gateway_main
 ```
 
 Terminal 2 — dashboard:
 
 ```bash
-python3 Dashboard/dashboard.py
+python Dashboard/dashboard.py
 ```
 
 Open [http://127.0.0.1:5000](http://127.0.0.1:5000). The live dashboard polls
@@ -167,14 +184,14 @@ previously archived sessions.
 Set `SMARTSEAL_SIMULATION=1` to exercise the gateway without BLE hardware:
 
 ```bash
-SMARTSEAL_SIMULATION=1 python3 Gateway/gateway_main.py
+SMARTSEAL_SIMULATION=1 python -m Gateway.gateway_main
 ```
 
 In PowerShell:
 
 ```powershell
 $env:SMARTSEAL_SIMULATION = "1"
-python3 Gateway/gateway_main.py
+python -m Gateway.gateway_main
 ```
 
 Simulation generates gateway packets in memory and does not require a key

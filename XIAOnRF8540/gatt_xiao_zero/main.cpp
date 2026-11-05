@@ -6,7 +6,7 @@
 
 // Bluetooth functions implemented in GATT_Xiao.ino.
 void setupBLE();
-void sendHeartbeat();
+void sendHeartbeat(uint32_t sealID);
 
 bool sendSensorPacket(
     uint32_t sealID,
@@ -271,7 +271,7 @@ void loop() {
     updateRecordButton(now);
 
     // Heartbeat timing is managed independently by the BLE file.
-    sendHeartbeat();
+    sendHeartbeat(SEAL_ID);
 
     if (!recording) {
         delay(1);

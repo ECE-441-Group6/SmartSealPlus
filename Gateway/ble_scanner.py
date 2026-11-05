@@ -15,7 +15,8 @@ except ImportError:
 
 MANUFACTURER_ID = 0x5353
 ESP_DEVICE_NAMES = {"SmartSeal-01"} 
-XIAO_DEVICE_NAME = "SmartSeal-XIAO"
+XIAO_DEVICE_NAME = "Xiao_Recorder"
+XIAO_DEVICE_NAMES = {XIAO_DEVICE_NAME, "SmartSeal-XIAO"}
 ENCRYPTED_PACKET_VERSION = 2
 ENCRYPTED_PACKET_LENGTH = 24
 SCAN_TIMEOUT = 5.0
@@ -102,7 +103,7 @@ async def scan_real_ble():
             uuid.lower() for uuid in (advertisement.service_uuids or [])
         }
         is_xiao = (
-            device_name == XIAO_DEVICE_NAME
+            device_name in XIAO_DEVICE_NAMES
             or "0000180f-0000-1000-8000-00805f9b34fb" in service_uuids
             or "180f" in service_uuids
         )
@@ -156,11 +157,12 @@ async def scan_real_ble():
 
     print(
         "No valid BLE packet received from "
-        f"{', '.join(sorted(ESP_DEVICE_NAMES | {XIAO_DEVICE_NAME}))}."
+        f"{', '.join(sorted(ESP_DEVICE_NAMES | XIAO_DEVICE_NAMES))}."
     )
     print(
-        "Check that the XIAO is advertising and that the integrated sketch "
-        "is uploaded; press D4 to start live sensor updates."
+        "Check that the XIAO is advertising the 0x5353 manufacturer data, "
+        "that a matching key is configured, and press D6 to start live "
+        "sensor updates."
     )
     return None
 
