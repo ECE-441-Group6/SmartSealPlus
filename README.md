@@ -75,6 +75,13 @@ python3 -m Gateway.provision_seal_key 1 \
   --firmware-header /secure/path/secrets.h
 ```
 
+If a previous registry exists but fails validation, inspect it and explicitly
+discard it only when you intend to replace its registered keys:
+
+```bash
+python3 -m Gateway.provision_seal_key 1 --replace-invalid-registry
+```
+
 Set the gateway environment variable to the same registry in the terminal
 that will run the gateway. Use an absolute path, especially when starting the
 gateway from `Gateway/XIAO`:

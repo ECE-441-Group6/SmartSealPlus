@@ -186,7 +186,7 @@ async def run_connected_session():
     sensor_buffer = bytearray()
 
     async with BleakClient(device, timeout=10.0) as client:
-        print("GATT connected.")
+        print(f"Seal {seal_id} GATT connected.")
 
         services = client.services
 
@@ -352,8 +352,6 @@ async def run_connected_session():
                 )
 
                 if heartbeat_age >= HEARTBEAT_TIMEOUT:
-                    if seal_id is None:
-                        seal_id = 0
 
                     print(
                         f"WARNING: No heartbeat from seal {seal_id} received for "
