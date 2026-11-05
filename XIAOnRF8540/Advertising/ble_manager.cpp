@@ -14,14 +14,14 @@ namespace {
 constexpr char DEVICE_NAME[] = "SmartSeal-XIAO";
 constexpr uint16_t GATEWAY_MANUFACTURER_ID = 0x5353;
 constexpr uint8_t PACKET_VERSION = 2;
-constexpr size_t NONCE_LENGTH = 10;
+constexpr size_t NONCE_LENGTH = 8;
 constexpr size_t PLAINTEXT_LENGTH = 10;
 constexpr size_t TAG_LENGTH = 8;
 constexpr size_t ENCRYPTED_PACKET_LENGTH =
   1 + NONCE_LENGTH + PLAINTEXT_LENGTH + TAG_LENGTH;
 static_assert(sizeof(SMARTSEAL_ENCRYPTION_KEY) == 16, "AES-128 key required");
 static_assert(
-  ENCRYPTED_PACKET_LENGTH + 2 <= 31,
+  ENCRYPTED_PACKET_LENGTH + 4 <= 31,
   "Encrypted manufacturer data must fit in a BLE advertisement"
 );
 

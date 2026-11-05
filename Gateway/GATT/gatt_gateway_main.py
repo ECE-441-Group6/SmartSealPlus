@@ -9,7 +9,6 @@ import time
 from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 
-from database import DB_NAME
 
 if __package__:
     from .gatt_ble_scanner import (
@@ -25,19 +24,20 @@ if __package__:
     )
     from ..packet_parser import parse_packet
     from ..database import (
+        DB_NAME,
         archive_events,
         clear_event_history,
         get_stale_seals,
         init_database,
         insert_event,
         record_seen,
-        record_heartbeat,      #TEST 
         update_event_artifacts,
     )
     from ..alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
     from ..ai_analyzer import analyze_image
     from ..camera_manager import capture_image
     from ..image_storage import image_path
+
 else:
     from gatt_ble_scanner import (
         XIAO_DEVICE_NAME,
@@ -52,6 +52,7 @@ else:
     )
     from packet_parser import parse_packet
     from database import (
+        DB_NAME,
         archive_events,
         clear_event_history,
         get_stale_seals,
@@ -96,7 +97,6 @@ def process_sensor_packet(raw_packet):
         return None
 
     # Preserve the actual tamper value decoded from the GATT packet.
-    # decode_sensor_packet() already validates that it is a boolean.
     packet["tamper"] = raw_packet["tamper"]
 
     record_seen(packet)
@@ -181,12 +181,11 @@ async def run_connected_session():
     print(f"Found XIAO: {device.name or device.address}")
     print("Connecting...")
 
-    # Queue entries distinguish sensor events from heartbeat messages.
     notification_queue = asyncio.Queue()
     sensor_buffer = bytearray()
 
     async with BleakClient(device, timeout=10.0) as client:
-        print(f"Seal {seal_id} GATT connected.")
+        print("GATT connected.")
 
         services = client.services
 
@@ -215,8 +214,7 @@ async def run_connected_session():
             "received_any": False,
             "last_seal_id": None,
         }
-        
-        
+
         def sensor_callback(sender, data):
             """Reassemble BLE fragments before decoding sensor packets."""
 
@@ -233,49 +231,68 @@ async def run_connected_session():
                     )
                 else:
                     print("Invalid complete sensor packet.")
-        
-
-#COMMENT OUT FOR NOW
-      #  def heartbeat_callback(sender, data):
-      #     """Record that the XIAO is still communicating."""
-
-       #     heartbeat_state["last_received"] = time.monotonic()
-       #     heartbeat_state["received_any"] = True
-
-        #    notification_queue.put_nowait(
-        #        ("heartbeat", bytes(data))
-         #   )
 
         def heartbeat_callback(sender, data):
             """Update the last-seen timestamp when a heartbeat arrives."""
 
+            # Firmware sends 8 bytes:
+            # bytes 0-3: seal ID
+            # bytes 4-7: heartbeat counter
+
             if len(data) != 8:
-                print("Invalid heartbeat packet length")
+                print(
+                    f"Invalid heartbeat packet length: {len(data)} bytes"
+                )
                 return
 
-            # Extract seal ID (first 4 bytes).
-            seal_id = int.from_bytes(data[0:4], byteorder="little")
+            # Extract seal ID.
+            seal_id = int.from_bytes(
+                data[0:4],
+                byteorder="little",
+            )
 
-            # Extract heartbeat counter (last 4 bytes).
-            heartbeat_counter = int.from_bytes(data[4:8], byteorder="little")
+            # Extract heartbeat counter.
+            heartbeat_counter = int.from_bytes(
+                data[4:8],
+                byteorder="little",
+            )
 
-            conn = sqlite3.connect(DB_NAME)
+            # Update heartbeat monitoring state.
+            heartbeat_state["last_received"] = time.monotonic()
+            heartbeat_state["received_any"] = True
+            heartbeat_state["last_seal_id"] = seal_id
 
-            conn.execute("""
-                INSERT INTO seal_status(seal_id, last_seen)
-                VALUES (?, CURRENT_TIMESTAMP)
-                ON CONFLICT(seal_id) DO UPDATE SET
-                last_seen = CURRENT_TIMESTAMP
-                """, (seal_id,))
+            # Update the database.
+            conn = None
 
-            conn.commit()
-            conn.close()
+            try:
+                conn = sqlite3.connect(DB_NAME)
+
+                conn.execute(
+                    """
+                    INSERT INTO seal_status(seal_id, last_seen)
+                    VALUES (?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(seal_id) DO UPDATE SET
+                        last_seen = CURRENT_TIMESTAMP
+                    """,
+                    (seal_id,),
+                )
+
+                conn.commit()
+
+            except sqlite3.Error as error:
+                print(f"Heartbeat database error: {error}")
+
+            finally:
+                if conn is not None:
+                    conn.close()
 
             print(
                 f"Heartbeat received: Seal ID={seal_id}, "
                 f"Counter={heartbeat_counter}"
             )
 
+        # Subscribe to BLE notifications.
         await client.start_notify(
             SENSOR_CHARACTERISTIC_UUID,
             sensor_callback,
@@ -294,26 +311,27 @@ async def run_connected_session():
 
         try:
             while client.is_connected:
-                # Check the heartbeat regularly, even when no sensor
-                # notifications are arriving.
+
+                # Wait briefly for sensor notifications.
+                # Heartbeats are handled directly by heartbeat_callback.
                 try:
                     kind, data = await asyncio.wait_for(
                         notification_queue.get(),
                         timeout=1.0,
                     )
+
                 except asyncio.TimeoutError:
                     kind, data = None, None
 
-                if kind == "heartbeat":
-                    if heartbeat_state["last_seal_id"] is not None:
-                        record_heartbeat(heartbeat_state["last_seal_id"])
-                    print(f"Heartbeat received: {data.hex()}")
-
-                elif kind == "sensor":
+                # Process sensor notifications.
+                if kind == "sensor":
                     packet = process_sensor_packet(data)
 
                     if packet is not None:
-                        heartbeat_state["last_seal_id"] = packet["seal_id"]
+                        heartbeat_state["last_seal_id"] = (
+                            packet["seal_id"]
+                        )
+
                         # Acknowledge the event sequence number only
                         # after processing the received packet.
                         sequence = packet["event_sequence"]
@@ -333,6 +351,7 @@ async def run_connected_session():
 
                 now = time.monotonic()
 
+                # Periodically check all seals in the database.
                 if (
                     now - last_stale_check
                     >= max(5.0, HEARTBEAT_TIMEOUT / 2)
@@ -347,16 +366,20 @@ async def run_connected_session():
 
                     last_stale_check = now
 
+                # Check whether the connected seal has stopped
+                # sending heartbeats.
                 heartbeat_age = (
                     now - heartbeat_state["last_received"]
                 )
 
                 if heartbeat_age >= HEARTBEAT_TIMEOUT:
+                    seal_id = heartbeat_state["last_seal_id"]
 
                     print(
-                        f"WARNING: No heartbeat from seal {seal_id} received for "
-                        f"{heartbeat_age:.1f} seconds."
+                        f"WARNING: No heartbeat received from seal "
+                        f"{seal_id} for {heartbeat_age:.1f} seconds."
                     )
+
                     print("Closing session and reconnecting.")
                     break
 
@@ -401,6 +424,7 @@ async def run_gateway():
                 OSError,
                 asyncio.TimeoutError,
                 RuntimeError,
+                sqlite3.Error,
             ) as error:
                 print(f"BLE/GATT connection error: {error}")
 
@@ -427,5 +451,6 @@ async def run_gateway():
 if __name__ == "__main__":
     try:
         asyncio.run(run_gateway())
+
     except KeyboardInterrupt:
         pass

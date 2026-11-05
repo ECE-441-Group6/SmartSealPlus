@@ -148,11 +148,12 @@ The gateway writes the acknowledged event sequence to the ACK characteristic
 using a 4-byte little-endian integer.
 
 The encrypted advertising gateway accepts manufacturer ID `0x5353` and
-version-2 packets only. The advertisement's 29-byte payload is version `2`,
-a 10-byte hardware-random nonce, 10 bytes of AES-CCM ciphertext, and an
-8-byte authentication tag. Together with the 2-byte company ID, this fills a
-31-byte legacy BLE advertisement, so the device name is sent separately in
-the scan response. The encrypted plaintext contains the seal ID,
+version-2 packets only. The encrypted manufacturer payload is 27 bytes:
+version `2`, an 8-byte hardware-random nonce, 10 bytes of AES-CCM ciphertext,
+and an 8-byte authentication tag. Including the BLE manufacturer-data
+structure and 2-byte company ID, it exactly fits a 31-byte legacy BLE
+advertisement, so the device name is sent separately in the scan response.
+The encrypted plaintext contains the seal ID,
 4-byte little-endian event sequence, signed temperature in tenths of a degree
 Celsius, tamper byte, and 2-byte little-endian vibration in hundredths of a
 volt. The version byte is authenticated as additional data. The seal ID is
