@@ -42,19 +42,14 @@ vibration events trigger a camera capture.
 - Raspberry Pi camera for real photographs (optional; Pillow creates a
   simulated image when camera hardware is unavailable)
 
-Install gateway and dashboard dependencies from a virtual environment. This
-avoids system-wide package changes and works on Raspberry Pi OS versions that
-enforce PEP 668:
+On Raspberry Pi OS, install the gateway and dashboard dependencies as
+OS-managed packages. This works with the system `python3` without a virtual
+environment and avoids PEP 668's blocked system-wide `pip` installs:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
+sudo apt update
+sudo apt install python3-bleak python3-flask python3-pil
 ```
-
-If `venv` is unavailable on Raspberry Pi OS, install it with
-`sudo apt install python3-venv` and retry. Keep the environment activated when
-running the gateway.
 
 The requirements are Flask, Pillow, and Bleak.
 
@@ -108,7 +103,10 @@ The advertising gateway identifies packets by manufacturer ID `0x5353`; it
 does not require a key registry. The advertising firmware's device name is
 `Xiao_Recorder`.
 
-The advertisement payload is plaintext version 1: one version byte, one
+The scan response carries manufacturer ID `0x5353` and a plaintext version-1
+sensor payload alongside the XIAO name. Keeping the sensor data in the scan
+response lets the Pi's active BLE scanner receive it with the advertised name.
+The payload is one version byte, one
 seal-ID byte, a 4-byte little-endian event sequence, a signed 2-byte
 temperature in tenths of a degree Celsius (`0x7FFF` means unavailable), one
 tamper byte, and a 2-byte little-endian vibration value in hundredths of a
@@ -122,26 +120,26 @@ monitor reports BLE initialization or advertisement-update failures.
 
 ## Run the gateway and dashboard
 
-Run each program in a separate terminal from the repository root.
+Run each program in a separate terminal.
 
-Terminal 1 — XIAO advertisement gateway:
+Terminal 1 — XIAO advertisement gateway. From the project root:
 
 ```bash
-python -m Gateway.XIAO.gateway_main
+cd Gateway/XIAO
+python3 gateway_main.py
 ```
 
-PowerShell:
+Or run it from the project root:
 
-```powershell
-python -m Gateway.XIAO.gateway_main
+```bash
+python3 Gateway/XIAO/gateway_main.py
 ```
 
-The XIAO scanner listens for up to 15 seconds per scan. Press D6 to start
+The scanner listens for up to 15 seconds per attempt. Press D6 to start
 recording, then wait for the next advertisement. If it receives no packet,
 its output distinguishes no BLE traffic, missing manufacturer data, and an
-unexpected packet format. On
-Raspberry Pi OS, run these commands from an activated `.venv` and make sure
-Bluetooth is enabled and available to the account running Python.
+unexpected packet format. Make sure Bluetooth is enabled and available to the
+account running Python.
 
 For the alternate GATT gateway, run:
 

@@ -14,6 +14,8 @@ constexpr uint8_t PACKET_VERSION = 1;
 constexpr uint8_t SEAL_ID = 1;
 constexpr size_t PACKET_LENGTH = 11;
 constexpr int16_t INVALID_TEMPERATURE = INT16_MAX;
+static_assert(sizeof(DEVICE_NAME) + 1 + PACKET_LENGTH + 4 <= 31,
+              "Scan response name and manufacturer data exceed 31 bytes");
 
 uint32_t advertisementSequence = 0;
 
@@ -23,7 +25,7 @@ bool addManufacturerPacket(const uint8_t *packet) {
     static_cast<uint8_t>(GATEWAY_MANUFACTURER_ID >> 8)
   };
   memcpy(manufacturerData + 2, packet, PACKET_LENGTH);
-  return Bluefruit.Advertising.addManufacturerData(
+  return Bluefruit.ScanResponse.addManufacturerData(
     manufacturerData,
     sizeof(manufacturerData)
   );
@@ -111,9 +113,11 @@ bool updateGatewayAdvertisement(
     return false;
   }
   Bluefruit.Advertising.clearData();
+  Bluefruit.ScanResponse.clearData();
   if (!Bluefruit.Advertising.addFlags(
         BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
       ) ||
+      !Bluefruit.ScanResponse.addName() ||
       !addManufacturerPacket(packet)) {
     Serial.println("ERROR: Could not build BLE manufacturer packet.");
     return false;

@@ -68,6 +68,7 @@ class TestBleAdvertisements(unittest.TestCase):
         advertisement = SimpleNamespace(
             local_name=None,
             service_uuids=[],
+            service_data={},
             manufacturer_data={0x5353: payload},
         )
 
@@ -97,6 +98,7 @@ class TestBleAdvertisements(unittest.TestCase):
         device = SimpleNamespace(name="Xiao_Recorder")
         advertisement = SimpleNamespace(
             local_name="Xiao_Recorder",
+            service_data={},
             manufacturer_data={0x1234: sensor_packet()},
         )
 

@@ -24,17 +24,49 @@ async def scan_real_ble():
     advertisements_seen = 0
     manufacturer_packets_seen = 0
     packet_candidates_seen = 0
+    raw_payload_logged = False
+    xiao_advertisement_logged = False
     packet_received = asyncio.Event()
 
     def detection_callback(device, advertisement):
         nonlocal advertised_packet, xiao_device, advertisements_seen
         nonlocal manufacturer_packets_seen, packet_candidates_seen
+        nonlocal raw_payload_logged, xiao_advertisement_logged
         advertisements_seen += 1
         device_name = advertisement.local_name or device.name or ""
+        if (
+            device_name in XIAO_DEVICE_NAMES
+            and not xiao_advertisement_logged
+        ):
+            manufacturer_data = {
+                f"0x{company_id:04X}": bytes(payload).hex()
+                for company_id, payload
+                in (advertisement.manufacturer_data or {}).items()
+            }
+            service_data = {
+                uuid: bytes(payload).hex()
+                for uuid, payload
+                in (advertisement.service_data or {}).items()
+            }
+            print(
+                "XIAO advertisement details: "
+                f"manufacturer_data={manufacturer_data}, "
+                f"service_data={service_data}"
+            )
+            xiao_advertisement_logged = True
         packet = None
         for manufacturer_id, payload in advertisement.manufacturer_data.items():
             if manufacturer_id == MANUFACTURER_ID:
                 manufacturer_packets_seen += 1
+                if not raw_payload_logged:
+                    print(
+                        "SmartSeal BLE manufacturer data observed: "
+                        f"name={device_name or 'unknown'}, "
+                        f"id=0x{manufacturer_id:04X}, "
+                        f"length={len(payload)}, "
+                        f"hex={bytes(payload).hex()}"
+                    )
+                    raw_payload_logged = True
                 if (
                     isinstance(payload, (bytes, bytearray))
                     and len(payload) == 11
