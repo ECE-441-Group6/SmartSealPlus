@@ -18,7 +18,7 @@ from Gateway.key_registry import KeyRegistryError, load_key_registry
 
 
 KEY = bytes(range(16))
-NONCE = bytes(range(8))
+NONCE = bytes(range(7))
 KEYS = {1: KEY}
 
 
@@ -177,26 +177,6 @@ class TestBleAdvertisements(unittest.TestCase):
             self.assertIn("SMARTSEAL_SEAL_ID = 7", header.read_text())
             self.assertEqual(registry.stat().st_mode & 0o777, 0o600)
             self.assertEqual(header.stat().st_mode & 0o777, 0o600)
-
-    def test_provisioning_requires_explicit_replacement_of_invalid_registry(self):
-        with tempfile.TemporaryDirectory() as directory:
-            registry = Path(directory) / "keys.json"
-            header = Path(directory) / "secrets.h"
-            registry.write_text('{"seals":{"1":{"key":"invalid"}}}')
-            registry.chmod(0o600)
-
-            with self.assertRaises(KeyRegistryError):
-                provision_seal_key.provision_key(1, registry, header)
-
-            generated_key = provision_seal_key.provision_key(
-                1,
-                registry,
-                header,
-                replace_invalid_registry=True,
-            )
-
-            self.assertEqual(load_key_registry(registry), {1: generated_key})
-            self.assertIn("SMARTSEAL_SEAL_ID = 1", header.read_text())
 
     def test_ble_scanners_accept_only_company_id_and_authenticated_packets(self):
         payload = encrypted_packet(sequence=7, vibration=1.0)

@@ -48,7 +48,7 @@ class ReliabilityTests(unittest.TestCase):
         nonce = (
             bytes([seal_id])
             + sequence.to_bytes(4, "little")
-            + b"\x00" * 3
+            + b"\x00\x00"
         )
         encrypted = AESCCM(TEST_KEYS[seal_id], tag_length=8).encrypt(
             nonce,

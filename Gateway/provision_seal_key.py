@@ -51,22 +51,12 @@ def _render_firmware_header(seal_id, key):
     )
 
 
-def provision_key(
-    seal_id,
-    registry_path,
-    firmware_header,
-    replace_invalid_registry=False,
-):
+def provision_key(seal_id, registry_path, firmware_header):
     if not 1 <= seal_id <= 255:
         raise KeyRegistryError("seal ID must be between 1 and 255")
 
     if registry_path.exists():
-        try:
-            registry = load_key_registry(registry_path)
-        except KeyRegistryError:
-            if not replace_invalid_registry:
-                raise
-            registry = {}
+        registry = load_key_registry(registry_path)
     else:
         registry = {}
     key = secrets.token_bytes(16)
@@ -105,20 +95,10 @@ def main():
         / "Advertising"
         / "secrets.h",
     )
-    parser.add_argument(
-        "--replace-invalid-registry",
-        action="store_true",
-        help="discard all entries in an existing invalid registry",
-    )
     args = parser.parse_args()
 
     try:
-        provision_key(
-            args.seal_id,
-            args.registry,
-            args.firmware_header,
-            replace_invalid_registry=args.replace_invalid_registry,
-        )
+        provision_key(args.seal_id, args.registry, args.firmware_header)
     except (KeyRegistryError, OSError) as error:
         parser.error(str(error))
     print(f"Provisioned seal {args.seal_id}. Keep both generated files private.")
