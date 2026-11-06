@@ -1,66 +1,190 @@
-"""Receive SmartSeal sensor packets over BLE advertisements."""
+
+"""Receive and decrypt SmartSeal BLE advertisements."""
 
 import os
 import random
-import re
-
 import asyncio
+
 from bleak import BleakScanner
 from bleak.exc import BleakError
+from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
 
-MANUFACTURER_ID = 0x5353   #when to use????
-ESP_DEVICE_NAMES = {"SmartSeal-01"} 
+# --------------------------------------------------
+# BLE CONFIGURATION
+# --------------------------------------------------
+
+MANUFACTURER_ID = 0x5353
 XIAO_DEVICE_NAME = "SmartSeal-XIAO"
-SCAN_TIMEOUT = 5.0
-SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"  #where to set simulation_mode?
+ESP_DEVICE_NAMES = {"SmartSeal-01"}
 
+SCAN_TIMEOUT = 5.0
+
+SIMULATION_MODE = (
+    os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
+)
+
+
+# --------------------------------------------------
+# AES-128-CCM CONFIGURATION
+# --------------------------------------------------
+
+# TEST KEY ONLY.
+# Replace this with a new randomly generated 16-byte key.
+# The XIAO and Raspberry Pi must use exactly the same key.
+AES_KEY = bytes.fromhex(
+    "00112233445566778899aabbccddeeff"
+)
+
+# TEST PREFIX ONLY.
+# Replace with your device-specific 9-byte nonce prefix.
+# Must match the XIAO exactly.
+NONCE_PREFIX = bytes.fromhex(
+    "102030405060708090"
+)
+
+AES_TAG_LENGTH = 8
+
+MAGIC = 0xA5
+PROTOCOL_VERSION = 2
+
+EXPECTED_PACKET_LENGTH = 20
+
+aes = AESCCM(AES_KEY, tag_length=AES_TAG_LENGTH)
+
+
+# --------------------------------------------------
+# DECRYPTION
+# --------------------------------------------------
 
 def parse_advertisement(payload):
-    """Convert an ESP32 or XIAO manufacturer payload into a gateway packet."""
+    """
+    Decrypt and authenticate a SmartSeal BLE advertisement.
+
+    Expected packet:
+        Byte 0:       Magic (0xA5)
+        Byte 1:       Protocol version (2)
+        Byte 2:       Seal ID
+        Bytes 3-6:    Sequence number (little-endian)
+        Bytes 7-11:   Encrypted sensor data
+        Bytes 12-19:  AES-CCM authentication tag
+    """
+
     if payload is None:
         return None
 
-    if isinstance(payload, (bytes, bytearray)):
-        # Bleak normally removes the company ID. Accept it too for backends
-        # that expose the raw manufacturer field.
-        if payload.startswith(b"\x53\x53"):
-            payload = payload[2:]
-        if len(payload) == 12 and payload[0] == 0xA5 and payload[1] == 1:
-            sequence = int.from_bytes(payload[3:7], "little")
-            temperature = int.from_bytes(
-                payload[7:9], "little", signed=True
-            ) / 10.0
-            vibration = int.from_bytes(payload[10:12], "little") / 100.0
-            return {
-                "seal_id": payload[2],
-                "event_sequence": sequence,
-                "temperature": temperature,
-                "tamper": bool(payload[9]),
-                "vibration": vibration,
-            }
-        payload = payload.decode("ascii", errors="ignore")
-
-    match = re.fullmatch(
-        r"S:(\d+),E:(\d+),T:([-+]?\d+(?:\.\d+)?),A:([01]),V:([-+]?\d+(?:\.\d+)?)",
-        payload.strip("\x00 \r\n"),
-    )
-    if not match:
+    if not isinstance(payload, (bytes, bytearray)):
         return None
 
-    seal_id, event_sequence, temperature, tamper, vibration_voltage = match.groups()
+    payload = bytes(payload)
+
+    # Bleak normally removes the manufacturer/company ID.
+    # Accept it if a backend includes it.
+    if payload.startswith(b"\x53\x53"):
+        payload = payload[2:]
+
+    # Validate packet length.
+    if len(payload) != EXPECTED_PACKET_LENGTH:
+        return None
+
+    # Validate header.
+    if payload[0] != MAGIC:
+        return None
+
+    if payload[1] != PROTOCOL_VERSION:
+        return None
+
+    seal_id = payload[2]
+
+    if seal_id < 1:
+        return None
+
+    # Extract sequence number.
+    sequence_bytes = payload[3:7]
+
+    sequence = int.from_bytes(
+        sequence_bytes,
+        byteorder="little"
+    )
+
+    # Nonce must match the XIAO implementation exactly.
+    # Use the transmitted sequence bytes directly.
+    nonce = NONCE_PREFIX + sequence_bytes
+
+    # Authenticate header and sequence.
+    aad = payload[0:7]
+
+    # Ciphertext and authentication tag.
+    ciphertext_and_tag = payload[7:20]
+
+    try:
+        plaintext = aes.decrypt(
+            nonce,
+            ciphertext_and_tag,
+            aad
+        )
+
+    except Exception:
+        print(
+            f"Rejected packet from seal {seal_id}: "
+            "AES-CCM authentication failed."
+        )
+        return None
+
+    # Expected plaintext:
+    # Bytes 0-1: temperature * 10 (signed little-endian)
+    # Byte 2:    tamper (0 or 1)
+    # Bytes 3-4: vibration * 100 (unsigned little-endian)
+
+    if len(plaintext) != 5:
+        print("Rejected packet: incorrect plaintext length.")
+        return None
+
+    temperature_raw = int.from_bytes(
+        plaintext[0:2],
+        byteorder="little",
+        signed=True
+    )
+
+    tamper_raw = plaintext[2]
+
+    vibration_raw = int.from_bytes(
+        plaintext[3:5],
+        byteorder="little"
+    )
+
+    if tamper_raw not in (0, 1):
+        print("Rejected packet: invalid tamper value.")
+        return None
+
+    temperature = temperature_raw / 10.0
+    vibration = vibration_raw / 100.0
+
+    print(
+        f"Decryption successful: seal={seal_id}, "
+        f"sequence={sequence}"
+    )
+
     return {
-        "seal_id": int(seal_id),
-        "event_sequence": int(event_sequence),
-        "temperature": float(temperature),
-        "tamper": tamper == "1",
-        "vibration": float(vibration_voltage),
+        "seal_id": seal_id,
+        "event_sequence": sequence,
+        "temperature": temperature,
+        "tamper": bool(tamper_raw),
+        "vibration": vibration,
     }
 
 
+# --------------------------------------------------
+# SIMULATION
+# --------------------------------------------------
+
 def simulated_packet():
-    """Generate a packet when a BLE adapter or ESP32 is not available."""
-    simulated_packet.sequence = (getattr(simulated_packet, "sequence", 0) + 1) & 0xFFFFFFFF
+    """Generate test sensor information without BLE."""
+
+    simulated_packet.sequence = (
+        getattr(simulated_packet, "sequence", 0) + 1
+    )
+
     return {
         "seal_id": 1,
         "event_sequence": simulated_packet.sequence,
@@ -70,97 +194,105 @@ def simulated_packet():
     }
 
 
+# --------------------------------------------------
+# BLE SCANNING
+# --------------------------------------------------
+
 async def scan_real_ble():
-    """Scan for SmartSeal packets in BLE manufacturer advertisements."""
+    """Scan for encrypted SmartSeal advertisements."""
+
     packets = []
-    xiao_device = None
 
     def detection_callback(device, advertisement):
-        nonlocal xiao_device
-        device_name = advertisement.local_name or device.name or ""
-        service_uuids = {
-            uuid.lower() for uuid in (advertisement.service_uuids or [])
-        }
-        is_xiao = (
-            device_name == XIAO_DEVICE_NAME
-            or "0000180f-0000-1000-8000-00805f9b34fb" in service_uuids
-            or "180f" in service_uuids
-        )
-        if is_xiao:
-            xiao_device = device
 
-        payloads = advertisement.manufacturer_data.values()
-        # The device name may be placed in a scan response or omitted when the
-        # advertisement is full. The company ID and payload are the reliable
-        # protocol identifiers, so do not require the name here.
-        packet = None
-        for payload in payloads:
-            packet = parse_advertisement(payload)
-            if packet is not None:
-                break
+        # Only accept the SmartSeal manufacturer ID.
+        manufacturer_data = advertisement.manufacturer_data
+
+        if MANUFACTURER_ID not in manufacturer_data:
+            return
+
+        payload = manufacturer_data[MANUFACTURER_ID]
+
+        packet = parse_advertisement(payload)
+
         if packet is not None:
             packets.append(packet)
-        elif advertisement.manufacturer_data:
-            print(
-                "Ignoring invalid manufacturer payload from "
-                f"{device.name or 'unnamed'}: "
-                f"{advertisement.manufacturer_data!r}"
-            )
 
-    scanner = BleakScanner(detection_callback=detection_callback)
+    scanner = BleakScanner(
+        detection_callback=detection_callback
+    )
+
     await scanner.start()
+
     try:
         await asyncio.sleep(SCAN_TIMEOUT)
+
     finally:
         await scanner.stop()
 
-    #tries to scan for xiao again
-    if xiao_device is None and not packets:
-        try:
-            xiao_device = await BleakScanner.find_device_by_name(
-                XIAO_DEVICE_NAME,
-                timeout=SCAN_TIMEOUT,
-            )
-        except (BleakError, OSError, asyncio.TimeoutError) as error:
-            print(f"XIAO BLE discovery error: {error}")
-
-    #but packets list will always be empty since code below line 94 wont run? also this will only return the most recent packet, not all of the packets received
     if packets:
+        # Return the newest valid packet observed.
         packet = packets[-1]
-        print(f"BLE packet received: {packet}")
+
+        print("Encrypted BLE packet successfully received.")
+        print("Decoded packet:", packet)
+
         return packet
 
     print(
-        "No valid BLE packet received from "
-        f"{', '.join(sorted(ESP_DEVICE_NAMES | {XIAO_DEVICE_NAME}))}."
+        "No valid encrypted SmartSeal packet received."
     )
+
     print(
-        "Check that the XIAO is advertising and that the integrated sketch "
-        "is uploaded; press D4 to start live sensor updates."
+        "Check that SmartSeal-XIAO is advertising "
+        "the encrypted manufacturer packet."
     )
+
     return None
 
 
+# --------------------------------------------------
+# MAIN SCANNER FUNCTION
+# --------------------------------------------------
+
 def scan_ble():
-    """Return one ESP32 packet, using simulation only when explicitly enabled."""
+    """Return one decoded sensor packet."""
 
     if SIMULATION_MODE:
         packet = simulated_packet()
-        print(f"SIMULATED packet: {packet}")
+
+        print("SIMULATED packet:", packet)
+
         return packet
 
     try:
         return asyncio.run(scan_real_ble())
 
     except RuntimeError as error:
-        if "asyncio.run() cannot be called" in str(error):
-            print(f"ASYNCIO EVENT LOOP ERROR: {error}")
-        else:
-            print(f"RUNTIME ERROR DURING BLE SCAN: {error}")
+
+        print(
+            "Runtime error during BLE scanning:",
+            error
+        )
+
+        return None
+
+    except (BleakError, OSError) as error:
+
+        print(
+            "BLE scanning error:",
+            error
+        )
+
         return None
 
     except Exception as error:
-        print(f"BLE SCANNING ERROR: {type(error).__name__}: {error}")
+
+        print(
+            f"Unexpected scanner error: "
+            f"{type(error).__name__}: {error}"
+        )
+
         return None
 
 

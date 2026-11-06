@@ -1,10 +1,8 @@
 #include "ble_manager.h"
-
 #include <bluefruit.h>
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
-
 #include "config.h"
 
 namespace {
@@ -34,22 +32,18 @@ void initializeBle() {
   Bluefruit.setName(DEVICE_NAME);
 
   const uint8_t initialPacket[12] = {
-    0xA5, PACKET_VERSION, SEAL_ID,
-    0, 0, 0, 0,
-    0, 0,
-    0,
-    0, 0
+    0xA5, PACKET_VERSION, SEAL_ID, 0, 
+    0, 0, 0, 0, 
+    0, 0, 0, 0
   };
 
-  Bluefruit.Advertising.addFlags(
-    BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE
-  );
-  Bluefruit.Advertising.addTxPower();
-  addManufacturerPacket(initialPacket, sizeof(initialPacket));
+  Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
+  Bluefruit.Advertising.addTxPower();  //can help estimate proximity to the gateway
+  addManufacturerPacket(initialPacket, sizeof(initialPacket)); //12 byte initial packet comes after
   Bluefruit.ScanResponse.addName();
   Bluefruit.Advertising.restartOnDisconnect(true);
-  Bluefruit.Advertising.setInterval(32, 244);
-  Bluefruit.Advertising.setFastTimeout(30);
+  Bluefruit.Advertising.setInterval(32, 244); //advertising interval between 20ms and 152.5ms
+  Bluefruit.Advertising.setFastTimeout(30); //fast timeout for advertising
   Bluefruit.Advertising.start(0);
 
   Serial.println("BLE manufacturer advertising started.");

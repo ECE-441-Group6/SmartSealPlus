@@ -10,61 +10,32 @@ from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 
 
-if __package__:
-    from .gatt_ble_scanner import (
-        XIAO_DEVICE_NAME,
-        SCAN_TIMEOUT,
-        SENSOR_SERVICE_UUID,
-        SENSOR_CHARACTERISTIC_UUID,
-        COMM_SERVICE_UUID,
-        HEARTBEAT_CHARACTERISTIC_UUID,
-        ACK_CHARACTERISTIC_UUID,
-        decode_sensor_packet,
-        extract_complete_json_packets,
-    )
-    from ..packet_parser import parse_packet
-    from ..database import (
-        DB_NAME,
-        archive_events,
-        clear_event_history,
-        get_stale_seals,
-        init_database,
-        insert_event,
-        record_seen,
-        update_event_artifacts,
-    )
-    from ..alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
-    from ..ai_analyzer import analyze_image
-    from ..camera_manager import capture_image
-    from ..image_storage import image_path
-
-else:
-    from gatt_ble_scanner import (
-        XIAO_DEVICE_NAME,
-        SCAN_TIMEOUT,
-        SENSOR_SERVICE_UUID,
-        SENSOR_CHARACTERISTIC_UUID,
-        COMM_SERVICE_UUID,
-        HEARTBEAT_CHARACTERISTIC_UUID,
-        ACK_CHARACTERISTIC_UUID,
-        decode_sensor_packet,
-        extract_complete_json_packets,
-    )
-    from packet_parser import parse_packet
-    from database import (
-        DB_NAME,
-        archive_events,
-        clear_event_history,
-        get_stale_seals,
-        init_database,
-        insert_event,
-        record_seen,
-        update_event_artifacts,
-    )
-    from alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
-    from ai_analyzer import analyze_image
-    from camera_manager import capture_image
-    from image_storage import image_path
+from gatt_ble_scanner import (
+    XIAO_DEVICE_NAME,
+    SCAN_TIMEOUT,
+    SENSOR_SERVICE_UUID,
+    SENSOR_CHARACTERISTIC_UUID,
+    COMM_SERVICE_UUID,
+    HEARTBEAT_CHARACTERISTIC_UUID,
+    ACK_CHARACTERISTIC_UUID,
+    decode_sensor_packet,
+    extract_complete_json_packets,
+)
+from packet_parser import parse_packet
+from database import (
+    DB_NAME,
+    archive_events,
+    clear_event_history,
+    get_stale_seals,
+    init_database,
+    insert_event,
+    record_seen,
+    update_event_artifacts,
+)
+from alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
+from ai_analyzer import analyze_image
+from camera_manager import capture_image
+from image_storage import image_path
 
 
 HEARTBEAT_TIMEOUT = 15.0
