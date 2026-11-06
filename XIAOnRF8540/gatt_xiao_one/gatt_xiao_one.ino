@@ -1,4 +1,3 @@
-
 #include <bluefruit.h>
 #include <math.h>
 #include <stdio.h>
@@ -39,7 +38,7 @@ static BLECharacteristic acknowledgmentCharacteristic(
 
 static const char DEVICE_NAME[] = "SmartSeal-XIAO";
 
-static const unsigned long HEARTBEAT_INTERVAL_MS = 5000;
+static const unsigned long HEARTBEAT_INTERVAL_MS = 2000;
 
 // ============================================================
 // STATE
@@ -150,7 +149,7 @@ void setupBLE() {
         SECMODE_NO_ACCESS
     );
 
-    heartbeatCharacteristic.setFixedLen(4);
+    heartbeatCharacteristic.setFixedLen(8);
     heartbeatCharacteristic.begin();
 
     // Acknowledgment: Pi writes a 4-byte sequence number.
@@ -208,15 +207,11 @@ void setupBLE() {
 //   "event_sequence": 0,
 //   "temperature": 72.5,
 //   "tamper": false,
-//   "vibration": 1.23,
-//   "movement_type": 0
+//   "vibration": 1.23
 // }
 //
 // Temperature is null if the thermistor reading is invalid.
 // Vibration is the voltage supplied by Main.cpp.
-// movement_type is a number supplied by Main.cpp:
-//   0 = none, 1 = general movement, 2 = tilt, 3 = tap, 4 = shake
-//   (2-4 are reserved for later).
 // ============================================================
 
 bool sendSensorPacket(
@@ -224,8 +219,7 @@ bool sendSensorPacket(
     uint32_t eventSequence,
     float temperature,
     bool tamper,
-    float vibration,
-    uint8_t movementType
+    float vibration
 ) {
     if (!Bluefruit.connected()) {
         return false;
@@ -246,14 +240,12 @@ bool sendSensorPacket(
             "\"event_sequence\":%lu,"
             "\"temperature\":%.2f,"
             "\"tamper\":%s,"
-            "\"vibration\":%.3f,"
-            "\"movement_type\":%u}",
+            "\"vibration\":%.3f}",
             (unsigned long)sealID,
             (unsigned long)eventSequence,
             temperature,
             tamper ? "true" : "false",
-            vibration,
-            (unsigned int)movementType
+            vibration
         );
     } else {
         packetLength = snprintf(
@@ -263,13 +255,11 @@ bool sendSensorPacket(
             "\"event_sequence\":%lu,"
             "\"temperature\":null,"
             "\"tamper\":%s,"
-            "\"vibration\":%.3f,"
-            "\"movement_type\":%u}",
+            "\"vibration\":%.3f}",
             (unsigned long)sealID,
             (unsigned long)eventSequence,
             tamper ? "true" : "false",
-            vibration,
-            (unsigned int)movementType
+            vibration
         );
     }
 
@@ -293,7 +283,7 @@ bool sendSensorPacket(
 // Actual transmission is limited to the heartbeat interval.
 // ============================================================
 
-void sendHeartbeat() {
+void sendHeartbeat(uint32_t sealID) {
     unsigned long now = millis();
 
     if (!Bluefruit.connected()) {
@@ -307,19 +297,29 @@ void sendHeartbeat() {
     lastHeartbeatMs = now;
     heartbeatCounter++;
 
-    uint8_t heartbeatData[4];
+    uint8_t heartbeatData[8];
 
-    heartbeatData[0] =
-        (uint8_t)(heartbeatCounter & 0xFF);
+    // First 4 bytes: seal ID
+    heartbeatData[0] = (uint8_t)(sealID & 0xFF);
+    heartbeatData[1] = (uint8_t)((sealID >> 8) & 0xFF);
+    heartbeatData[2] = (uint8_t)((sealID >> 16) & 0xFF);
+    heartbeatData[3] = (uint8_t)((sealID >> 24) & 0xFF);
 
-    heartbeatData[1] =
-        (uint8_t)((heartbeatCounter >> 8) & 0xFF);
+    // Next 4 bytes: heartbeat counter
+    heartbeatData[4] = (uint8_t)(heartbeatCounter & 0xFF);
+    heartbeatData[5] = (uint8_t)((heartbeatCounter >> 8) & 0xFF);
+    heartbeatData[6] = (uint8_t)((heartbeatCounter >> 16) & 0xFF);
+    heartbeatData[7] = (uint8_t)((heartbeatCounter >> 24) & 0xFF);
+    
+    Serial.print("Heartbeat packet: ");
 
-    heartbeatData[2] =
-        (uint8_t)((heartbeatCounter >> 16) & 0xFF);
+    for (int i = 0; i < 8; i++) {
 
-    heartbeatData[3] =
-        (uint8_t)((heartbeatCounter >> 24) & 0xFF);
+        Serial.print(heartbeatData[i]);
+        Serial.print(" ");
+    }
+
+    Serial.println();
 
     heartbeatCharacteristic.notify(
         heartbeatData,

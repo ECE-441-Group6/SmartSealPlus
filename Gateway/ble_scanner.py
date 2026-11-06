@@ -90,9 +90,6 @@ async def scan_real_ble():
             xiao_device = device
 
         payloads = advertisement.manufacturer_data.values()
-        if is_xiao:
-            return   #code below wont run
-
         # The device name may be placed in a scan response or omitted when the
         # advertisement is full. The company ID and payload are the reliable
         # protocol identifiers, so do not require the name here.
