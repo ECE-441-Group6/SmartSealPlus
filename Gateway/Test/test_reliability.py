@@ -5,18 +5,11 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from cryptography.hazmat.primitives.ciphers.aead import AESCCM
-
 from Gateway import database
 from Gateway import gateway_main
 from Gateway.alert_manager import process_alerts
 from Gateway.ble_scanner import parse_advertisement
 from Gateway.packet_parser import parse_packet
-
-TEST_KEYS = {
-    1: bytes(range(16)),
-    2: bytes(range(16, 32)),
-}
 
 
 class ReliabilityTests(unittest.TestCase):
@@ -37,26 +30,17 @@ class ReliabilityTests(unittest.TestCase):
         tamper=False,
         vibration=0.0,
     ):
-        temperature_tenths = int(temperature * 10)
-        plaintext = (
-            bytes([seal_id])
+        temperature_tenths = (
+            int(temperature * 10)
+        )
+        payload = (
+            bytes([0xA5, 1, seal_id])
             + sequence.to_bytes(4, "little")
             + temperature_tenths.to_bytes(2, "little", signed=True)
             + bytes([int(tamper)])
             + int(vibration * 100).to_bytes(2, "little")
         )
-        nonce = (
-            bytes([seal_id])
-            + sequence.to_bytes(4, "little")
-            + b"\x00\x00"
-        )
-        encrypted = AESCCM(TEST_KEYS[seal_id], tag_length=8).encrypt(
-            nonce,
-            plaintext,
-            b"\x02",
-        )
-        payload = b"\x02" + nonce + encrypted
-        return parse_packet(parse_advertisement(payload, TEST_KEYS))
+        return parse_packet(parse_advertisement(payload))
 
     def test_normal_and_critical_packets_are_parsed(self):
         normal = self.packet()
@@ -130,7 +114,6 @@ class ReliabilityTests(unittest.TestCase):
             rows = list(csv.DictReader(archive_file))
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["event_sequence"], "7")
-
 
 if __name__ == "__main__":
     unittest.main()

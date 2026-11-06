@@ -13,14 +13,12 @@ from Gateway.ble_scanner import (
     parse_advertisement,
     simulated_packet,
 )
-from Gateway.key_registry import load_key_registry
 
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
 
 async def scan_real_ble():
     """Find the XIAO and receive its sensor packet over BLE."""
-    key_registry = load_key_registry()
     xiao_device = None
     advertised_packet = None
     packet_received = asyncio.Event()
@@ -31,7 +29,9 @@ async def scan_real_ble():
         packet = None
         for manufacturer_id, payload in advertisement.manufacturer_data.items():
             if manufacturer_id == MANUFACTURER_ID:
-                packet = parse_advertisement(payload, key_registry)
+                packet = parse_advertisement(payload)
+            if packet is None and isinstance(payload, (bytes, bytearray)):
+                packet = parse_advertisement(payload)
             if packet is not None:
                 break
         if device_name == XIAO_DEVICE_NAME:
@@ -90,7 +90,7 @@ def scan_ble():
         else:
             print(f"RUNTIME ERROR DURING BLE SCAN: {error}")
         return None
-    except (BleakError, OSError, asyncio.TimeoutError) as error:
+    except Exception as error:
         print(f"XIAO BLE SCANNING ERROR: {type(error).__name__}: {error}")
         return None
 
