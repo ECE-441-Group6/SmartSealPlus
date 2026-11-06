@@ -55,7 +55,7 @@ bool updateGatewayAdvertisement(
   float temperatureC,
   bool vibrationDetected
 ) {
-  if (!isfinite(temperatureC) ||
+  if (!isfinite(temperatureC) ||    //isfinite checks for NaN and infinity
       temperatureC < -3276.8f ||
       temperatureC > 3276.7f) {
     return false;

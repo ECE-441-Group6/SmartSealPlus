@@ -19,6 +19,7 @@ venv/
 .env.*
 Gateway/keys.json
 XIAOnRF8540/Advertising/secrets.h
+XIAOnRF8540/SmartSeal_Encrypted/secrets.h
 
 # Generated media and test output
 images/

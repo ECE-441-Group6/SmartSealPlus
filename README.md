@@ -92,11 +92,20 @@ is invalid. Simulation mode does not load real keys.
 ## Upload the XIAO firmware
 
 1. Open the XIAO firmware sketch you want to use in Arduino IDE:
-   `XIAOnRF8540/Advertising/Advertising.ino` for BLE advertising, or
-   `XIAOnRF8540/VT_IntegratedBLE.cpp` for the integrated/GATT experiment.
-2. In Arduino IDE Library Manager, install **Crypto** by Rhys Weatherley.
-3. Generate the private `secrets.h` as described above; do not use the
-   all-zero example key.
+   `XIAOnRF8540/Advertising/Advertising.ino` for the modular sensor-advertising
+   firmware, `XIAOnRF8540/SmartSeal_Encrypted/SmartSeal_Encrypted.ino` for
+   AES-CCM BLE advertisements, or `XIAOnRF8540/VT_IntegratedBLE.cpp` for the
+   integrated/GATT experiment.
+   The encrypted sketch is split across `main.cpp`, `sensor_manager.cpp`,
+   `sequence_manager.cpp`, and `ble_manager.cpp`.
+2. The encrypted sketch uses Nordic CryptoCell and internal LittleFS APIs
+   provided by the XIAO nRF52840 board support package; it does not use the
+   Rhys Weatherley Crypto library.
+3. For the encrypted sketch, copy
+   `XIAOnRF8540/SmartSeal_Encrypted/secrets.example.h` to `secrets.h` in the
+   same folder. Set `AES_KEY`, `NONCE_PREFIX`, and `SEAL_ID` to the matching
+   gateway values; do not use the all-zero example values. Keep `secrets.h`
+   private and out of version control.
 4. Select the Seeed XIAO nRF52840 Sense board and its serial port.
 5. Upload the sketch.
 6. Open Serial Monitor at 115200 baud.
