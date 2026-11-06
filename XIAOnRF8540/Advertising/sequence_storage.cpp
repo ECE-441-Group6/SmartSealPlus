@@ -152,3 +152,21 @@ bool getNextPersistentSequence(uint32_t* sequence) {
   ++nextSequence;
   return true;
 }
+
+// Explicit provisioning only. Never call during normal startup.
+// Use only on a verified fresh device with a newly generated AES key.
+bool provisionSequenceStorage() {
+  storageReady = false;
+
+  if (!InternalFS.Adafruit_LittleFS::begin()) {
+    return false;
+  }
+
+  // Refuse to overwrite existing or interrupted provisioning data.
+  if (InternalFS.exists(RECORD_PATH) || InternalFS.exists(TEMP_PATH)) {
+    return false;
+  }
+
+  // Reserve sequence 0 as a marker; normal operation starts at 1.
+  return saveReservation(0);
+}

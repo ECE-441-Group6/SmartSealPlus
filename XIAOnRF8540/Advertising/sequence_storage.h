@@ -11,4 +11,7 @@ bool initializeSequenceStorage();
 // Returns false if no sequence can be safely issued.
 bool getNextPersistentSequence(uint32_t* sequence);
 
+// Explicit first-time provisioning; never called automatically.
+bool provisionSequenceStorage();
+
 #endif
