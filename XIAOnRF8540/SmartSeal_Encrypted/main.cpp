@@ -9,8 +9,58 @@
 #include "sequence_manager.h"
 #include "sensor_manager.h"
 
+void publishSensorData();
+
 namespace {
+bool recording = false;
+int lastButtonReading = HIGH;
+int stableButtonState = HIGH;
+uint32_t lastDebounceTime = 0;
 uint32_t lastAdvertisement = 0;
+
+void startRecording() {
+    if (recording) {
+        return;
+    }
+
+    Serial.println("Recording started; keep the seal still for calibration.");
+    calibrateVibrationSensor();
+    recording = true;
+    publishSensorData();
+    lastAdvertisement = millis();
+}
+
+void stopRecording() {
+    if (!recording) {
+        return;
+    }
+
+    recording = false;
+    stopEncryptedAdvertising();
+    Serial.println("Recording stopped.");
+}
+
+void updateRecordButton(uint32_t now) {
+    const int reading = digitalRead(RECORD_BUTTON_PIN);
+    if (reading != lastButtonReading) {
+        lastButtonReading = reading;
+        lastDebounceTime = now;
+    }
+
+    if (now - lastDebounceTime < BUTTON_DEBOUNCE_MS ||
+        reading == stableButtonState) {
+        return;
+    }
+
+    stableButtonState = reading;
+    if (stableButtonState == LOW) {
+        if (recording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    }
+}
 }
 
 void publishSensorData() {
@@ -77,6 +127,7 @@ void setup() {
 
     pinMode(TEMP_PIN, INPUT);
     pinMode(VIBRATION_PIN, INPUT);
+    pinMode(RECORD_BUTTON_PIN, INPUT_PULLUP);
 
     // Initialize Nordic CryptoCell.
     if (!nRFCrypto.begin()) {
@@ -101,16 +152,8 @@ void setup() {
     }
 
     initializeBle();
-
-    // Calibrate vibration sensor.
-    calibrateVibrationSensor();
-
-    // Start first encrypted advertisement.
-    publishSensorData();
-
-    lastAdvertisement = millis();
-
-    Serial.println("SmartSeal secure advertising is running.");
+    Serial.println("SmartSeal secure advertiser ready.");
+    Serial.println("Press D6 to start or stop recording.");
 }
 
 
@@ -119,11 +162,14 @@ void setup() {
 // =====================================================
 
 void loop() {
+    const uint32_t now = millis();
+    updateRecordButton(now);
 
-    if (millis() - lastAdvertisement >=
+    if (recording &&
+        now - lastAdvertisement >=
         ADVERTISEMENT_INTERVAL_MS) {
 
-        lastAdvertisement = millis();
+        lastAdvertisement = now;
 
         publishSensorData();
     }

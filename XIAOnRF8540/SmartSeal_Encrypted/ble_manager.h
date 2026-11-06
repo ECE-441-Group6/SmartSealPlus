@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 void initializeBle();
+void stopEncryptedAdvertising();
 bool createEncryptedPacket(
   float temperatureC,
   bool vibrationDetected,

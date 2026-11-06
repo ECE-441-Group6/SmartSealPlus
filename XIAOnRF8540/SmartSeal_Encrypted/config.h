@@ -6,11 +6,13 @@
 
 #define TEMP_PIN A0
 #define VIBRATION_PIN A2
+#define RECORD_BUTTON_PIN D6
 
 constexpr uint16_t MANUFACTURER_ID = 0x5353;
 constexpr uint8_t MAGIC = 0xA5;
 constexpr uint8_t PROTOCOL_VERSION = 2;
 constexpr uint32_t ADVERTISEMENT_INTERVAL_MS = 5000;
+constexpr uint32_t BUTTON_DEBOUNCE_MS = 40;
 constexpr uint16_t ADC_MAX = 4095;
 constexpr float R25 = 10000.0f;
 constexpr float BETA = 3950.0f;

@@ -9,7 +9,6 @@ import time
 from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 
-
 from gatt_ble_scanner import (
     XIAO_DEVICE_NAME,
     SCAN_TIMEOUT,
@@ -37,10 +36,8 @@ from ai_analyzer import analyze_image
 from camera_manager import capture_image
 from image_storage import image_path
 
-
 HEARTBEAT_TIMEOUT = 15.0
 RECONNECT_DELAY = 3.0
-
 
 def find_smartseal(device, advertisement):
     """Identify the XIAO by its advertised name or sensor service UUID."""

@@ -210,6 +210,10 @@ void startEncryptedAdvertising(const uint8_t *packet) {
     Bluefruit.Advertising.start(0);
 }
 
+void stopEncryptedAdvertising() {
+    Bluefruit.Advertising.stop();
+}
+
 void initializeBle() {
   Bluefruit.begin();
   Bluefruit.setName("SmartSeal-XIAO");
