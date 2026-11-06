@@ -1,5 +1,4 @@
 #pragma once
-
 #include <Arduino.h>
 
 constexpr int RECORD_BUTTON_PIN = D6;
@@ -26,5 +25,6 @@ constexpr float VIBRATION_NOISE_MULTIPLIER = 4.0f;
 constexpr uint8_t VIBRATION_CONFIRMATION_SAMPLES = 3;
 constexpr unsigned long VIBRATION_CONFIRMATION_WINDOW_MS = 20;
 constexpr unsigned long VIBRATION_REARM_QUIET_MS = 100;
-
 constexpr bool SERIAL_PLOTTER_MODE = true;
+
+constexpr unsigned long ACCEL_INTERVAL_MS = 10; //sampling interval for accelerometer

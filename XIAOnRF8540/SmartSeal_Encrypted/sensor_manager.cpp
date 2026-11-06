@@ -59,31 +59,39 @@ void calibrateVibrationSensor() {
 }
 
 
-bool detectVibration() {
+VibrationReading detectVibration() {
 
     constexpr uint16_t THRESHOLD = 100;
     constexpr uint8_t REQUIRED_HITS = 3;
     constexpr uint8_t TOTAL_SAMPLES = 20;
 
     uint8_t hits = 0;
+    VibrationReading result = {};
 
     for (uint8_t i = 0; i < TOTAL_SAMPLES; i++) {
 
         int reading = analogRead(VIBRATION_PIN);
 
-        float difference =
+        const float difference =
             fabs((float)reading - vibrationBaseline);
+
+        result.adcValue = reading;
+        result.baseline = vibrationBaseline;
+        result.deviation = difference;
+        result.voltage =
+            ((float)reading / ADC_MAX) * ADC_REFERENCE_VOLTAGE;
 
         if (difference > THRESHOLD) {
             hits++;
         }
 
         if (hits >= REQUIRED_HITS) {
-            return true;
+            result.detected = true;
+            return result;
         }
 
         delay(1);
     }
 
-    return false;
+    return result;
 }

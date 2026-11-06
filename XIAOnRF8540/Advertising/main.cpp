@@ -1,8 +1,6 @@
 #include <Arduino.h>
-
 #include <math.h>
 #include <stdio.h>
-
 #include "ble_manager.h"
 #include "config.h"
 #include "sensor_manager.h"

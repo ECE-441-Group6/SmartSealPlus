@@ -102,6 +102,7 @@ bool updateGatewayAdvertisement(
   return true;
 }
 
+//For accelerometer detection, replace "updateGatewayAdvertisement" with "updateGatewayAdvertisement2"
 bool updateGatewayAdvertisement2(
   float temperatureC,
   bool vibrationDetected,

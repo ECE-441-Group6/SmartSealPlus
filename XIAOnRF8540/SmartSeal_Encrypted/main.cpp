@@ -67,7 +67,7 @@ void publishSensorData() {
 
     float temperature = readTemperatureC();
 
-    bool vibration = detectVibration();
+    const VibrationReading vibration = detectVibration();
 
     if (!isfinite(temperature)) {
 
@@ -79,7 +79,7 @@ void publishSensorData() {
 
     if (!createEncryptedPacket(
             temperature,
-            vibration,
+            vibration.detected,
             encryptedPacket)) {
 
         Serial.println("Could not create encrypted packet.");
@@ -95,7 +95,24 @@ void publishSensorData() {
     Serial.println(temperature, 1);
 
     Serial.print("Vibration: ");
-    Serial.println(vibration ? 1 : 0);
+    Serial.println(vibration.detected ? 1 : 0);
+
+    if (vibration.detected) {
+        Serial.print("Vibration event detected. ADC: ");
+        Serial.print(vibration.adcValue);
+        Serial.print(", voltage: ");
+        Serial.print(vibration.voltage, 3);
+        Serial.print(" V, baseline: ");
+        Serial.print(vibration.baseline, 1);
+        Serial.print(", deviation: ");
+        Serial.print(vibration.deviation, 1);
+        Serial.print(" ADC (");
+        Serial.print(
+            vibration.deviation * ADC_REFERENCE_VOLTAGE / ADC_MAX,
+            3
+        );
+        Serial.println(" V)");
+    }
 
     Serial.print("Encrypted packet: ");
 
