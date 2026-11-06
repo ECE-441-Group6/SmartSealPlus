@@ -284,7 +284,7 @@ bool sendSensorPacket(
 // Actual transmission is limited to the heartbeat interval.
 // ============================================================
 
-void sendHeartbeat() {
+void sendHeartbeat(uint32_t sealID) {
     unsigned long now = millis();
 
     if (!Bluefruit.connected()) {
@@ -298,19 +298,19 @@ void sendHeartbeat() {
     lastHeartbeatMs = now;
     heartbeatCounter++;
 
-    uint8_t heartbeatData[4];
+    uint8_t heartbeatData[8];
 
-    heartbeatData[0] =
-        (uint8_t)(heartbeatCounter & 0xFF);
+    // First 4 bytes: seal ID
+    heartbeatData[0] = (uint8_t)(sealID & 0xFF);
+    heartbeatData[1] = (uint8_t)((sealID >> 8) & 0xFF);
+    heartbeatData[2] = (uint8_t)((sealID >> 16) & 0xFF);
+    heartbeatData[3] = (uint8_t)((sealID >> 24) & 0xFF);
 
-    heartbeatData[1] =
-        (uint8_t)((heartbeatCounter >> 8) & 0xFF);
-
-    heartbeatData[2] =
-        (uint8_t)((heartbeatCounter >> 16) & 0xFF);
-
-    heartbeatData[3] =
-        (uint8_t)((heartbeatCounter >> 24) & 0xFF);
+    // Next 4 bytes: heartbeat counter
+    heartbeatData[4] = (uint8_t)(heartbeatCounter & 0xFF);
+    heartbeatData[5] = (uint8_t)((heartbeatCounter >> 8) & 0xFF);
+    heartbeatData[6] = (uint8_t)((heartbeatCounter >> 16) & 0xFF);
+    heartbeatData[7] = (uint8_t)((heartbeatCounter >> 24) & 0xFF);
 
     heartbeatCharacteristic.notify(
         heartbeatData,

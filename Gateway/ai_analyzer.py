@@ -65,8 +65,9 @@ def _fallback_analysis(packet):
         events.append("possible tampering")
     if packet["vibration"]:
         events.append("movement or impact detected")
-    if packet["temperature"] > TEMP_HIGH:
-        events.append(f"temperature too high ({packet['temperature']} C)")
-    elif packet["temperature"] < TEMP_LOW:
-        events.append(f"temperature too low ({packet['temperature']} C)")
+    if packet["temperature"] is not None:
+        if packet["temperature"] > TEMP_HIGH:
+            events.append(f"temperature too high ({packet['temperature']} C)")
+        elif packet["temperature"] < TEMP_LOW:
+            events.append(f"temperature too low ({packet['temperature']} C)")
     return "; ".join(events) or "sensor alert triggered without a specific tamper or vibration classification"

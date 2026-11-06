@@ -116,7 +116,6 @@ def record_seen(packet):
     conn.commit()
     conn.close()
 
-
 def get_stale_seals(timeout_seconds):
     conn = sqlite3.connect(DB_NAME)
     rows = conn.execute("""

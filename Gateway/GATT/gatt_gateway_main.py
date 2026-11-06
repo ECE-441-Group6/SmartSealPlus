@@ -9,6 +9,8 @@ import time
 from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 
+from Gateway.database import DB_NAME
+
 if __package__:
     from .gatt_ble_scanner import (
         XIAO_DEVICE_NAME,
@@ -21,10 +23,9 @@ if __package__:
         decode_sensor_packet,
         extract_complete_json_packets,
     )
-    from .packet_parser import parse_packet
-    from .secure_packet_validator import SecurePacketValidator
-    from .database import (
-        DB_NAME,
+    from ..packet_parser import parse_packet
+    from ..secure_packet_validator import SecurePacketValidator
+    from ..database import (
         archive_events,
         clear_event_history,
         get_stale_seals,
@@ -33,12 +34,12 @@ if __package__:
         record_seen,
         update_event_artifacts,
     )
-    from .alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
-    from .ai_analyzer import analyze_image
-    from .camera_manager import capture_image
-    from .image_storage import image_path
+    from ..alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
+    from ..ai_analyzer import analyze_image
+    from ..camera_manager import capture_image
+    from ..image_storage import image_path
 else:
-    from gatt_ble_scanner import (
+    from Gateway.GATT.gatt_ble_scanner import (
         XIAO_DEVICE_NAME,
         SCAN_TIMEOUT,
         SENSOR_SERVICE_UUID,
@@ -49,9 +50,9 @@ else:
         decode_sensor_packet,
         extract_complete_json_packets,
     )
-    from packet_parser import parse_packet
-    from secure_packet_validator import SecurePacketValidator
-    from database import (
+    from Gateway.packet_parser import parse_packet
+    from Gateway.secure_packet_validator import SecurePacketValidator
+    from Gateway.database import (
         DB_NAME,
         archive_events,
         clear_event_history,
@@ -61,10 +62,10 @@ else:
         record_seen,
         update_event_artifacts,
     )
-    from alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
-    from ai_analyzer import analyze_image
-    from camera_manager import capture_image
-    from image_storage import image_path
+    from Gateway.alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
+    from Gateway.ai_analyzer import analyze_image
+    from Gateway.camera_manager import capture_image
+    from Gateway.image_storage import image_path
 
 
 HEARTBEAT_TIMEOUT = 15.0
@@ -125,8 +126,11 @@ def process_sensor_packet(raw_packet):
     alerts = process_alerts(packet)
 
     temperature_out_of_range = (
-        packet["temperature"] < TEMP_LOW
-        or packet["temperature"] > TEMP_HIGH
+        packet["temperature"] is not None
+        and (
+            packet["temperature"] < TEMP_LOW
+            or packet["temperature"] > TEMP_HIGH
+        )
     )
 
     capture_triggered = packet["tamper"] or packet["vibration"]
@@ -223,6 +227,7 @@ async def run_connected_session():
         heartbeat_state = {
             "last_received": time.monotonic(),
             "received_any": False,
+            "last_seal_id": None,
         }
         
         
@@ -244,15 +249,22 @@ async def run_connected_session():
                     print("Invalid complete sensor packet.")
         
 
-        def heartbeat_callback(sender, data):
-            """Record that the XIAO is still communicating."""
+#COMMENT OUT FOR NOW
+      #  def heartbeat_callback(sender, data):
+      #     """Record that the XIAO is still communicating."""
 
+       #     heartbeat_state["last_received"] = time.monotonic()
+       #     heartbeat_state["received_any"] = True
+
+        #    notification_queue.put_nowait(
+        #        ("heartbeat", bytes(data))
+         #   )
+
+        def heartbeat_callback(sender, data):
+            """Track heartbeat activity without blocking the BLE callback."""
             heartbeat_state["last_received"] = time.monotonic()
             heartbeat_state["received_any"] = True
-
-            notification_queue.put_nowait(
-                ("heartbeat", bytes(data))
-            )
+            notification_queue.put_nowait(("heartbeat", bytes(data)))
 
         await client.start_notify(
             SENSOR_CHARACTERISTIC_UUID,
@@ -289,6 +301,7 @@ async def run_connected_session():
                     packet = process_sensor_packet(data)
 
                     if packet is not None:
+                        heartbeat_state["last_seal_id"] = packet["seal_id"]
                         # Acknowledge the event sequence number only
                         # after processing the received packet.
                         sequence = packet["event_sequence"]

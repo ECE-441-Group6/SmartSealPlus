@@ -30,12 +30,14 @@ def parse_packet(packet):
             raise ValueError("Invalid event sequence")
 
         # Validate the temperature.
-        if (
+        if temperature is not None and (
             not isinstance(temperature, Real)
             or isinstance(temperature, bool)
             or not isfinite(temperature)
         ):
             raise ValueError("Invalid temperature")
+
+        if type(packet.get('tamper', False)) is not bool: raise ValueError('Invalid tamper flag')
 
         # Tamper detection hardware is not currently installed.
         if (
@@ -50,7 +52,7 @@ def parse_packet(packet):
             "seal_id": seal_id,
             "event_sequence": event_sequence,
             "temperature": temperature,
-            "tamper": False,
+            "tamper": packet.get("tamper", False),
             "vibration": vibration
         }
 

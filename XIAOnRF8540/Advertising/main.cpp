@@ -69,7 +69,7 @@ void startRecording() {
   const unsigned long now = millis();
   lastTempSampleTime = now - TEMP_INTERVAL_MS;
   lastSerialPrintTime = now - SERIAL_INTERVAL_MS;
-  lastBleTransmissionTime = now - BLE_TRANSMISSION_INTERVAL_MS;
+  lastBleTransmissionTime = now - ADVERTISEMENT_INTERVAL_MS;
   latestTemperatureC = NAN;
   startVibrationCalibration();
   Serial.println("Recording started.");
@@ -191,34 +191,18 @@ void sampleVibration() {
   }
 
   if (now - lastBleTransmissionTime >=
-      BLE_TRANSMISSION_INTERVAL_MS &&
-      isfinite(latestTemperatureC)) {
+      ADVERTISEMENT_INTERVAL_MS) {
     lastBleTransmissionTime = now;
-    const float vibrationVoltage =
-      static_cast<float>(vibrationADC) *
-      ADC_REFERENCE_VOLTAGE / ADC_MAX;
-    uint32_t eventSequence = 0;
-    if (!sequenceStorageReady ||
-        !getNextPersistentSequence(&eventSequence)) {
-      Serial.println("SECURITY: Persistent sequence unavailable; packet blocked.");
+    if (!sequenceStorageReady) {
+      Serial.println("SECURITY: Persistent sequence unavailable; advertisement blocked.");
       return;
     }
-
-    if (sendSensorPacket(
-          1,
-          eventSequence,
+    if (updateGatewayAdvertisement(
           latestTemperatureC,
-          vibrationEventPending,
-          vibrationVoltage
+          vibrationEventPending
         )) {
       vibrationEventPending = false;
     }
-  }
-
-  uint32_t acknowledgedSequence = 0;
-  if (getAcknowledgment(&acknowledgedSequence)) {
-    Serial.print("Pi acknowledged sequence: ");
-    Serial.println(acknowledgedSequence);
   }
 }
 }
@@ -248,7 +232,6 @@ void setup() {
 void loop() {
   const unsigned long now = millis();
   updateButton(now);
-  sendHeartbeat();
   if (recording) {
     sampleVibration();
   } else {

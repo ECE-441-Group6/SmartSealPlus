@@ -44,13 +44,13 @@ The requirements are Flask, Pillow, and Bleak.
 
 ## Upload the XIAO firmware
 
-1. Open `XIAOnRF8540/VT_IntegratedBLE/VT_IntegratedBLE.ino` in Arduino IDE.
+1. Open `XIAOnRF8540/Advertising/Advertising.ino` in Arduino IDE.
 2. Select the Seeed XIAO nRF52840 Sense board and its serial port.
 3. Upload the sketch.
 4. Open Serial Monitor at 115200 baud.
 5. Press the record button on D6 to start sampling.
 
-The current firmware configuration in `XIAOnRF8540/VT_IntegratedBLE/config.h`
+The current firmware configuration in `XIAOnRF8540/Advertising/config.h`
 uses:
 
 - Record button: D6
@@ -90,6 +90,26 @@ using a 4-byte little-endian integer.
 The gateway accepts the packet using the manufacturer ID and packet format,
 not the advertised device name.
 
+The XIAO `Advertising` firmware encrypts its manufacturer payload with
+AES-CCM. Generate a unique key for each seal and keep both the firmware
+secret and gateway registry outside source control:
+
+```bash
+python3 Gateway/provision_seal_key.py 1 \
+  --registry Gateway/keys.json \
+  --firmware-header XIAOnRF8540/Advertising/secrets.h
+SMARTSEAL_KEY_REGISTRY=Gateway/keys.json python3 Gateway/gateway_main.py
+```
+
+Encrypted advertisements use manufacturer ID `0x5353`, version `2`, a
+7-byte random nonce, 10 bytes of encrypted sensor data, and a 6-byte
+authentication tag. The gateway rejects packets that fail authentication.
+The gateway rejects version-2 packets for unknown seal IDs and requires the
+authenticated seal ID to match the key that successfully decrypts the packet.
+Legacy version-1 binary and plaintext packets are accepted only for registered
+seal IDs and do not provide confidentiality; disable them before production
+deployment.
+
 ## Run the gateway and dashboard
 
 Run each program in a separate terminal from the repository root.
@@ -97,13 +117,13 @@ Run each program in a separate terminal from the repository root.
 Terminal 1 — XIAO BLE gateway:
 
 ```bash
-python3 Gateway/XIAO/gateway_main.py
+python3 Gateway/gateway_main.py
 ```
 
 Alternatively, run from the XIAO gateway directory:
 
 ```bash
-cd Gateway/XIAO
+cd Gateway
 python3 gateway_main.py
 ```
 
@@ -121,7 +141,7 @@ previously archived sessions.
 Set `SMARTSEAL_SIMULATION=1` to exercise the gateway without BLE hardware:
 
 ```bash
-SMARTSEAL_SIMULATION=1 python3 Gateway/XIAO/gateway_main.py
+SMARTSEAL_SIMULATION=1 python3 Gateway/gateway_main.py
 ```
 
 ## Event processing and storage
@@ -171,7 +191,7 @@ event-history clearing, CSV export, and archiving on gateway shutdown.
 ## Main project paths
 
 ```text
-XIAOnRF8540/VT_IntegratedBLE/   XIAO Arduino sketch and firmware modules
+XIAOnRF8540/Advertising/         XIAO Arduino sketch and firmware modules
 Gateway/XIAO/                   XIAO BLE advertisement scanner and launcher
 Gateway/                         Shared packet handling, alerts, storage, camera
 Gateway/archives/                Timestamped CSV archives after gateway shutdown

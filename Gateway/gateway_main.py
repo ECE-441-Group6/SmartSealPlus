@@ -5,8 +5,11 @@ import sqlite3
 import time
 
 if __package__:
+    from . import database
+    from .replay_protection import ReplayProtector
     from .ble_scanner import scan_ble
     from .packet_parser import parse_packet
+    from .key_registry import load_key_registry
     from .database import (
         archive_events,
         clear_event_history,
@@ -21,8 +24,11 @@ if __package__:
     from .camera_manager import capture_image
     from .image_storage import image_path
 else:
+    import database
+    from replay_protection import ReplayProtector
     from ble_scanner import scan_ble
     from packet_parser import parse_packet
+    from key_registry import load_key_registry
     from database import (
         archive_events,
         clear_event_history,
@@ -39,7 +45,9 @@ else:
 
 
 def run_gateway(interval=5, scanner=scan_ble):
+    load_key_registry()
     init_database()
+    replay_protector = ReplayProtector(db_path=database.DB_NAME)
     clear_event_history()
     print("SmartSeal+ gateway started.")
     print("Previous dashboard events cleared.")
@@ -56,6 +64,13 @@ def run_gateway(interval=5, scanner=scan_ble):
                 packet = parse_packet(raw_packet)
                 if packet is None:
                     print("Invalid sensor packet. Skipping...")
+                    continue
+
+                accepted, reason = replay_protector.check_sequence(
+                    packet['seal_id'], packet['event_sequence']
+                )
+                if not accepted:
+                    print(f'Rejected packet: {reason}')
                     continue
 
                 record_seen(packet)
@@ -76,8 +91,11 @@ def run_gateway(interval=5, scanner=scan_ble):
                 )
                 alerts = process_alerts(packet)
                 temperature_out_of_range = (
-                    packet["temperature"] < TEMP_LOW
-                    or packet["temperature"] > TEMP_HIGH
+                    packet["temperature"] is not None
+                    and (
+                        packet["temperature"] < TEMP_LOW
+                        or packet["temperature"] > TEMP_HIGH
+                    )
                 )
                 capture_triggered = packet["tamper"] or packet["vibration"]
 
