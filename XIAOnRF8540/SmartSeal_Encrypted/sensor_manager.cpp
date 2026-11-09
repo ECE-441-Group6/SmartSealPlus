@@ -6,6 +6,9 @@
 
 namespace {
 float vibrationBaseline = 0.0f;
+VibrationReading latestVibration = {};
+uint8_t vibrationHits = 0;
+bool vibrationLatched = false;
 }
 
 // Assumption:
@@ -54,44 +57,48 @@ void calibrateVibrationSensor() {
     vibrationBaseline =
         (float)total / SAMPLES;
 
+    latestVibration = {};
+    vibrationHits = 0;
+    vibrationLatched = false;
+
     Serial.print("Vibration baseline: ");
     Serial.println(vibrationBaseline);
 }
 
 
-VibrationReading detectVibration() {
+void updateVibrationSensor() {
 
     constexpr uint16_t THRESHOLD = 100;
     constexpr uint8_t REQUIRED_HITS = 3;
-    constexpr uint8_t TOTAL_SAMPLES = 20;
 
-    uint8_t hits = 0;
-    VibrationReading result = {};
+    const int reading = analogRead(VIBRATION_PIN);
+    const float difference =
+        fabs((float)reading - vibrationBaseline);
 
-    for (uint8_t i = 0; i < TOTAL_SAMPLES; i++) {
+    latestVibration.adcValue = reading;
+    latestVibration.baseline = vibrationBaseline;
+    latestVibration.deviation = difference;
+    latestVibration.voltage =
+        ((float)reading / ADC_MAX) * ADC_REFERENCE_VOLTAGE;
 
-        int reading = analogRead(VIBRATION_PIN);
-
-        const float difference =
-            fabs((float)reading - vibrationBaseline);
-
-        result.adcValue = reading;
-        result.baseline = vibrationBaseline;
-        result.deviation = difference;
-        result.voltage =
-            ((float)reading / ADC_MAX) * ADC_REFERENCE_VOLTAGE;
-
-        if (difference > THRESHOLD) {
-            hits++;
+    if (difference > THRESHOLD) {
+        if (vibrationHits < REQUIRED_HITS) {
+            vibrationHits++;
         }
-
-        if (hits >= REQUIRED_HITS) {
-            result.detected = true;
-            return result;
-        }
-
-        delay(1);
+    } else {
+        vibrationHits = 0;
     }
 
-    return result;
+    if (vibrationHits >= REQUIRED_HITS) {
+        vibrationLatched = true;
+    }
+}
+
+
+VibrationReading detectVibration() {
+
+    latestVibration.detected = vibrationLatched;
+    vibrationLatched = false;
+
+    return latestVibration;
 }

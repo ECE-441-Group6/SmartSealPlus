@@ -182,6 +182,10 @@ void loop() {
     const uint32_t now = millis();
     updateRecordButton(now);
 
+    if (recording) {
+        updateVibrationSensor();
+    }
+
     if (recording &&
         now - lastAdvertisement >=
         ADVERTISEMENT_INTERVAL_MS) {

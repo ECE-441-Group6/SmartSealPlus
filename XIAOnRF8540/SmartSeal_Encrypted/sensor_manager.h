@@ -12,4 +12,5 @@ struct VibrationReading {
 
 float readTemperatureC();
 void calibrateVibrationSensor();
+void updateVibrationSensor();
 VibrationReading detectVibration();
