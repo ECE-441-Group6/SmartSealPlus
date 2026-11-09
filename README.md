@@ -287,9 +287,31 @@ XIAOnRF8540/Advertising/         XIAO manufacturer-advertising firmware
 XIAOnRF8540/VT_IntegratedBLE.cpp Integrated BLE/GATT firmware experiment
 Gateway/                         Shared packet handling, alerts, storage, camera
 Gateway/GATT/                    Persistent BLE GATT scanner and gateway
-Gateway/XIAO/ and Gateway/ESP32/ BLE scanner entry points
+Gateway/XIAO/ BLE scanner entry point
 Gateway/archives/                Timestamped CSV archives after gateway shutdown
 Gateway/images/                  Captured or simulated camera images
 Dashboard/                       Flask app, templates, and browser assets
 requirements.txt                 Python dependencies
 ```
+
+### Local image analysis with Ollama
+
+Install and start Ollama, then download the vision model:
+
+```bash
+ollama pull moondream
+ollama serve
+```
+
+The gateway uses Ollama by default at
+`http://127.0.0.1:11434/api/generate`. Optional configuration:
+
+```bash
+export SMARTSEAL_AI_PROVIDER=ollama
+export OLLAMA_VISION_MODEL=moondream
+export OLLAMA_URL=http://127.0.0.1:11434/api/generate
+export OLLAMA_TIMEOUT_SECONDS=60
+```
+
+Set `SMARTSEAL_AI_PROVIDER=none` to use sensor-only fallback text, or
+`SMARTSEAL_AI_PROVIDER=openai` to use the existing OpenAI integration.

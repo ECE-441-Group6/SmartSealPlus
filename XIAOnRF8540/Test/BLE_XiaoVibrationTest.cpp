@@ -15,7 +15,7 @@ const int BUTTON2_PIN       = D2;  // Button 2: state logging
 // BLE CONFIGURATION
 // ============================================================
 
-const char* DEVICE_NAME = "ESP32_Recorder";
+const char* DEVICE_NAME = "XIAO_Recorder";
 
 BLEService recordingService(
     "12345678-1234-1234-1234-1234567890ab"

@@ -13,10 +13,12 @@ else:
 
 
 def analyze_image(filename, packet):
-    # Read configuration from the environment so credentials are not stored in
-    # the repository.
+    provider = os.getenv("SMARTSEAL_AI_PROVIDER", "ollama").lower()
+    if provider == "ollama":
+        return _analyze_with_ollama(filename, packet)
+
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    if provider != "openai" or not api_key:
         return _fallback_analysis(packet)
 
     with open(filename, "rb") as image_file:
@@ -57,6 +59,46 @@ def analyze_image(filename, packet):
     except Exception as error:
         # Keep the event usable when the network or vision service is down.
         return f"AI analysis unavailable; sensor evidence: {_fallback_analysis(packet)} ({error})"
+
+
+def _analyze_with_ollama(filename, packet):
+    with open(filename, "rb") as image_file:
+        encoded_image = base64.b64encode(image_file.read()).decode("ascii")
+
+    prompt = (
+        "Describe what happened in this SmartSeal event image in one concise "
+        f"sentence. Sensor reading: {packet['temperature']} C; "
+        f"tamper={packet['tamper']}; vibration={packet['vibration']}; "
+        f"movement_type={packet.get('movement_type', 0)}."
+    )
+    payload = {
+        "model": os.getenv("OLLAMA_VISION_MODEL", "moondream"),
+        "prompt": prompt,
+        "images": [encoded_image],
+        "stream": False,
+    }
+    request = Request(
+        os.getenv("OLLAMA_URL", "http://127.0.0.1:11434/api/generate"),
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urlopen(
+            request,
+            timeout=float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "60")),
+        ) as response:
+            result = json.load(response)
+        analysis = result.get("response", "").strip()
+        if not analysis:
+            raise ValueError("Ollama returned an empty response")
+        return analysis
+    except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+        return (
+            "AI analysis unavailable; sensor evidence: "
+            f"{_fallback_analysis(packet)} ({error})"
+        )
 
 
 def _fallback_analysis(packet):
