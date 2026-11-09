@@ -1,18 +1,41 @@
 
 """AES-128-CCM decryption for SmartSeal BLE advertisements."""
 
+import json
+from pathlib import Path
+
 from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
-# Replace with the NEW 16-byte key provisioned to the XIAO.
-# Store this in a private configuration file, not GitHub.
-ENCRYPTION_KEY = bytes.fromhex(
-    "00112233445566778899aabbccddeeff"
-)
 
-# Replace with the matching 9-byte device-specific prefix.
-NONCE_PREFIX = bytes.fromhex(
-    "102030405060708090"
-)
+def _load_hex_secret(name, length):
+    """Load a fixed-length hexadecimal secret from the local key file."""
+    key_path = Path(__file__).parents[1] / "keys.json"
+    try:
+        with key_path.open(encoding="utf-8") as key_file:
+            value = json.load(key_file)[name]
+    except (OSError, KeyError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            f"Could not load {name} from {key_path}."
+        ) from error
+
+    try:
+        secret = bytes.fromhex(value)
+    except ValueError as error:
+        raise RuntimeError(
+            f"{name} must contain hexadecimal bytes."
+        ) from error
+
+    if len(secret) != length:
+        raise RuntimeError(
+            f"{name} must be exactly {length} bytes "
+            f"({length * 2} hexadecimal characters)."
+        )
+
+    return secret
+
+
+ENCRYPTION_KEY = _load_hex_secret("SMARTSEAL_AES_KEY", 16)
+NONCE_PREFIX = _load_hex_secret("SMARTSEAL_NONCE_PREFIX", 9)
 
 MANUFACTURER_ID = 0x5353
 MAGIC = 0xA5

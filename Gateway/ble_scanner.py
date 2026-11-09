@@ -4,6 +4,8 @@
 import os
 import random
 import asyncio
+import json
+from pathlib import Path
 
 from bleak import BleakScanner
 from bleak.exc import BleakError
@@ -29,19 +31,35 @@ SIMULATION_MODE = (
 # AES-128-CCM CONFIGURATION
 # --------------------------------------------------
 
-# TEST KEY ONLY.
-# Replace this with a new randomly generated 16-byte key.
-# The XIAO and Raspberry Pi must use exactly the same key.
-AES_KEY = bytes.fromhex(
-    "00112233445566778899aabbccddeeff"
-)
+def _load_hex_secret(name, length):
+    """Load a fixed-length hexadecimal secret from the local key file."""
+    key_path = Path(__file__).with_name("keys.json")
+    try:
+        with key_path.open(encoding="utf-8") as key_file:
+            value = json.load(key_file)[name]
+    except (OSError, KeyError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            f"Could not load {name} from {key_path}."
+        ) from error
 
-# TEST PREFIX ONLY.
-# Replace with your device-specific 9-byte nonce prefix.
-# Must match the XIAO exactly.
-NONCE_PREFIX = bytes.fromhex(
-    "102030405060708090"
-)
+    try:
+        secret = bytes.fromhex(value)
+    except ValueError as error:
+        raise RuntimeError(
+            f"{name} must contain hexadecimal bytes."
+        ) from error
+
+    if len(secret) != length:
+        raise RuntimeError(
+            f"{name} must be exactly {length} bytes "
+            f"({length * 2} hexadecimal characters)."
+        )
+
+    return secret
+
+
+AES_KEY = _load_hex_secret("SMARTSEAL_AES_KEY", 16)
+NONCE_PREFIX = _load_hex_secret("SMARTSEAL_NONCE_PREFIX", 9)
 
 AES_TAG_LENGTH = 8
 
