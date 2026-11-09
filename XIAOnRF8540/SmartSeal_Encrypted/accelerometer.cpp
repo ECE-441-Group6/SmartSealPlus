@@ -1,30 +1,77 @@
 #include "accelerometer.h"
 
-#include <Adafruit_ADXL345_U.h>
-#include <Adafruit_Sensor.h>
 #include <Arduino.h>
 #include <Wire.h>
 #include <math.h>
 
 namespace {
-Adafruit_ADXL345_Unified accelerometer(12345);
-constexpr float MOVEMENT_THRESHOLD = 0.5f;
+constexpr uint8_t ADXL345_ADDRESS = 0x53;
+constexpr uint8_t REG_DATA_FORMAT = 0x31;
+constexpr uint8_t REG_BW_RATE = 0x2C;
+constexpr uint8_t REG_POWER_CTL = 0x2D;
+constexpr uint8_t REG_DATA_X0 = 0x32;
+constexpr uint8_t MEASURE_MODE = 0x08;
+constexpr uint8_t FULL_RESOLUTION_16G = 0x0B;
+constexpr uint8_t DATA_RATE_100_HZ = 0x0A;
+constexpr float ADXL345_SCALE_MPS2 = 0.0039f * 9.80665f;
+constexpr float MOVEMENT_THRESHOLD = 1.5f;
+constexpr uint8_t REQUIRED_MOVEMENT_SAMPLES = 4;
+
 bool sensorReady = false;
 bool firstReading = true;
 float previousX = 0.0f;
 float previousY = 0.0f;
 float previousZ = 0.0f;
 uint8_t latchedMovement = MOVEMENT_NONE;
+uint8_t movementSamples = 0;
+
+bool writeRegister(uint8_t reg, uint8_t value) {
+    Wire.beginTransmission(ADXL345_ADDRESS);
+    Wire.write(reg);
+    Wire.write(value);
+    return Wire.endTransmission() == 0;
+}
+
+bool readAcceleration(float &x, float &y, float &z) {
+    Wire.beginTransmission(ADXL345_ADDRESS);
+    Wire.write(REG_DATA_X0);
+    if (Wire.endTransmission(false) != 0 ||
+        Wire.requestFrom(ADXL345_ADDRESS, (uint8_t)6) != 6) {
+        return false;
+    }
+
+    const int16_t rawX = (int16_t)(Wire.read() | (Wire.read() << 8));
+    const int16_t rawY = (int16_t)(Wire.read() | (Wire.read() << 8));
+    const int16_t rawZ = (int16_t)(Wire.read() | (Wire.read() << 8));
+
+    x = rawX * ADXL345_SCALE_MPS2;
+    y = rawY * ADXL345_SCALE_MPS2;
+    z = rawZ * ADXL345_SCALE_MPS2;
+    return isfinite(x) && isfinite(y) && isfinite(z);
+}
 }
 
 bool accelerometerBegin() {
-    if (!accelerometer.begin()) {
+    Wire.begin();
+
+    Wire.beginTransmission(ADXL345_ADDRESS);
+    Wire.write(0x00);
+    if (Wire.endTransmission(false) != 0 ||
+        Wire.requestFrom(ADXL345_ADDRESS, (uint8_t)1) != 1 ||
+        Wire.read() != 0xE5) {
         Serial.println("ADXL345 not detected; movement detection disabled.");
         return false;
     }
 
-    accelerometer.setRange(ADXL345_RANGE_16_G);
-    accelerometer.setDataRate(ADXL345_DATARATE_100_HZ);
+    if (!writeRegister(REG_DATA_FORMAT, FULL_RESOLUTION_16G) ||
+        !writeRegister(REG_BW_RATE, DATA_RATE_100_HZ) ||
+        !writeRegister(REG_POWER_CTL, MEASURE_MODE)) {
+        Serial.println(
+            "ADXL345 configuration failed; movement detection disabled."
+        );
+        return false;
+    }
+
     sensorReady = true;
     resetMovementDetection();
     Serial.println("ADXL345 initialized.");
@@ -34,6 +81,7 @@ bool accelerometerBegin() {
 void resetMovementDetection() {
     firstReading = true;
     latchedMovement = MOVEMENT_NONE;
+    movementSamples = 0;
 }
 
 void detectMovement() {
@@ -41,32 +89,44 @@ void detectMovement() {
         return;
     }
 
-    sensors_event_t event;
-    accelerometer.getEvent(&event);
-    if (!isfinite(event.acceleration.x) ||
-        !isfinite(event.acceleration.y) ||
-        !isfinite(event.acceleration.z)) {
+    float currentX;
+    float currentY;
+    float currentZ;
+    if (!readAcceleration(currentX, currentY, currentZ)) {
         return;
     }
 
     if (firstReading) {
-        previousX = event.acceleration.x;
-        previousY = event.acceleration.y;
-        previousZ = event.acceleration.z;
+        previousX = currentX;
+        previousY = currentY;
+        previousZ = currentZ;
         firstReading = false;
         return;
     }
 
-    const float deltaX = event.acceleration.x - previousX;
-    const float deltaY = event.acceleration.y - previousY;
-    const float deltaZ = event.acceleration.z - previousZ;
+    const float deltaX = currentX - previousX;
+    const float deltaY = currentY - previousY;
+    const float deltaZ = currentZ - previousZ;
 
-    previousX = event.acceleration.x;
-    previousY = event.acceleration.y;
-    previousZ = event.acceleration.z;
+    previousX = currentX;
+    previousY = currentY;
+    previousZ = currentZ;
 
-    if (sqrtf(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ)
-        > MOVEMENT_THRESHOLD) {
+    const float deltaMagnitude = sqrtf(
+        deltaX * deltaX +
+        deltaY * deltaY +
+        deltaZ * deltaZ
+    );
+
+    if (deltaMagnitude > MOVEMENT_THRESHOLD) {
+        if (movementSamples < REQUIRED_MOVEMENT_SAMPLES) {
+            movementSamples++;
+        }
+    } else {
+        movementSamples = 0;
+    }
+
+    if (movementSamples >= REQUIRED_MOVEMENT_SAMPLES) {
         latchedMovement = MOVEMENT_GENERAL;
     }
 }
@@ -77,4 +137,5 @@ uint8_t getMovementCode() {
 
 void clearMovementCode() {
     latchedMovement = MOVEMENT_NONE;
+    movementSamples = 0;
 }
