@@ -147,12 +147,6 @@ def get_latest_events():
 
 
 def archive_events():
-    archive_dir = DB_NAME.parent / "archives"
-    archive_dir.mkdir(parents=True, exist_ok=True)
-    archive_path = archive_dir / (
-        f"gateway-events-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.csv"
-    )
-
     conn = sqlite3.connect(DB_NAME)
     try:
         rows = conn.execute("""
@@ -163,6 +157,15 @@ def archive_events():
         """).fetchall()
     finally:
         conn.close()
+
+    if not rows:
+        return None
+
+    archive_dir = DB_NAME.parent / "archives"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    archive_path = archive_dir / (
+        f"SmartSeal_Events_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')}.csv"
+    )
 
     with archive_path.open("w", newline="", encoding="utf-8") as archive_file:
         writer = csv.writer(archive_file)

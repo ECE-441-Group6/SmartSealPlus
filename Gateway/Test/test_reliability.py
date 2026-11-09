@@ -107,7 +107,7 @@ class ReliabilityTests(unittest.TestCase):
             gateway_main.run_gateway(interval=0, scanner=stop_gateway)
 
         archives = list((Path(database.DB_NAME).parent / "archives").glob(
-            "gateway-events-*.csv"
+            "SmartSeal_Events_*.csv"
         ))
         self.assertEqual(len(archives), 1)
         with archives[0].open(newline="", encoding="utf-8") as archive_file:

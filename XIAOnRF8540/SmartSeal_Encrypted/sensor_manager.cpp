@@ -6,6 +6,7 @@
 
 namespace {
 float vibrationBaseline = 0.0f;
+float vibrationThreshold = 40.0f;
 VibrationReading latestVibration = {};
 uint8_t vibrationHits = 0;
 bool vibrationLatched = false;
@@ -57,19 +58,34 @@ void calibrateVibrationSensor() {
     vibrationBaseline =
         (float)total / SAMPLES;
 
+    float absoluteDeviation = 0.0f;
+
+    for (uint16_t i = 0; i < SAMPLES; i++) {
+        absoluteDeviation += fabs(
+            (float)analogRead(VIBRATION_PIN) - vibrationBaseline
+        );
+        delay(1);
+    }
+
+    vibrationThreshold = fmaxf(
+        40.0f,
+        absoluteDeviation / SAMPLES * 6.0f
+    );
+
     latestVibration = {};
     vibrationHits = 0;
     vibrationLatched = false;
 
     Serial.print("Vibration baseline: ");
     Serial.println(vibrationBaseline);
+    Serial.print("Vibration threshold: ");
+    Serial.println(vibrationThreshold);
 }
 
 
 void updateVibrationSensor() {
 
-    constexpr uint16_t THRESHOLD = 20;
-    constexpr uint8_t REQUIRED_HITS = 2;
+    constexpr uint8_t REQUIRED_HITS = 4;
 
     const int reading = analogRead(VIBRATION_PIN);
     const float difference =
@@ -81,7 +97,7 @@ void updateVibrationSensor() {
     latestVibration.voltage =
         ((float)reading / ADC_MAX) * ADC_REFERENCE_VOLTAGE;
 
-    if (difference > THRESHOLD) {
+    if (difference > vibrationThreshold) {
         if (vibrationHits < REQUIRED_HITS) {
             vibrationHits++;
         }

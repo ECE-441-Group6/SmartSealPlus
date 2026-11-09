@@ -408,7 +408,10 @@ async def run_gateway():
     finally:
         try:
             archive_path = archive_events()
-            print(f"Gateway event archive saved: {archive_path}")
+            if archive_path is not None:
+                print(f"Gateway event archive saved: {archive_path}")
+            else:
+                print("No gateway events to archive.")
 
         except (OSError, sqlite3.Error, csv.Error) as error:
             print(
