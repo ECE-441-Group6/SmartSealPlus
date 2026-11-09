@@ -113,6 +113,11 @@ function formatInitialTimestamps() {
 let refreshInProgress = false;
 let refreshRequested = false;
 let selectedArchive = "live";
+const deleteArchiveButton = document.querySelector("#delete-archive");
+
+function updateDeleteArchiveButton() {
+    deleteArchiveButton.disabled = selectedArchive === "live";
+}
 
 async function refreshEvents() {
     if (refreshInProgress) {
@@ -219,6 +224,12 @@ async function loadArchives() {
             throw new Error(`HTTP ${response.status}`);
         }
         const archives = await response.json();
+        const archiveNames = new Set(archives);
+        for (const option of [...selector.options]) {
+            if (option.value !== "live" && !archiveNames.has(option.value)) {
+                option.remove();
+            }
+        }
         for (const archive of archives) {
             if ([...selector.options].some((option) => option.value === archive)) {
                 continue;
@@ -239,11 +250,52 @@ async function loadArchives() {
 
 document.querySelector("#event-source").addEventListener("change", (event) => {
     selectedArchive = event.target.value;
+    updateDeleteArchiveButton();
     refreshEvents();
+});
+
+deleteArchiveButton.addEventListener("click", async () => {
+    if (selectedArchive === "live") {
+        return;
+    }
+
+    if (!window.confirm(`Delete ${selectedArchive} and its stored pictures?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            `/api/archives/${encodeURIComponent(selectedArchive)}`,
+            { method: "DELETE" }
+        );
+        if (!response.ok) {
+            if (response.status === 409) {
+                throw new Error(
+                    "This archive contains a protected incident record."
+                );
+            }
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const deletedArchive = selectedArchive;
+        selectedArchive = "live";
+        const selector = document.querySelector("#event-source");
+        selector.value = "live";
+        updateDeleteArchiveButton();
+        await loadArchives();
+        await refreshEvents();
+        document.querySelector("#gateway-status").textContent =
+            `Deleted ${deletedArchive} and its unshared pictures.`;
+    } catch (error) {
+        console.error("Could not delete gateway archive:", error);
+        document.querySelector("#gateway-status").textContent =
+            error.message || "Could not delete the selected archive.";
+    }
 });
 
 // Keep live events synchronized; archived snapshots only refresh on selection.
 formatInitialTimestamps();
+updateDeleteArchiveButton();
 loadArchives();
 refreshEvents();
 setInterval(() => {

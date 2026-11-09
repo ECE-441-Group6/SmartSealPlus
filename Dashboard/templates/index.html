@@ -15,9 +15,12 @@
 </p>
 
 <label for="event-source">Event history:</label>
-<select id="event-source">
+<select id="event-source" aria-label="Event history">
     <option value="live">Current gateway session</option>
 </select>
+<button id="delete-archive" type="button" disabled>
+    Delete selected archive
+</button>
 
 <table>
     <thead>

@@ -1,10 +1,73 @@
 # Saves sensor readings and events so they can be reviewed later.
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import sqlite3
 
 DB_NAME = Path(__file__).resolve().parent / "smartseal.db"
+IMAGE_FOLDER = DB_NAME.parent / "images"
+ARCHIVE_DIRECTORY = DB_NAME.parent / "archives"
+ARCHIVE_FILENAME = "SmartSeal_Events_"
+
+
+def _delete_unreferenced_images():
+    referenced = set()
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        referenced.update(
+            row[0] for row in conn.execute(
+                "SELECT image_path FROM events "
+                "WHERE image_path IS NOT NULL AND image_path != ''"
+            )
+        )
+    finally:
+        conn.close()
+
+    image_folder = IMAGE_FOLDER.resolve()
+    for image_path in IMAGE_FOLDER.glob("*"):
+        if image_path.name not in referenced and image_path.is_file():
+            resolved = image_path.resolve()
+            if resolved.parent == image_folder:
+                resolved.unlink()
+
+
+def apply_retention_policy():
+    cutoff = (datetime.utcnow() - timedelta(days=30)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        conn.execute(
+            """
+            DELETE FROM events
+            WHERE timestamp < ?
+              AND COALESCE(image_path, '') = ''
+              AND COALESCE(ai_analysis, '') = ''
+            """,
+            (cutoff,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    archive_cutoff = datetime.now().timestamp() - timedelta(days=90).total_seconds()
+    for archive_path in ARCHIVE_DIRECTORY.glob(f"{ARCHIVE_FILENAME}*.csv"):
+        if archive_path.stat().st_mtime >= archive_cutoff:
+            continue
+        try:
+            with archive_path.open(newline="", encoding="utf-8") as archive_file:
+                rows = list(csv.DictReader(archive_file))
+        except (OSError, csv.Error):
+            continue
+        if any(
+            (row.get("image_path") or "").strip()
+            or (row.get("ai_analysis") or "").strip()
+            for row in rows
+        ):
+            continue
+        archive_path.unlink()
+
+    _delete_unreferenced_images()
 
 
 def init_database():
@@ -54,14 +117,22 @@ def init_database():
 
     conn.commit()
     conn.close()
+    apply_retention_policy()
 
 
 def clear_event_history():
     conn = sqlite3.connect(DB_NAME)
     with conn:
-        conn.execute("DELETE FROM events")
+        conn.execute(
+            """
+            DELETE FROM events
+            WHERE COALESCE(image_path, '') = ''
+              AND COALESCE(ai_analysis, '') = ''
+            """
+        )
         conn.execute("DELETE FROM seal_status")
     conn.close()
+    _delete_unreferenced_images()
 
 
 def insert_event(packet, image_filename=None, ai_analysis=None):
