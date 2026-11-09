@@ -87,7 +87,11 @@ def process_sensor_packet(raw_packet):
         )
     )
 
-    capture_triggered = packet["tamper"] or packet["vibration"]
+    capture_triggered = (
+        packet["tamper"]
+        or packet["vibration"]
+        or packet["movement_type"] != 0
+    )
 
     image_filename = None
 

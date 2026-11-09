@@ -21,15 +21,20 @@ def init_database():
         temperature REAL,
         tamper INTEGER,
         vibration REAL,
+        movement_type INTEGER DEFAULT 0,
         image_path TEXT,
         ai_analysis TEXT
     )
     """)
 
     # Add newer columns when opening a database created by an older version.
-    for column in ("event_sequence", "image_path", "ai_analysis"):
+    for column in ("event_sequence", "movement_type", "image_path", "ai_analysis"):
         try:
-            column_type = "INTEGER" if column == "event_sequence" else "TEXT"
+            column_type = (
+                "INTEGER"
+                if column in ("event_sequence", "movement_type")
+                else "TEXT"
+            )
             cur.execute(f"ALTER TABLE events ADD COLUMN {column} {column_type}")
         except sqlite3.OperationalError:
             pass
@@ -66,8 +71,9 @@ def insert_event(packet, image_filename=None, ai_analysis=None):
 
     cur.execute("""
     INSERT OR IGNORE INTO events
-    (seal_id, event_sequence, temperature, tamper, vibration, image_path, ai_analysis)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    (seal_id, event_sequence, temperature, tamper, vibration, movement_type,
+     image_path, ai_analysis)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """,
     (
         packet["seal_id"],
@@ -75,6 +81,7 @@ def insert_event(packet, image_filename=None, ai_analysis=None):
         packet["temperature"],
         int(packet["tamper"]),
         packet["vibration"],
+        packet.get("movement_type", 0),
         image_filename,
         ai_analysis
     ))
@@ -134,7 +141,7 @@ def get_latest_events():
 
     cur.execute("""
     SELECT id, timestamp, seal_id, event_sequence, temperature, tamper,
-           vibration, image_path, ai_analysis
+           vibration, movement_type, image_path, ai_analysis
     FROM events
     ORDER BY timestamp DESC, id DESC
     """)
@@ -151,7 +158,7 @@ def archive_events():
     try:
         rows = conn.execute("""
         SELECT id, timestamp, seal_id, event_sequence, temperature, tamper,
-               vibration, image_path, ai_analysis
+               vibration, movement_type, image_path, ai_analysis
         FROM events
         ORDER BY timestamp ASC, id ASC
         """).fetchall()
@@ -177,6 +184,7 @@ def archive_events():
             "temperature",
             "tamper",
             "vibration",
+            "movement_type",
             "image_path",
             "ai_analysis",
         ))

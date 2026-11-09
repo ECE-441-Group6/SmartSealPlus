@@ -8,6 +8,7 @@
 #include <nrf_cc310/include/crys_aesccm.h>
 
 #include "config.h"
+#include "accelerometer.h"
 #include "sequence_manager.h"
 
 namespace {
@@ -69,6 +70,7 @@ bool encryptSensorData(
 bool createEncryptedPacket(
     float temperatureC,
     bool vibrationDetected,
+    uint8_t movementCode,
     uint8_t *packet
 ) {
 
@@ -118,6 +120,10 @@ bool createEncryptedPacket(
     uint16_t vibrationValue =
         vibrationDetected ? 100 : 0;
 
+    if (movementCode > MOVEMENT_SHAKE) {
+        return false;
+    }
+
     uint8_t plaintext[PLAINTEXT_LENGTH];
 
     uint16_t temperatureRaw =
@@ -131,6 +137,7 @@ bool createEncryptedPacket(
 
     plaintext[3] = vibrationValue & 0xFF;
     plaintext[4] = (vibrationValue >> 8) & 0xFF;
+    plaintext[5] = movementCode;
 
     // -------------------------------------------------
     // Encrypt and authenticate
@@ -160,7 +167,7 @@ bool createEncryptedPacket(
 
     memcpy(packet + 7, ciphertext, PLAINTEXT_LENGTH);
 
-    memcpy(packet + 12, tag, TAG_LENGTH);
+    memcpy(packet + 13, tag, TAG_LENGTH);
 
     return true;
 }
@@ -171,7 +178,7 @@ bool createEncryptedPacket(
 
 void startEncryptedAdvertising(const uint8_t *packet) {
 
-    uint8_t manufacturerData[22];
+    uint8_t manufacturerData[23];
 
     // Company ID, little-endian.
     manufacturerData[0] =

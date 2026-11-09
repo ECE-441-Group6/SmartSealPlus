@@ -82,7 +82,11 @@ def run_gateway(interval=5, scanner=scan_ble):
                         or packet["temperature"] > TEMP_HIGH
                     )
                 )
-                capture_triggered = packet["tamper"] or packet["vibration"]
+                capture_triggered = (
+                    packet["tamper"]
+                    or packet["vibration"]
+                    or packet["movement_type"] != 0
+                )
 
                 image_filename = None
                 ai_analysis = (

@@ -64,9 +64,9 @@ NONCE_PREFIX = _load_hex_secret("SMARTSEAL_NONCE_PREFIX", 9)
 AES_TAG_LENGTH = 8
 
 MAGIC = 0xA5
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 
-EXPECTED_PACKET_LENGTH = 20
+EXPECTED_PACKET_LENGTH = 21
 
 aes = AESCCM(AES_KEY, tag_length=AES_TAG_LENGTH)
 
@@ -81,11 +81,11 @@ def parse_advertisement(payload):
 
     Expected packet:
         Byte 0:       Magic (0xA5)
-        Byte 1:       Protocol version (2)
+        Byte 1:       Protocol version (3)
         Byte 2:       Seal ID
         Bytes 3-6:    Sequence number (little-endian)
-        Bytes 7-11:   Encrypted sensor data
-        Bytes 12-19:  AES-CCM authentication tag
+        Bytes 7-12:   Encrypted sensor data
+        Bytes 13-20:  AES-CCM authentication tag
     """
 
     if payload is None:
@@ -133,7 +133,7 @@ def parse_advertisement(payload):
     aad = payload[0:7]
 
     # Ciphertext and authentication tag.
-    ciphertext_and_tag = payload[7:20]
+    ciphertext_and_tag = payload[7:21]
 
     try:
         plaintext = aes.decrypt(
@@ -153,8 +153,9 @@ def parse_advertisement(payload):
     # Bytes 0-1: temperature * 10 (signed little-endian)
     # Byte 2:    tamper (0 or 1)
     # Bytes 3-4: vibration * 100 (unsigned little-endian)
+    # Byte 5: movement type
 
-    if len(plaintext) != 5:
+    if len(plaintext) != 6:
         print("Rejected packet: incorrect plaintext length.")
         return None
 
@@ -170,9 +171,14 @@ def parse_advertisement(payload):
         plaintext[3:5],
         byteorder="little"
     )
+    movement_type = plaintext[5]
 
     if tamper_raw not in (0, 1):
         print("Rejected packet: invalid tamper value.")
+        return None
+
+    if movement_type > 4:
+        print("Rejected packet: invalid movement type.")
         return None
 
     temperature = temperature_raw / 10.0
@@ -189,6 +195,7 @@ def parse_advertisement(payload):
         "temperature": temperature,
         "tamper": bool(tamper_raw),
         "vibration": vibration,
+        "movement_type": movement_type,
     }
 
 
@@ -209,6 +216,7 @@ def simulated_packet():
         "temperature": round(random.uniform(1.0, 10.0), 1),
         "tamper": random.choice([True, False]),
         "vibration": round(random.uniform(0.0, 3.05), 2),
+        "movement_type": random.choice([0, 1]),
     }
 
 

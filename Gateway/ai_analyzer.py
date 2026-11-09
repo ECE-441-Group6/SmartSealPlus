@@ -34,7 +34,8 @@ def analyze_image(filename, packet):
                     "text": (
                         "Describe what happened in this SmartSeal event image in one concise "
                         f"sentence. Sensor reading: {packet['temperature']} C; "
-                        f"tamper={packet['tamper']}; vibration={packet['vibration']}."
+                        f"tamper={packet['tamper']}; vibration={packet['vibration']}; "
+                        f"movement_type={packet.get('movement_type', 0)}."
                     ),
                 },
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}},
@@ -65,6 +66,10 @@ def _fallback_analysis(packet):
         events.append("possible tampering")
     if packet["vibration"]:
         events.append("movement or impact detected")
+    if packet.get("movement_type", 0):
+        events.append(
+            f"accelerometer movement detected (type {packet['movement_type']})"
+        )
     if packet["temperature"] is not None:
         if packet["temperature"] > TEMP_HIGH:
             events.append(f"temperature too high ({packet['temperature']} C)")

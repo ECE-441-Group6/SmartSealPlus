@@ -6,6 +6,7 @@
 
 #include "ble_manager.h"
 #include "config.h"
+#include "accelerometer.h"
 #include "sequence_manager.h"
 #include "sensor_manager.h"
 
@@ -25,6 +26,7 @@ void startRecording() {
 
     Serial.println("Recording started; keep the seal still for calibration.");
     calibrateVibrationSensor();
+    resetMovementDetection();
     recording = true;
     publishSensorData();
     lastAdvertisement = millis();
@@ -68,6 +70,7 @@ void publishSensorData() {
     float temperature = readTemperatureC();
 
     const VibrationReading vibration = detectVibration();
+    const uint8_t movementCode = getMovementCode();
 
     if (!isfinite(temperature)) {
 
@@ -80,6 +83,7 @@ void publishSensorData() {
     if (!createEncryptedPacket(
             temperature,
             vibration.detected,
+            movementCode,
             encryptedPacket)) {
 
         Serial.println("Could not create encrypted packet.");
@@ -87,6 +91,7 @@ void publishSensorData() {
     }
 
     startEncryptedAdvertising(encryptedPacket);
+    clearMovementCode();
 
     Serial.println();
     Serial.println("Encrypted BLE advertisement updated.");
@@ -96,6 +101,8 @@ void publishSensorData() {
 
     Serial.print("Vibration: ");
     Serial.println(vibration.detected ? 1 : 0);
+    Serial.print("Movement type: ");
+    Serial.println(movementCode);
 
     if (vibration.detected) {
         Serial.print("Vibration event detected. ADC: ");
@@ -145,6 +152,7 @@ void setup() {
     pinMode(TEMP_PIN, INPUT);
     pinMode(VIBRATION_PIN, INPUT);
     pinMode(RECORD_BUTTON_PIN, INPUT_PULLUP);
+    accelerometerBegin();
 
     // Initialize Nordic CryptoCell.
     if (!nRFCrypto.begin()) {
@@ -184,6 +192,7 @@ void loop() {
 
     if (recording) {
         updateVibrationSensor();
+        detectMovement();
     }
 
     if (recording &&

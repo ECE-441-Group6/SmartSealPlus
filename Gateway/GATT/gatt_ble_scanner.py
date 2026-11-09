@@ -68,6 +68,7 @@ def decode_sensor_packet(data):
             return None
 
         temperature = packet["temperature"]
+        movement_type = packet.get("movement_type", 0)
         if temperature is not None and (
             not isinstance(temperature, (int, float))
             or isinstance(temperature, bool)
@@ -84,12 +85,20 @@ def decode_sensor_packet(data):
         if not isinstance(packet["tamper"], bool):
             return None
 
+        if (
+            not isinstance(movement_type, int)
+            or isinstance(movement_type, bool)
+            or not 0 <= movement_type <= 4
+        ):
+            return None
+
         return {
             "seal_id": packet["seal_id"],
             "event_sequence": packet["event_sequence"],
             "temperature": packet["temperature"],
             "tamper": packet["tamper"],
             "vibration": packet["vibration"],
+            "movement_type": movement_type,
         }
 
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):

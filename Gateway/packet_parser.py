@@ -14,6 +14,7 @@ def parse_packet(packet):
         temperature = packet["temperature"]
         tamper = packet.get("tamper", False)
         vibration = packet["vibration"]
+        movement_type = packet.get("movement_type", 0)
 
         # Validate the seal ID.
         if (
@@ -50,12 +51,20 @@ def parse_packet(packet):
         ):
             raise ValueError("Invalid vibration voltage")
 
+        if (
+            not isinstance(movement_type, int)
+            or isinstance(movement_type, bool)
+            or not 0 <= movement_type <= 4
+        ):
+            raise ValueError("Invalid movement type")
+
         return {
             "seal_id": seal_id,
             "event_sequence": event_sequence,
             "temperature": temperature,
             "tamper": tamper,
-            "vibration": vibration
+            "vibration": vibration,
+            "movement_type": movement_type,
         }
 
     except (KeyError, TypeError, ValueError) as error:

@@ -39,13 +39,13 @@ NONCE_PREFIX = _load_hex_secret("SMARTSEAL_NONCE_PREFIX", 9)
 
 MANUFACTURER_ID = 0x5353
 MAGIC = 0xA5
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 
 HEADER_LENGTH = 3
 SEQUENCE_LENGTH = 4
-PLAINTEXT_LENGTH = 5
+PLAINTEXT_LENGTH = 6
 TAG_LENGTH = 8
-PACKET_LENGTH = 20
+PACKET_LENGTH = 21
 
 aes = AESCCM(ENCRYPTION_KEY, tag_length=TAG_LENGTH)
 
@@ -76,7 +76,7 @@ def decrypt_advertisement(payload):
     sequence = int.from_bytes(payload[3:7], "little")
 
     # The sequence counter must never repeat for the same key.
-    nonce = NONCE_PREFIX + sequence.to_bytes(4, "big")
+    nonce = NONCE_PREFIX + payload[3:7]
 
     # Authenticate the visible header and sequence number.
     aad = payload[:7]
@@ -97,8 +97,11 @@ def decrypt_advertisement(payload):
     )
     tamper = bool(plaintext[2])
     vibration_raw = int.from_bytes(plaintext[3:5], "little")
+    movement_type = plaintext[5]
 
     if plaintext[2] not in (0, 1):
+        return None
+    if movement_type > 4:
         return None
 
     return {
@@ -107,4 +110,5 @@ def decrypt_advertisement(payload):
         "temperature": temperature_raw / 10.0,
         "tamper": tamper,
         "vibration": vibration_raw / 100.0,
+        "movement_type": movement_type,
     }
