@@ -68,8 +68,8 @@ void calibrateVibrationSensor() {
 
 void updateVibrationSensor() {
 
-    constexpr uint16_t THRESHOLD = 100;
-    constexpr uint8_t REQUIRED_HITS = 3;
+    constexpr uint16_t THRESHOLD = 20;
+    constexpr uint8_t REQUIRED_HITS = 2;
 
     const int reading = analogRead(VIBRATION_PIN);
     const float difference =
