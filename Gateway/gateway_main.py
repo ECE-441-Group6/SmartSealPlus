@@ -1,3 +1,4 @@
+
 """SmartSeal+ gateway with validation, idempotent storage, and delivery ACKs."""
 
 import csv
@@ -48,9 +49,12 @@ def run_gateway(interval=5, scanner=scan_ble):
     load_key_registry()
     init_database()
     replay_protector = ReplayProtector(db_path=database.DB_NAME)
-    clear_event_history()
+
+    # Preserve previously recorded events across gateway restarts.
+    # Event history should only be cleared by an explicit action.
     print("SmartSeal+ gateway started.")
-    print("Previous dashboard events cleared.")
+    print("Previous event history preserved.")
+
     last_stale_check = 0.0
 
     try:
@@ -67,16 +71,19 @@ def run_gateway(interval=5, scanner=scan_ble):
                     continue
 
                 accepted, reason = replay_protector.check_sequence(
-                    packet['seal_id'], packet['event_sequence']
+                    packet["seal_id"], packet["event_sequence"]
                 )
                 if not accepted:
-                    print(f'Rejected packet: {reason}')
+                    print(f"Rejected packet: {reason}")
                     continue
 
                 record_seen(packet)
+
                 now = time.monotonic()
                 if now - last_stale_check >= max(interval, 5):
-                    for seal_id, last_seen in get_stale_seals(max(interval * 3, 15)):
+                    for seal_id, last_seen in get_stale_seals(
+                        max(interval * 3, 15)
+                    ):
                         print(
                             f"WARNING: seal {seal_id} stopped reporting; "
                             f"last seen {last_seen}"
@@ -85,11 +92,14 @@ def run_gateway(interval=5, scanner=scan_ble):
 
                 inserted = insert_event(packet)
                 status = "recorded" if inserted else "duplicate ignored"
+
                 print(
                     f"Event {status}: seal={packet['seal_id']} "
                     f"seq={packet['event_sequence']}"
                 )
+
                 alerts = process_alerts(packet)
+
                 temperature_out_of_range = (
                     packet["temperature"] is not None
                     and (
@@ -97,6 +107,7 @@ def run_gateway(interval=5, scanner=scan_ble):
                         or packet["temperature"] > TEMP_HIGH
                     )
                 )
+
                 capture_triggered = packet["tamper"] or packet["vibration"]
 
                 image_filename = None
@@ -105,11 +116,13 @@ def run_gateway(interval=5, scanner=scan_ble):
                     if temperature_out_of_range and not capture_triggered
                     else "No issues detected."
                 )
+
                 if capture_triggered:
                     try:
                         image_filename = capture_image(packet)
                     except Exception as error:
                         print(f"Camera error: {error}")
+
                     if image_filename:
                         try:
                             ai_analysis = analyze_image(
@@ -121,19 +134,26 @@ def run_gateway(interval=5, scanner=scan_ble):
                     else:
                         ai_analysis = "Alert detected; image unavailable."
 
-                update_event_artifacts(packet, image_filename, ai_analysis)
+                update_event_artifacts(
+                    packet, image_filename, ai_analysis
+                )
 
                 print("\nPacket Received")
                 print(packet)
+
                 for alert in alerts:
                     print("ALERT:", alert)
+
                 print("Analysis:", ai_analysis)
                 time.sleep(interval)
+
             except Exception as error:
                 print(f"Gateway processing error: {error}")
                 time.sleep(interval)
+
     except KeyboardInterrupt:
         print("\nSmartSeal+ gateway stopped.")
+
     finally:
         try:
             archive_path = archive_events()

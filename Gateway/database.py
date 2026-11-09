@@ -1,5 +1,7 @@
+
 # Saves sensor readings and events so they can be reviewed later.
 import csv
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 import sqlite3
@@ -38,6 +40,7 @@ def init_database():
     CREATE UNIQUE INDEX IF NOT EXISTS idx_events_seal_sequence
     ON events(seal_id, event_sequence)
     """)
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS seal_status(
         seal_id INTEGER PRIMARY KEY,
@@ -116,6 +119,7 @@ def record_seen(packet):
     conn.commit()
     conn.close()
 
+
 def get_stale_seals(timeout_seconds):
     conn = sqlite3.connect(DB_NAME)
     rows = conn.execute("""
@@ -180,3 +184,90 @@ def archive_events():
         writer.writerows(rows)
 
     return archive_path
+
+
+def accept_and_store_event(packet):
+    """
+    Atomically validate the sequence and store an authenticated event.
+
+    IMPORTANT:
+    The caller must authenticate the packet before calling this function.
+
+    Returns:
+        (True, "accepted") when the event is stored successfully.
+        (False, reason) when the event is rejected or storage fails.
+    """
+    seal_id = packet.get("seal_id")
+    sequence = packet.get("event_sequence")
+
+    if type(seal_id) is not int or not 0 < seal_id <= 0xFFFFFFFF:
+        return False, "invalid seal ID"
+
+    if type(sequence) is not int or not 0 <= sequence <= 0xFFFFFFFF:
+        return False, "invalid event sequence"
+
+    try:
+        with closing(sqlite3.connect(DB_NAME, timeout=10)) as conn:
+            with conn:
+                conn.execute("BEGIN IMMEDIATE")
+
+                row = conn.execute(
+                    """
+                    SELECT last_sequence
+                    FROM security_sequences
+                    WHERE seal_id = ?
+                    """,
+                    (seal_id,),
+                ).fetchone()
+
+                if row is not None:
+                    previous = row[0]
+
+                    if sequence == previous:
+                        return False, "duplicate event"
+
+                    if sequence < previous:
+                        return False, "outdated event sequence"
+
+                conn.execute(
+                    """
+                    INSERT INTO events
+                    (seal_id, event_sequence, temperature, tamper, vibration)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        seal_id,
+                        sequence,
+                        packet["temperature"],
+                        int(packet["tamper"]),
+                        packet["vibration"],
+                    ),
+                )
+
+                conn.execute(
+                    """
+                    INSERT INTO seal_status
+                    (seal_id, last_seen, last_event_sequence)
+                    VALUES (?, CURRENT_TIMESTAMP, ?)
+                    ON CONFLICT(seal_id) DO UPDATE SET
+                        last_seen = excluded.last_seen,
+                        last_event_sequence = excluded.last_event_sequence
+                    """,
+                    (seal_id, sequence),
+                )
+
+                conn.execute(
+                    """
+                    INSERT INTO security_sequences
+                    (seal_id, last_sequence)
+                    VALUES (?, ?)
+                    ON CONFLICT(seal_id) DO UPDATE SET
+                        last_sequence = excluded.last_sequence
+                    """,
+                    (seal_id, sequence),
+                )
+
+        return True, "accepted"
+
+    except sqlite3.Error:
+        return False, "database transaction failed"
