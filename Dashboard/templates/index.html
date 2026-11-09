@@ -28,6 +28,7 @@
             <th>Temp</th>
             <th>Tamper</th>
             <th>Vibration</th>
+            <th>Movement</th>
             <th>Image</th>
             <th>AI analysis</th>
         </tr>
@@ -88,17 +89,30 @@
                 {% endif %}
             </td>
 
-            <!-- Camera evidence -->
+            <!-- Accelerometer movement status -->
             <td>
                 {% if event[7] %}
-                    <a href="{{ url_for('images', filename=event[7]) }}"
+                    <span class="sensor-status sensor-warning">
+                        DETECTED ({{ event[7] }})
+                    </span>
+                {% else %}
+                    <span class="sensor-status sensor-normal">
+                        NORMAL
+                    </span>
+                {% endif %}
+            </td>
+
+            <!-- Camera evidence -->
+            <td>
+                {% if event[8] %}
+                    <a href="{{ url_for('images', filename=event[8]) }}"
                        target="_blank"
                        rel="noopener noreferrer">View</a>
                 {% endif %}
             </td>
 
             <!-- AI analysis -->
-            <td>{{ event[8] or '' }}</td>
+            <td>{{ event[9] or '' }}</td>
         </tr>
     {% endfor %}
     </tbody>

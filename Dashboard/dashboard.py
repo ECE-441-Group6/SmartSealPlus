@@ -16,7 +16,9 @@ from Gateway.image_storage import IMAGE_FOLDER
 
 app = Flask(__name__)
 ARCHIVE_DIRECTORY = REPOSITORY_PATH / "Gateway" / "archives"
-ARCHIVE_FILENAME = re.compile(r"gateway-events-\d{8}-\d{6}-\d{6}\.csv")
+ARCHIVE_FILENAME = re.compile(
+    r"SmartSeal_Events_\d{2}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-[AP]M\.csv"
+)
 
 
 def _archive_path(filename):
@@ -83,6 +85,7 @@ def archive_events_api(filename):
                 float(event["temperature"]) if event.get("temperature") else None,
                 int(event["tamper"]) if event.get("tamper") else 0,
                 float(event["vibration"]) if event.get("vibration") else None,
+                int(event["movement_type"]) if event.get("movement_type") else 0,
                 event.get("image_path") or None,
                 event.get("ai_analysis") or None,
             ])

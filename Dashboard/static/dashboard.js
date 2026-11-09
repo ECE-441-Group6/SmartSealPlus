@@ -60,6 +60,55 @@ function vibrationStatus(value) {
         : '<span class="sensor-status sensor-normal">NORMAL</span>';
 }
 
+function movementStatus(value) {
+    const movementType = Number(value);
+
+    return movementType > 0
+        ? `<span class="sensor-status sensor-warning">
+            DETECTED (${movementType})
+        </span>`
+        : '<span class="sensor-status sensor-normal">NORMAL</span>';
+}
+
+function formatTimestamp(value) {
+    if (!value) {
+        return "";
+    }
+
+    let timestampValue = String(value).replace(" ", "T");
+    if (
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(
+            timestampValue
+        )
+    ) {
+        timestampValue += "Z";
+    }
+
+    const timestamp = new Date(timestampValue);
+    if (Number.isNaN(timestamp.getTime())) {
+        return String(value);
+    }
+
+    return timestamp.toLocaleString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "2-digit",
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+    });
+}
+
+function formatInitialTimestamps() {
+    for (const row of document.querySelectorAll("#events tr")) {
+        const timeCell = row.cells[0];
+        if (timeCell) {
+            timeCell.textContent = formatTimestamp(timeCell.textContent);
+        }
+    }
+}
+
 // Refresh events from the Flask API.
 let refreshInProgress = false;
 let refreshRequested = false;
@@ -90,7 +139,7 @@ async function refreshEvents() {
             const row = document.createElement("tr");
 
             // Time and Seal ID
-            for (const value of [event[1], event[2], event[3]]) {
+            for (const value of [formatTimestamp(event[1]), event[2], event[3]]) {
                 const cell = document.createElement("td");
                 cell.textContent = value ?? "";
                 row.appendChild(cell);
@@ -111,12 +160,16 @@ async function refreshEvents() {
             vibrationCell.innerHTML = vibrationStatus(event[6]);
             row.appendChild(vibrationCell);
 
+            const movementCell = document.createElement("td");
+            movementCell.innerHTML = movementStatus(event[7]);
+            row.appendChild(movementCell);
+
             // Camera evidence link
             const imageCell = document.createElement("td");
 
-            if (event[7]) {
+            if (event[8]) {
                 const link = document.createElement("a");
-                link.href = `/images/${encodeURIComponent(event[7])}`;
+                link.href = `/images/${encodeURIComponent(event[8])}`;
                 link.target = "_blank";
                 link.rel = "noopener noreferrer";
                 link.textContent = "View";
@@ -127,7 +180,7 @@ async function refreshEvents() {
 
             // AI analysis: textContent prevents HTML injection.
             const analysisCell = document.createElement("td");
-            analysisCell.textContent = event[8] ?? "";
+            analysisCell.textContent = event[9] ?? "";
             row.appendChild(analysisCell);
 
             return row;
@@ -190,6 +243,7 @@ document.querySelector("#event-source").addEventListener("change", (event) => {
 });
 
 // Keep live events synchronized; archived snapshots only refresh on selection.
+formatInitialTimestamps();
 loadArchives();
 refreshEvents();
 setInterval(() => {

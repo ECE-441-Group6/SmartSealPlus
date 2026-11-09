@@ -171,7 +171,7 @@ def archive_events():
     archive_dir = DB_NAME.parent / "archives"
     archive_dir.mkdir(parents=True, exist_ok=True)
     archive_path = archive_dir / (
-        f"SmartSeal_Events_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')}.csv"
+        f"SmartSeal_Events_{datetime.now().strftime('%m-%d-%y_%I-%M-%S-%p')}.csv"
     )
 
     with archive_path.open("w", newline="", encoding="utf-8") as archive_file:
