@@ -144,7 +144,7 @@ void setup() {
     
 
     //Initialize the accelerometer
-    While (!accelerometerBegin();) {
+    while (!accelerometerBegin()) {
         Serial.println("ERROR: Accelerometer initialization failed...Retrying");
         delay(1000);
     }
