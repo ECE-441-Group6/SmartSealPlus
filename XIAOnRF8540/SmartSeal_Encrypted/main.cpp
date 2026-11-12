@@ -19,23 +19,15 @@ uint32_t lastDebounceTime = 0;
 uint32_t lastAdvertisement = 0;
 
 void startRecording() {
-    if (recording) {
-        return; //if we are already recording, do nothing
-    }
-
-    Serial.println("Recording started; keep the seal still for calibration.");
+    recording = true;
     calibrateVibrationSensor();
     resetMovementDetection();
-    recording = true;
     publishSensorData();
     lastAdvertisement = millis();
+    Serial.println("Recording started; keep the seal still for calibration.");
 }
 
 void stopRecording() {
-    if (!recording) {
-        return;
-    }
-
     recording = false;
     stopEncryptedAdvertising();
     Serial.println("Recording stopped.");
@@ -166,7 +158,7 @@ void setup() {
 
 
     // Initialize persistent sequence storage.
-    while (!initializeSequenceCounter()) {
+    if (!initializeSequenceCounter()) {
         Serial.println("ERROR: Secure sequence initialization failed.");
         while (true) {
             delay(1000);
@@ -175,7 +167,7 @@ void setup() {
 
     initializeBle();
     Serial.println("SmartSeal secure advertiser ready.");
-    Serial.println("Press D6 to start or stop recording.");
+    Serial.println("Press button to start or stop recording.");
 }
 
 
@@ -201,5 +193,5 @@ void loop() {
         publishSensorData();
     }
 
-    delay(10);
+    delay(10); //100hz
 }
