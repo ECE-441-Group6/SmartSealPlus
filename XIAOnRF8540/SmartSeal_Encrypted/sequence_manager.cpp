@@ -1,5 +1,4 @@
 #include "sequence_manager.h"
-
 #include <Adafruit_LittleFS.h>
 #include <InternalFileSystem.h>
 #include <stdint.h>
@@ -50,26 +49,28 @@ uint32_t decodeUint32(const uint8_t *source) {
 
 
 const char *sequencePath(uint8_t slot) {
-
     return slot == 0 ? "/seq0.bin" : "/seq1.bin";
 }
 
 
 bool readSequenceSlot(uint8_t slot, uint32_t &highWater) {
+    //Create file object for the internal flash filesystem.
+    File file(InternalFS);   //typeName, ObjectName()
 
-    File file(InternalFS);
-
-    if (!file.open(sequencePath(slot), FILE_O_READ)) {
+    
+    // Open the file in read mode, and copy into the record buffer.
+    if (!file.open(sequencePath(slot), FILE_O_READ)) { //.open(path, mode)
+        Serial.println("ERROR: Could not open sequence slot " + String(slot) + ".");
         return false;
     }
-
     uint8_t record[12] = {0};
-
-    uint32_t bytesRead = file.read(record, sizeof(record));
-
+    uint32_t bytesRead = file.read(record, sizeof(record)); //.read(buffer, length) returns number of bytes it stored
     file.close();
 
+
+    //check the correct # of bytes were successfully read
     if (bytesRead != sizeof(record)) {
+        Serial.println("ERROR: Incomplete read from sequence slot " + String(slot) + ".");
         return false;
     }
 
@@ -178,8 +179,8 @@ bool reserveSequenceBlock() {
 
 
 bool initializeSequenceCounter() {
-
-    if (!InternalFS.begin()) {
+    // Initialize the internal flash filesystem. to store sequence numbers after shutdown.
+    if (!InternalFS.begin()) {  //CHANGE?
         Serial.println("ERROR: Internal flash filesystem unavailable.");
         return false;
     }
