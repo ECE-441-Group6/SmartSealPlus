@@ -111,6 +111,32 @@ is invalid. Simulation mode does not load real keys.
 6. Open Serial Monitor at 115200 baud.
 7. Press the record button on D6 to start sampling.
 
+### Test a second, sensorless seal
+
+From the repository root, create a unique seal-2 key and its private firmware
+header:
+
+```bash
+python3 -m Gateway.provision_test_seal --seal-id 2
+```
+
+This adds seal 2 to `Gateway/keys.json` and creates
+`XIAOnRF8540/SmartSeal_Encrypted_Test/secrets_test.h`. Both files are private
+and ignored by Git. In Arduino IDE, open
+`XIAOnRF8540/SmartSeal_Encrypted_Test/SmartSeal_Encrypted_Test.ino`, select the
+second XIAO, and upload it. The test board has no sensor dependencies; it sends
+encrypted simulated temperature, vibration, and movement values every five
+seconds using its own persistent sequence counter.
+
+Run the normal gateway with the updated registry. It should report packets for
+seal IDs 1 and 2 as they arrive, and the dashboard should keep their event
+sequences separate. Use the encrypted advertisement gateway, not the alternate
+GATT gateway:
+
+```bash
+python3 Gateway/XIAO/gateway_main.py
+```
+
 The current firmware configuration in `XIAOnRF8540/Advertising/config.h`
 uses:
 

@@ -17,14 +17,13 @@ from Gateway.ble_scanner import (
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
 
-async def scan_real_ble():
-    """Find the XIAO and receive its sensor packet over BLE."""
+async def scan_real_ble_packets():
+    """Return the newest packet observed from each seal in range."""
     xiao_device = None
-    advertised_packet = None
-    packet_received = asyncio.Event()
+    packets_by_seal = {}
 
     def detection_callback(device, advertisement):
-        nonlocal advertised_packet, xiao_device
+        nonlocal xiao_device
         device_name = advertisement.local_name or device.name or ""
         packet = None
         for manufacturer_id, payload in advertisement.manufacturer_data.items():
@@ -37,23 +36,23 @@ async def scan_real_ble():
         if device_name == XIAO_DEVICE_NAME:
             xiao_device = device
         if packet is not None:
-            advertised_packet = packet
+            packets_by_seal[packet["seal_id"]] = packet
             xiao_device = device
-            packet_received.set()
 
     scanner = BleakScanner(detection_callback=detection_callback)
     await scanner.start()
     try:
-        try:
-            await asyncio.wait_for(packet_received.wait(), SCAN_TIMEOUT)
-        except asyncio.TimeoutError:
-            pass
+        await asyncio.sleep(SCAN_TIMEOUT)
     finally:
         await scanner.stop()
 
-    if advertised_packet is not None:
-        print(f"XIAO BLE advertisement received: {advertised_packet}")
-        return advertised_packet
+    if packets_by_seal:
+        packets = list(packets_by_seal.values())
+        print(
+            "XIAO BLE packets received from seals:",
+            ", ".join(str(packet["seal_id"]) for packet in packets),
+        )
+        return packets
 
     if xiao_device is None:
         try:
@@ -66,24 +65,25 @@ async def scan_real_ble():
 
     if xiao_device is None:
         print("No valid BLE packet received from SmartSeal-XIAO.")
-        return None
+        return []
 
     print(
         "XIAO was found, but no SmartSeal manufacturer advertisement "
         "was received. Ensure the updated firmware is uploaded."
     )
-    return None
+    return []
 
 
 def scan_ble():
-    """Return one XIAO packet from BLE."""
+    """Return one XIAO packet for callers that expect the old interface."""
     if SIMULATION_MODE:
         packet = simulated_packet()
         print(f"SIMULATED XIAO packet: {packet}")
         return packet
 
     try:
-        return asyncio.run(scan_real_ble())
+        packets = asyncio.run(scan_real_ble_packets())
+        return packets[-1] if packets else None
     except RuntimeError as error:
         if "asyncio.run() cannot be called" in str(error):
             print(f"ASYNCIO EVENT LOOP ERROR: {error}")
@@ -95,5 +95,25 @@ def scan_ble():
         return None
 
 
+def scan_ble_packets():
+    """Return the newest packet observed from each seal in one scan."""
+    if SIMULATION_MODE:
+        packet = simulated_packet()
+        print(f"SIMULATED XIAO packet: {packet}")
+        return [packet]
+
+    try:
+        return asyncio.run(scan_real_ble_packets())
+    except RuntimeError as error:
+        if "asyncio.run() cannot be called" in str(error):
+            print(f"ASYNCIO EVENT LOOP ERROR: {error}")
+        else:
+            print(f"RUNTIME ERROR DURING BLE SCAN: {error}")
+        return []
+    except Exception as error:
+        print(f"XIAO BLE SCANNING ERROR: {type(error).__name__}: {error}")
+        return []
+
+
 if __name__ == "__main__":
-    print("Scanner result:", scan_ble())
+    print("Scanner result:", scan_ble_packets())
