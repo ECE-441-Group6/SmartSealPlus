@@ -21,7 +21,6 @@ Gateway/keys.json
 XIAOnRF8540/Advertising/secrets.h
 XIAOnRF8540/SmartSeal_Encrypted/secrets.h
 XIAOnRF8540/SmartSeal_Encrypted_Test/secrets.h
-XIAOnRF8540/SmartSeal_Encrypted_Test/secrets_test.h
 
 # Generated media and test output
 images/

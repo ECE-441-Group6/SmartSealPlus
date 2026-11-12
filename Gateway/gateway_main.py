@@ -6,7 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 if __package__:
-    from .ble_scanner import scan_ble_packets
+    from .ble_scanner import scan_ble
     from .packet_parser import parse_packet
     from .database import (
         archive_events,
@@ -22,7 +22,7 @@ if __package__:
     from .camera_manager import capture_image
     from .image_storage import image_path
 else:
-    from ble_scanner import scan_ble_packets
+    from ble_scanner import scan_ble
     from packet_parser import parse_packet
     from database import (
         archive_events,
@@ -72,66 +72,7 @@ def _process_event_artifacts(packet):
     )
 
 
-def _process_packet(raw_packet, last_stale_check, interval, image_worker):
-    packet = parse_packet(raw_packet)
-    if packet is None:
-        print("Invalid sensor packet. Skipping...")
-        return last_stale_check
-
-    record_seen(packet)
-    now = time.monotonic()
-    if now - last_stale_check >= max(interval, 5):
-        for seal_id, last_seen in get_stale_seals(max(interval * 3, 15)):
-            print(
-                f"WARNING: seal {seal_id} stopped reporting; "
-                f"last seen {last_seen}"
-            )
-        last_stale_check = now
-
-    inserted = insert_event(packet)
-    status = "recorded" if inserted else "duplicate ignored"
-    print(
-        f"Event {status}: seal={packet['seal_id']} "
-        f"seq={packet['event_sequence']}"
-    )
-    alerts = process_alerts(packet)
-    temperature_out_of_range = (
-        packet["temperature"] is not None
-        and (
-            packet["temperature"] < TEMP_LOW
-            or packet["temperature"] > TEMP_HIGH
-        )
-    )
-    capture_triggered = (
-        packet["tamper"]
-        or packet["vibration"]
-        or packet["movement_type"] != 0
-    )
-
-    if capture_triggered:
-        image_worker.submit(_process_event_artifacts, packet.copy())
-        print(
-            f"Image capture and analysis queued for "
-            f"seal={packet['seal_id']} seq={packet['event_sequence']}"
-        )
-    else:
-        ai_analysis = (
-            "Temperature out of bounds; image capture skipped."
-            if temperature_out_of_range
-            else "No issues detected."
-        )
-        update_event_artifacts(packet, None, ai_analysis)
-        print("Analysis:", ai_analysis)
-
-    print("\nPacket Received")
-    print(packet)
-    for alert in alerts:
-        print("ALERT:", alert)
-
-    return last_stale_check
-
-
-def run_gateway(interval=5, scanner=scan_ble_packets):
+def run_gateway(interval=5, scanner=scan_ble):
     init_database()
     clear_event_history()
     print("SmartSeal+ gateway started.")
@@ -144,31 +85,68 @@ def run_gateway(interval=5, scanner=scan_ble_packets):
     try:
         while True:
             try:
-                raw_packets = scanner()
-                if raw_packets is None:
+                raw_packet = scanner()
+                if raw_packet is None:
                     print("No sensor packet received; retrying BLE scan.")
                     continue
 
-                packets = (
-                    raw_packets
-                    if isinstance(raw_packets, (list, tuple))
-                    else (raw_packets,)
-                )
-                if not packets:
-                    print("No sensor packet received; retrying BLE scan.")
-                    time.sleep(interval)
+                packet = parse_packet(raw_packet)
+                if packet is None:
+                    print("Invalid sensor packet. Skipping...")
                     continue
 
-                for raw_packet in packets:
-                    try:
-                        last_stale_check = _process_packet(
-                            raw_packet,
-                            last_stale_check,
-                            interval,
-                            image_worker,
+                record_seen(packet)
+                now = time.monotonic()
+                if now - last_stale_check >= max(interval, 5):
+                    for seal_id, last_seen in get_stale_seals(max(interval * 3, 15)):
+                        print(
+                            f"WARNING: seal {seal_id} stopped reporting; "
+                            f"last seen {last_seen}"
                         )
-                    except Exception as error:
-                        print(f"Gateway processing error: {error}")
+                    last_stale_check = now
+
+                inserted = insert_event(packet)
+                status = "recorded" if inserted else "duplicate ignored"
+                print(
+                    f"Event {status}: seal={packet['seal_id']} "
+                    f"seq={packet['event_sequence']}"
+                )
+                alerts = process_alerts(packet)
+                temperature_out_of_range = (
+                    packet["temperature"] is not None
+                    and (
+                        packet["temperature"] < TEMP_LOW
+                        or packet["temperature"] > TEMP_HIGH
+                    )
+                )
+                capture_triggered = (
+                    packet["tamper"]
+                    or packet["vibration"]
+                    or packet["movement_type"] != 0
+                )
+
+                if capture_triggered:
+                    image_worker.submit(
+                        _process_event_artifacts, packet.copy()
+                    )
+                    print(
+                        f"Image capture and analysis queued for "
+                        f"seal={packet['seal_id']} "
+                        f"seq={packet['event_sequence']}"
+                    )
+                else:
+                    ai_analysis = (
+                        "Temperature out of bounds; image capture skipped."
+                        if temperature_out_of_range
+                        else "No issues detected."
+                    )
+                    update_event_artifacts(packet, None, ai_analysis)
+                    print("Analysis:", ai_analysis)
+
+                print("\nPacket Received")
+                print(packet)
+                for alert in alerts:
+                    print("ALERT:", alert)
                 time.sleep(interval)
             except Exception as error:
                 print(f"Gateway processing error: {error}")

@@ -1,8 +1,6 @@
 
 """Receive and decrypt SmartSeal BLE advertisements."""
 
-import base64
-import binascii
 import os
 import random
 import asyncio
@@ -33,94 +31,44 @@ SIMULATION_MODE = (
 # AES-128-CCM CONFIGURATION
 # --------------------------------------------------
 
-def _load_key_configuration():
-    """Load the shared nonce prefix and AES keys indexed by seal ID."""
-    key_path = Path(
-        os.getenv(
-            "SMARTSEAL_KEY_REGISTRY",
-            str(Path(__file__).with_name("keys.json")),
-        )
-    ).expanduser()
+def _load_hex_secret(name, length):
+    """Load a fixed-length hexadecimal secret from the local key file."""
+    key_path = Path(__file__).with_name("keys.json")
     try:
         with key_path.open(encoding="utf-8") as key_file:
-            configuration = json.load(key_file)
-    except (OSError, json.JSONDecodeError) as error:
+            value = json.load(key_file)[name]
+    except (OSError, KeyError, json.JSONDecodeError) as error:
         raise RuntimeError(
-            f"Could not load SmartSeal key registry from {key_path}."
+            f"Could not load {name} from {key_path}."
         ) from error
-
-    if not isinstance(configuration, dict):
-        raise RuntimeError(
-            f"SmartSeal key registry {key_path} must contain a JSON object."
-        )
 
     try:
-        nonce_prefix = bytes.fromhex(
-            configuration["SMARTSEAL_NONCE_PREFIX"]
-        )
-    except (KeyError, TypeError, ValueError) as error:
+        secret = bytes.fromhex(value)
+    except ValueError as error:
         raise RuntimeError(
-            "SMARTSEAL_NONCE_PREFIX must contain hexadecimal bytes."
+            f"{name} must contain hexadecimal bytes."
         ) from error
 
-    if len(nonce_prefix) != 9:
+    if len(secret) != length:
         raise RuntimeError(
-            "SMARTSEAL_NONCE_PREFIX must be exactly 9 bytes "
-            "(18 hexadecimal characters)."
+            f"{name} must be exactly {length} bytes "
+            f"({length * 2} hexadecimal characters)."
         )
 
-    ciphers = {}
-    for seal_id, encoded_key in configuration.items():
-        if not seal_id.isdecimal():
-            continue
-
-        try:
-            key = base64.b64decode(encoded_key, validate=True)
-        except (binascii.Error, TypeError, ValueError) as error:
-            raise RuntimeError(
-                f"Key for seal {seal_id} must be Base64 encoded."
-            ) from error
-
-        if not 1 <= int(seal_id) <= 255 or len(key) != 16:
-            raise RuntimeError(
-                f"Key for seal {seal_id} must identify a seal from 1 to 255 "
-                "and contain exactly 16 bytes."
-            )
-        ciphers[int(seal_id)] = AESCCM(key, tag_length=8)
-
-    legacy_key = configuration.get("SMARTSEAL_AES_KEY")
-    if legacy_key is not None:
-        try:
-            legacy_key = bytes.fromhex(legacy_key)
-            legacy_seal_id = int(
-                configuration.get("SMARTSEAL_LEGACY_SEAL_ID", 1)
-            )
-        except (TypeError, ValueError) as error:
-            raise RuntimeError(
-                "Legacy SmartSeal key configuration is invalid."
-            ) from error
-
-        if len(legacy_key) != 16 or not 1 <= legacy_seal_id <= 255:
-            raise RuntimeError(
-                "Legacy SmartSeal configuration must contain a 16-byte key "
-                "and a seal ID from 1 to 255."
-            )
-        ciphers[legacy_seal_id] = AESCCM(legacy_key, tag_length=8)
-
-    if not ciphers:
-        raise RuntimeError(
-            f"No per-seal AES keys were found in {key_path}."
-        )
-
-    return nonce_prefix, ciphers
+    return secret
 
 
-NONCE_PREFIX, AES_BY_SEAL = _load_key_configuration()
+AES_KEY = _load_hex_secret("SMARTSEAL_AES_KEY", 16)
+NONCE_PREFIX = _load_hex_secret("SMARTSEAL_NONCE_PREFIX", 9)
 
 AES_TAG_LENGTH = 8
+
 MAGIC = 0xA5
 PROTOCOL_VERSION = 3
+
 EXPECTED_PACKET_LENGTH = 21
+
+aes = AESCCM(AES_KEY, tag_length=AES_TAG_LENGTH)
 
 
 # --------------------------------------------------
@@ -169,11 +117,6 @@ def parse_advertisement(payload):
     if seal_id < 1:
         return None
 
-    seal_cipher = AES_BY_SEAL.get(seal_id)
-    if seal_cipher is None:
-        print(f"Rejected packet from unconfigured seal {seal_id}.")
-        return None
-
     # Extract sequence number.
     sequence_bytes = payload[3:7]
 
@@ -193,7 +136,7 @@ def parse_advertisement(payload):
     ciphertext_and_tag = payload[7:21]
 
     try:
-        plaintext = seal_cipher.decrypt(
+        plaintext = aes.decrypt(
             nonce,
             ciphertext_and_tag,
             aad
@@ -281,10 +224,10 @@ def simulated_packet():
 # BLE SCANNING
 # --------------------------------------------------
 
-async def scan_real_ble_packets():
-    """Scan for the newest valid packet from each seal in range."""
+async def scan_real_ble():
+    """Scan for encrypted SmartSeal advertisements."""
 
-    packets_by_seal = {}
+    packets = []
 
     def detection_callback(device, advertisement):
 
@@ -299,7 +242,7 @@ async def scan_real_ble_packets():
         packet = parse_advertisement(payload)
 
         if packet is not None:
-            packets_by_seal[packet["seal_id"]] = packet
+            packets.append(packet)
 
     scanner = BleakScanner(
         detection_callback=detection_callback
@@ -313,13 +256,14 @@ async def scan_real_ble_packets():
     finally:
         await scanner.stop()
 
-    if packets_by_seal:
-        packets = list(packets_by_seal.values())
-        print(
-            "Encrypted BLE packets received from seals:",
-            ", ".join(str(packet["seal_id"]) for packet in packets),
-        )
-        return packets
+    if packets:
+        # Return the newest valid packet observed.
+        packet = packets[-1]
+
+        print("Encrypted BLE packet successfully received.")
+        print("Decoded packet:", packet)
+
+        return packet
 
     print(
         "No valid encrypted SmartSeal packet received."
@@ -330,13 +274,7 @@ async def scan_real_ble_packets():
         "the encrypted manufacturer packet."
     )
 
-    return []
-
-
-async def scan_real_ble():
-    """Return one decoded sensor packet for backward compatibility."""
-    packets = await scan_real_ble_packets()
-    return packets[-1] if packets else None
+    return None
 
 
 # --------------------------------------------------
@@ -384,28 +322,5 @@ def scan_ble():
         return None
 
 
-def scan_ble_packets():
-    """Return the newest packet observed from each seal in one scan."""
-    if SIMULATION_MODE:
-        packet = simulated_packet()
-        print("SIMULATED packet:", packet)
-        return [packet]
-
-    try:
-        return asyncio.run(scan_real_ble_packets())
-    except RuntimeError as error:
-        print("Runtime error during BLE scanning:", error)
-        return []
-    except (BleakError, OSError) as error:
-        print("BLE scanning error:", error)
-        return []
-    except Exception as error:
-        print(
-            f"Unexpected scanner error: "
-            f"{type(error).__name__}: {error}"
-        )
-        return []
-
-
 if __name__ == "__main__":
-    print("Scanner result:", scan_ble_packets())
+    print("Scanner result:", scan_ble())

@@ -2,11 +2,7 @@
 
 #include <Arduino.h>
 
-#ifdef SMARTSEAL_SECRETS_HEADER
-#include SMARTSEAL_SECRETS_HEADER
-#else
 #include "secrets.h"
-#endif
 
 #define TEMP_PIN A0
 #define VIBRATION_PIN A2

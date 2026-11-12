@@ -7,8 +7,8 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from Gateway.gateway_main import run_gateway
-from Gateway.XIAO.ble_scanner import scan_ble_packets
+from Gateway.XIAO.ble_scanner import scan_ble
 
 
 if __name__ == "__main__":
-    run_gateway(scanner=scan_ble_packets)
+    run_gateway(scanner=scan_ble)
