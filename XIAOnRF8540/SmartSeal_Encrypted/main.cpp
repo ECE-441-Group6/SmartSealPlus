@@ -146,20 +146,26 @@ void setup() {
     Serial.println(" SmartSeal+ Secure BLE");
     Serial.println("==============================");
 
+    //PIN SETUP
     analogReadResolution(12); // Set ADC resolution to 12 bits (0-4095)
-
     pinMode(TEMP_PIN, INPUT);
     pinMode(VIBRATION_PIN, INPUT);
     pinMode(RECORD_BUTTON_PIN, INPUT_PULLUP); //pin reads HIGH when not pressed, LOW when pressed
-    accelerometerBegin();  // can return a bool
+    
+
+    //Initialize the accelerometer
+    While (!accelerometerBegin();) {
+        Serial.println("ERROR: Accelerometer initialization failed...Retrying");
+        delay(1000);
+    }
 
     // Initialize Nordic CryptoCell.
     while (!nRFCrypto.begin()) {
         Serial.println("ERROR: CryptoCell initialization failed...Retrying");    // Loop until the cryptoCell is initialized successfully.
-        delay(2000);
+        delay(1000);
     }
-
     Serial.println("CryptoCell initialized.");
+
 
     // Initialize persistent sequence storage.
     if (!initializeSequenceCounter()) {
