@@ -49,14 +49,11 @@ void calibrateVibrationSensor() {
     constexpr uint16_t SAMPLES = 1000;
 
     for (uint16_t i = 0; i < SAMPLES; i++) {
-
         total += analogRead(VIBRATION_PIN);
-
         delay(1);
     }
 
-    vibrationBaseline =
-        (float)total / SAMPLES;
+    vibrationBaseline = (float)total / SAMPLES;
 
     float absoluteDeviation = 0.0f;
 

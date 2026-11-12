@@ -24,7 +24,7 @@ void soundSensorAlert() {
     digitalWrite(BUZZER_PIN, LOW);
 }
 
-void startRecording() {
+void startRecording() {  //Need to add accelerometer calibration 
     recording = true;
     calibrateVibrationSensor();
     resetMovementDetection();
