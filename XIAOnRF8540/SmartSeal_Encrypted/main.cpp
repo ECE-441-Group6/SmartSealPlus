@@ -18,6 +18,12 @@ int stableButtonState = HIGH;
 uint32_t lastDebounceTime = 0;
 uint32_t lastAdvertisement = 0;
 
+void soundSensorAlert() {
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(500);
+    digitalWrite(BUZZER_PIN, LOW);
+}
+
 void startRecording() {
     recording = true;
     calibrateVibrationSensor();
@@ -62,6 +68,10 @@ void publishSensorData() {
 
     const VibrationReading vibration = detectVibration();
     const uint8_t movementCode = getMovementCode();
+
+    if (vibration.detected || movementCode != MOVEMENT_NONE) {
+        soundSensorAlert();
+    }
 
     if (!isfinite(temperature)) {
 
@@ -141,6 +151,8 @@ void setup() {
     pinMode(TEMP_PIN, INPUT);
     pinMode(VIBRATION_PIN, INPUT);
     pinMode(RECORD_BUTTON_PIN, INPUT_PULLUP); //pin reads HIGH when not pressed, LOW when pressed
+    pinMode(BUZZER_PIN, OUTPUT);
+    digitalWrite(BUZZER_PIN, LOW);
     
 
     //Initialize the accelerometer

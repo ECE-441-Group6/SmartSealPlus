@@ -7,6 +7,7 @@
 #define TEMP_PIN A0
 #define VIBRATION_PIN A2
 #define RECORD_BUTTON_PIN D6
+#define BUZZER_PIN D3
 
 constexpr uint16_t MANUFACTURER_ID = 0x5353;
 constexpr uint8_t MAGIC = 0xA5;
