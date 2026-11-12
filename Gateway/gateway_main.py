@@ -73,10 +73,11 @@ def _process_event_artifacts(packet):
 
 
 def run_gateway(interval=5, scanner=scan_ble):
+    print("Initializing SmartSeal+ gateway...", flush=True)
     init_database()
     clear_event_history()
-    print("SmartSeal+ gateway started.")
-    print("Previous dashboard events cleared.")
+    print("SmartSeal+ gateway started.", flush=True)
+    print("Previous dashboard events cleared.", flush=True)
     last_stale_check = 0.0
     image_worker = ThreadPoolExecutor(
         max_workers=1, thread_name_prefix="smartseal-image"
