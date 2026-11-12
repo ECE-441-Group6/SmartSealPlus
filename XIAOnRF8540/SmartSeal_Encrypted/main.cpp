@@ -136,11 +136,9 @@ void publishSensorData() {
 }
 
 void setup() {
-
+    // Initialize serial communication.
     Serial.begin(115200);
-
     delay(1000);
-
     Serial.println();
     Serial.println("==============================");
     Serial.println(" SmartSeal+ Secure BLE");
@@ -168,10 +166,8 @@ void setup() {
 
 
     // Initialize persistent sequence storage.
-    if (!initializeSequenceCounter()) {
-
+    while (!initializeSequenceCounter()) {
         Serial.println("ERROR: Secure sequence initialization failed.");
-
         while (true) {
             delay(1000);
         }

@@ -39,12 +39,11 @@ void encodeUint32(uint8_t *destination, uint32_t value) {
 
 
 uint32_t decodeUint32(const uint8_t *source) {
-
     return
-        (uint32_t)source[0] |
+        (uint32_t)source[0] |         //LSB 
         ((uint32_t)source[1] << 8) |
         ((uint32_t)source[2] << 16) |
-        ((uint32_t)source[3] << 24);
+        ((uint32_t)source[3] << 24);   //MSB
 }
 
 
@@ -68,7 +67,7 @@ bool readSequenceSlot(uint8_t slot, uint32_t &highWater) {
     file.close();
 
 
-    //check the correct # of bytes were successfully read
+    //check read looks correct
     if (bytesRead != sizeof(record)) {
         Serial.println("ERROR: Incomplete read from sequence slot " + String(slot) + ".");
         return false;
@@ -78,17 +77,15 @@ bool readSequenceSlot(uint8_t slot, uint32_t &highWater) {
         return false;
     }
 
-    uint32_t storedChecksum = decodeUint32(record + 8);
-
-    uint32_t calculatedChecksum =
-        calculateChecksum(record, 8);
-
+    //verify checksum to validate record data has not been corrupted.
+    uint32_t storedChecksum = decodeUint32(record + 8); //Pass point to the 9th byte
+    uint32_t calculatedChecksum = calculateChecksum(record, 8); //Calculate checksum based on first 8 bytes
     if (storedChecksum != calculatedChecksum) {
+        Serial.println("ERROR: Checksum mismatch in sequence slot " + String(slot) + ".");
         return false;
     }
 
-    highWater = decodeUint32(record + 4);
-
+    highWater = decodeUint32(record + 4); //highwater0 or 1 depending on slot passed in.
     return true;
 }
 
@@ -101,8 +98,7 @@ bool writeSequenceSlot(uint8_t slot, uint32_t highWater) {
 
     encodeUint32(record + 4, highWater);
 
-    uint32_t checksum =
-        calculateChecksum(record, 8);
+    uint32_t checksum = calculateChecksum(record, 8);
 
     encodeUint32(record + 8, checksum);
 
@@ -180,22 +176,22 @@ bool reserveSequenceBlock() {
 
 bool initializeSequenceCounter() {
     // Initialize the internal flash filesystem. to store sequence numbers after shutdown.
-    if (!InternalFS.begin()) {  //CHANGE?
-        Serial.println("ERROR: Internal flash filesystem unavailable.");
-        return false;
+    while(!InternalFS.begin()) { 
+        Serial.println("ERROR: Failed to initialize internal flash filesystem. Retrying...");
+        delay(1000);
     }
 
+    //variables that hold the highest reserved sequence number for each slot
     uint32_t highWater0 = 0;
     uint32_t highWater1 = 0;
 
-    bool valid0 = readSequenceSlot(0, highWater0);
-    bool valid1 = readSequenceSlot(1, highWater1);
+    //variables that hold if sequences are valid for each slot
+    bool valid0 = readSequenceSlot(0, highWater0); //readSequenceSlot will update highWater variable
+    bool valid1 = readSequenceSlot(1, highWater1); //readSequenceSlot will update highWater variable
 
     if (!valid0 && !valid1) {
-
         // If files exist but neither is valid, do not
         // silently restart at sequence zero.
-
         if (InternalFS.exists("/seq0.bin") ||
             InternalFS.exists("/seq1.bin")) {
 
@@ -204,8 +200,8 @@ bool initializeSequenceCounter() {
             return false;
         }
 
+        //If neither file exists, this is the first boot.
         Serial.println("First boot: initializing sequence storage.");
-
         reservedEnd = 0;
         nextSequence = 1;
         activeSlot = -1;
