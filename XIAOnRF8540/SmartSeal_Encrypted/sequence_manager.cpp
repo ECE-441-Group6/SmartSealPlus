@@ -57,7 +57,7 @@ bool readSequenceSlot(uint8_t slot, uint32_t &highWater) {
     //Create file object for the internal flash filesystem.
     File file(InternalFS);   //typeName, ObjectName()
 
-    
+
     // Open the file in read mode, and copy into the record buffer.
     if (!file.open(sequencePath(slot), FILE_O_READ)) { //.open(path, mode)
         Serial.println("ERROR: Could not open sequence slot " + String(slot) + ".");
@@ -73,8 +73,8 @@ bool readSequenceSlot(uint8_t slot, uint32_t &highWater) {
         Serial.println("ERROR: Incomplete read from sequence slot " + String(slot) + ".");
         return false;
     }
-
     if (memcmp(record, "SSQ2", 4) != 0) {
+        Serial.println("ERROR: First bytes of sequence slot " + String(slot) + " do not match expected signature.");
         return false;
     }
 
