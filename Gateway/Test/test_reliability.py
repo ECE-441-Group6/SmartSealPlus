@@ -1,9 +1,11 @@
 import csv
 import io
 import tempfile
+import threading
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 from Gateway import database
 from Gateway import gateway_main
@@ -114,6 +116,50 @@ class ReliabilityTests(unittest.TestCase):
             rows = list(csv.DictReader(archive_file))
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["event_sequence"], "7")
+
+    def test_gateway_scans_while_image_capture_runs_in_background(self):
+        packet = {
+            "seal_id": 1,
+            "event_sequence": 7,
+            "temperature": 5.0,
+            "tamper": True,
+            "vibration": 0.0,
+            "movement_type": 0,
+        }
+        capture_started = threading.Event()
+        release_capture = threading.Event()
+        calls = 0
+        capture_started_during_scan = False
+
+        def capture_image(_packet):
+            capture_started.set()
+            if not release_capture.wait(timeout=2):
+                raise TimeoutError("Test did not release background capture")
+            return "capture.jpg"
+
+        def scan():
+            nonlocal calls, capture_started_during_scan
+            calls += 1
+            if calls == 1:
+                return packet
+            capture_started_during_scan = capture_started.wait(timeout=2)
+            release_capture.set()
+            raise KeyboardInterrupt
+
+        with (
+            patch.object(gateway_main, "capture_image", side_effect=capture_image),
+            patch.object(
+                gateway_main, "analyze_image", return_value="test analysis"
+            ),
+            redirect_stdout(io.StringIO()),
+        ):
+            gateway_main.run_gateway(interval=0, scanner=scan)
+
+        self.assertEqual(calls, 2)
+        self.assertTrue(capture_started_during_scan)
+        event = database.get_latest_events()[0]
+        self.assertEqual(event[8], "capture.jpg")
+        self.assertEqual(event[9], "test analysis")
 
 if __name__ == "__main__":
     unittest.main()
