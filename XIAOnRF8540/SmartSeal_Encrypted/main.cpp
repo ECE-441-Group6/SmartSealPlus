@@ -3,7 +3,6 @@
 #include <Adafruit_nRFCrypto.h>
 #include <math.h>
 #include <stdint.h>
-
 #include "ble_manager.h"
 #include "config.h"
 #include "accelerometer.h"
@@ -21,7 +20,7 @@ uint32_t lastAdvertisement = 0;
 
 void startRecording() {
     if (recording) {
-        return;
+        return; //if we are already recording, do nothing
     }
 
     Serial.println("Recording started; keep the seal still for calibration.");
@@ -147,21 +146,17 @@ void setup() {
     Serial.println(" SmartSeal+ Secure BLE");
     Serial.println("==============================");
 
-    analogReadResolution(12);
+    analogReadResolution(12); // Set ADC resolution to 12 bits (0-4095)
 
     pinMode(TEMP_PIN, INPUT);
     pinMode(VIBRATION_PIN, INPUT);
-    pinMode(RECORD_BUTTON_PIN, INPUT_PULLUP);
-    accelerometerBegin();
+    pinMode(RECORD_BUTTON_PIN, INPUT_PULLUP); //pin reads HIGH when not pressed, LOW when pressed
+    accelerometerBegin();  // can return a bool
 
     // Initialize Nordic CryptoCell.
-    if (!nRFCrypto.begin()) {
-
-        Serial.println("ERROR: CryptoCell initialization failed.");
-
-        while (true) {
-            delay(1000);
-        }
+    while (!nRFCrypto.begin()) {
+        Serial.println("ERROR: CryptoCell initialization failed...Retrying");    // Loop until the cryptoCell is initialized successfully.
+        delay(2000);
     }
 
     Serial.println("CryptoCell initialized.");

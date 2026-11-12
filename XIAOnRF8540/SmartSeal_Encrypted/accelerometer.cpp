@@ -1,5 +1,4 @@
 #include "accelerometer.h"
-
 #include <Arduino.h>
 #include <Wire.h>
 #include <math.h>
@@ -52,7 +51,7 @@ bool readAcceleration(float &x, float &y, float &z) {
 }
 
 bool accelerometerBegin() {
-    Wire.begin();
+    Wire.begin();  // Initialize I2C communication from wire library
 
     Wire.beginTransmission(ADXL345_ADDRESS);
     Wire.write(0x00);
