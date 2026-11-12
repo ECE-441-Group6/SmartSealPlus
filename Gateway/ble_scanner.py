@@ -208,15 +208,15 @@ def simulated_packet():
 
     simulated_packet.sequence = (
         getattr(simulated_packet, "sequence", 0) + 1
-    )
+    ) & 0xFFFFFFFF
 
     return {
         "seal_id": 1,
         "event_sequence": simulated_packet.sequence,
-        "temperature": round(random.uniform(1.0, 10.0), 1),
+        "temperature": round(random.uniform(-10.0, 40.0), 1),
         "tamper": random.choice([True, False]),
-        "vibration": round(random.uniform(0.0, 3.05), 2),
-        "movement_type": random.choice([0, 1]),
+        "vibration": random.choice([0.0, 1.0]),
+        "movement_type": random.randint(0, 4),
     }
 
 

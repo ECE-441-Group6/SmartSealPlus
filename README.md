@@ -218,7 +218,6 @@ SMARTSEAL_SIMULATION=1 python -m Gateway.gateway_main
 In PowerShell:
 
 ```powershell
-$env:SMARTSEAL_SIMULATION = "1"
 python -m Gateway.gateway_main
 ```
 
