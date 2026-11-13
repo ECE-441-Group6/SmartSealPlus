@@ -15,7 +15,6 @@ from Gateway.ble_scanner import (
 )
 
 SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
-SCAN_START_TIMEOUT = 10.0
 
 
 async def scan_real_ble():
@@ -43,19 +42,7 @@ async def scan_real_ble():
             packet_received.set()
 
     scanner = BleakScanner(detection_callback=detection_callback)
-    print("Starting XIAO BLE scan...", flush=True)
-    try:
-        await asyncio.wait_for(
-            scanner.start(), timeout=SCAN_START_TIMEOUT
-        )
-    except asyncio.TimeoutError:
-        print(
-            "BLE scanner did not start. Check the Bluetooth adapter and "
-            "Bluetooth service.",
-            flush=True,
-        )
-        return None
-
+    await scanner.start()
     try:
         try:
             await asyncio.wait_for(packet_received.wait(), SCAN_TIMEOUT)
@@ -78,10 +65,7 @@ async def scan_real_ble():
             print(f"XIAO BLE discovery error: {error}")
 
     if xiao_device is None:
-        print(
-            "No valid BLE packet received from SmartSeal-XIAO.",
-            flush=True,
-        )
+        print("No valid BLE packet received from SmartSeal-XIAO.")
         return None
 
     print(

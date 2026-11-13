@@ -3,7 +3,6 @@
 import csv
 import sqlite3
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 if __package__:
     from .ble_scanner import scan_ble
@@ -39,49 +38,12 @@ else:
     from image_storage import image_path
 
 
-def _process_event_artifacts(packet):
-    image_filename = None
-    try:
-        image_filename = capture_image(packet)
-    except Exception as error:
-        print(f"Camera error: {error}")
-
-    if image_filename:
-        try:
-            ai_analysis = analyze_image(
-                str(image_path(image_filename)), packet
-            )
-        except Exception as error:
-            print(f"AI analysis error: {error}")
-            ai_analysis = "Analysis unavailable."
-    else:
-        ai_analysis = "Alert detected; image unavailable."
-
-    try:
-        update_event_artifacts(packet, image_filename, ai_analysis)
-    except Exception as error:
-        print(
-            "Could not save event artifacts for "
-            f"seal={packet['seal_id']} seq={packet['event_sequence']}: "
-            f"{error}"
-        )
-
-    print(
-        f"Analysis for seal={packet['seal_id']} "
-        f"seq={packet['event_sequence']}: {ai_analysis}"
-    )
-
-
 def run_gateway(interval=5, scanner=scan_ble):
-    print("Initializing SmartSeal+ gateway...", flush=True)
     init_database()
     clear_event_history()
-    print("SmartSeal+ gateway started.", flush=True)
-    print("Previous dashboard events cleared.", flush=True)
+    print("SmartSeal+ gateway started.")
+    print("Previous dashboard events cleared.")
     last_stale_check = 0.0
-    image_worker = ThreadPoolExecutor(
-        max_workers=1, thread_name_prefix="smartseal-image"
-    )
 
     try:
         while True:
@@ -126,28 +88,35 @@ def run_gateway(interval=5, scanner=scan_ble):
                     or packet["movement_type"] != 0
                 )
 
+                image_filename = None
+                ai_analysis = (
+                    "Temperature out of bounds; image capture skipped."
+                    if temperature_out_of_range and not capture_triggered
+                    else "No issues detected."
+                )
                 if capture_triggered:
-                    image_worker.submit(
-                        _process_event_artifacts, packet.copy()
-                    )
-                    print(
-                        f"Image capture and analysis queued for "
-                        f"seal={packet['seal_id']} "
-                        f"seq={packet['event_sequence']}"
-                    )
-                else:
-                    ai_analysis = (
-                        "Temperature out of bounds; image capture skipped."
-                        if temperature_out_of_range
-                        else "No issues detected."
-                    )
-                    update_event_artifacts(packet, None, ai_analysis)
-                    print("Analysis:", ai_analysis)
+                    try:
+                        image_filename = capture_image(packet)
+                    except Exception as error:
+                        print(f"Camera error: {error}")
+                    if image_filename:
+                        try:
+                            ai_analysis = analyze_image(
+                                str(image_path(image_filename)), packet
+                            )
+                        except Exception as error:
+                            print(f"AI analysis error: {error}")
+                            ai_analysis = "Analysis unavailable."
+                    else:
+                        ai_analysis = "Alert detected; image unavailable."
+
+                update_event_artifacts(packet, image_filename, ai_analysis)
 
                 print("\nPacket Received")
                 print(packet)
                 for alert in alerts:
                     print("ALERT:", alert)
+                print("Analysis:", ai_analysis)
                 time.sleep(interval)
             except Exception as error:
                 print(f"Gateway processing error: {error}")
@@ -155,7 +124,6 @@ def run_gateway(interval=5, scanner=scan_ble):
     except KeyboardInterrupt:
         print("\nSmartSeal+ gateway stopped.")
     finally:
-        image_worker.shutdown(wait=True)
         try:
             archive_path = archive_events()
             if archive_path is not None:
