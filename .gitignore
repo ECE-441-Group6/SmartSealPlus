@@ -6,6 +6,7 @@ __pycache__/
 htmlcov/
 .venv/
 venv/
+Gateway/.dashboard_secret
 
 # Local databases and SQLite sidecar files
 *.db
