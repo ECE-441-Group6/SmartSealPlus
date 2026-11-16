@@ -1,12 +1,31 @@
 # Saves sensor readings and events so they can be reviewed later.
 import csv
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import os
 from pathlib import Path
 import sqlite3
+import tempfile
 
 DB_NAME = Path(__file__).resolve().parent / "smartseal.db"
 IMAGE_FOLDER = DB_NAME.parent / "images"
 ARCHIVE_DIRECTORY = DB_NAME.parent / "archives"
+RETENTION_DAYS = 90
+
+
+def _utc_cutoff():
+    return datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+
+
+def _parse_timestamp(value):
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _delete_unreferenced_images():
@@ -42,41 +61,70 @@ def _delete_unreferenced_images():
 
 
 def apply_retention_policy():
-    cutoff = (datetime.utcnow() - timedelta(days=30)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    cutoff = _utc_cutoff()
+    database_cutoff = cutoff.strftime("%Y-%m-%d %H:%M:%S")
     conn = sqlite3.connect(DB_NAME)
     try:
         conn.execute(
             """
             DELETE FROM events
             WHERE timestamp < ?
-              AND COALESCE(image_path, '') = ''
-              AND COALESCE(ai_analysis, '') = ''
             """,
-            (cutoff,),
+            (database_cutoff,),
         )
         conn.commit()
     finally:
         conn.close()
 
     ARCHIVE_DIRECTORY.mkdir(parents=True, exist_ok=True)
-    archive_cutoff = datetime.now().timestamp() - timedelta(days=90).total_seconds()
     for archive_path in ARCHIVE_DIRECTORY.glob("*.csv"):
-        if archive_path.stat().st_mtime >= archive_cutoff:
-            continue
         try:
             with archive_path.open(newline="", encoding="utf-8") as archive_file:
-                rows = list(csv.DictReader(archive_file))
+                reader = csv.DictReader(archive_file)
+                fieldnames = reader.fieldnames
+                rows = list(reader)
         except (OSError, csv.Error):
             continue
-        if any(
-            (row.get("image_path") or "").strip()
-            or (row.get("ai_analysis") or "").strip()
-            for row in rows
-        ):
+
+        # Unknown or malformed timestamps are retained so a damaged or
+        # hand-edited archive is never silently discarded.
+        retained_rows = [
+            row for row in rows
+            if (
+                (event_time := _parse_timestamp(row.get("timestamp"))) is None
+                or event_time >= cutoff
+            )
+        ]
+        if len(retained_rows) == len(rows):
             continue
-        archive_path.unlink()
+
+        if not retained_rows:
+            archive_path.unlink()
+            continue
+
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                newline="",
+                encoding="utf-8",
+                dir=archive_path.parent,
+                prefix=f".{archive_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary_file:
+                temporary_path = Path(temporary_file.name)
+                writer = csv.DictWriter(
+                    temporary_file,
+                    fieldnames=fieldnames,
+                    extrasaction="ignore",
+                )
+                writer.writeheader()
+                writer.writerows(retained_rows)
+            os.replace(temporary_path, archive_path)
+        finally:
+            if temporary_path is not None and temporary_path.exists():
+                temporary_path.unlink()
 
     _delete_unreferenced_images()
 
@@ -125,6 +173,13 @@ def init_database():
         last_delivery_failure DATETIME
     )
     """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS dashboard_users(
+        username TEXT PRIMARY KEY COLLATE NOCASE,
+        password_hash TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
 
     conn.commit()
     conn.close()
@@ -141,7 +196,6 @@ def clear_event_history():
               AND COALESCE(ai_analysis, '') = ''
             """
         )
-        conn.execute("DELETE FROM seal_status")
     conn.close()
     _delete_unreferenced_images()
 
@@ -174,6 +228,54 @@ def insert_event(packet, image_filename=None, ai_analysis=None):
     return inserted
 
 
+def accept_event(packet):
+    """Atomically reject replayed sequences and persist a fresh event."""
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        with conn:
+            row = conn.execute(
+                "SELECT last_event_sequence FROM seal_status WHERE seal_id = ?",
+                (packet["seal_id"],),
+            ).fetchone()
+            last_sequence = row[0] if row and row[0] is not None else None
+            if last_sequence is None:
+                event_row = conn.execute(
+                    "SELECT MAX(event_sequence) FROM events WHERE seal_id = ?",
+                    (packet["seal_id"],),
+                ).fetchone()
+                last_sequence = event_row[0] if event_row else None
+
+            sequence = packet["event_sequence"]
+            if last_sequence is not None and sequence <= last_sequence:
+                return False
+
+            cur = conn.execute("""
+            INSERT OR IGNORE INTO events
+            (seal_id, event_sequence, temperature, tamper, vibration, movement_type)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                packet["seal_id"],
+                sequence,
+                packet["temperature"],
+                int(packet["tamper"]),
+                packet["vibration"],
+                packet.get("movement_type", 0),
+            ))
+            if cur.rowcount != 1:
+                return False
+
+            conn.execute("""
+            INSERT INTO seal_status(seal_id, last_seen, last_event_sequence)
+            VALUES (?, CURRENT_TIMESTAMP, ?)
+            ON CONFLICT(seal_id) DO UPDATE SET
+                last_seen = excluded.last_seen,
+                last_event_sequence = excluded.last_event_sequence
+            """, (packet["seal_id"], sequence))
+        return True
+    finally:
+        conn.close()
+
+
 def update_event_artifacts(packet, image_filename=None, ai_analysis=None):
     conn = sqlite3.connect(DB_NAME)
     conn.execute(
@@ -195,15 +297,25 @@ def update_event_artifacts(packet, image_filename=None, ai_analysis=None):
 
 def record_seen(packet):
     conn = sqlite3.connect(DB_NAME)
-    conn.execute("""
-    INSERT INTO seal_status(seal_id, last_seen, last_event_sequence)
-    VALUES (?, CURRENT_TIMESTAMP, ?)
-    ON CONFLICT(seal_id) DO UPDATE SET
-        last_seen = excluded.last_seen,
-        last_event_sequence = excluded.last_event_sequence
-    """, (packet["seal_id"], packet["event_sequence"]))
-    conn.commit()
-    conn.close()
+    try:
+        with conn:
+            row = conn.execute(
+                "SELECT last_event_sequence FROM seal_status WHERE seal_id = ?",
+                (packet["seal_id"],),
+            ).fetchone()
+            sequence = packet["event_sequence"]
+            if row is not None and row[0] is not None and sequence <= row[0]:
+                return False
+            conn.execute("""
+            INSERT INTO seal_status(seal_id, last_seen, last_event_sequence)
+            VALUES (?, CURRENT_TIMESTAMP, ?)
+            ON CONFLICT(seal_id) DO UPDATE SET
+                last_seen = excluded.last_seen,
+                last_event_sequence = excluded.last_event_sequence
+            """, (packet["seal_id"], sequence))
+        return True
+    finally:
+        conn.close()
 
 def get_stale_seals(timeout_seconds):
     conn = sqlite3.connect(DB_NAME)
@@ -270,6 +382,15 @@ def archive_events():
             "image_path",
             "ai_analysis",
         ))
-        writer.writerows(rows)
+        writer.writerows(_spreadsheet_safe_row(row) for row in rows)
 
     return archive_path
+
+
+def _spreadsheet_safe_row(row):
+    """Prefix formula-like text so spreadsheet apps treat it as plain text."""
+    safe_row = list(row)
+    for index, value in enumerate(safe_row):
+        if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")):
+            safe_row[index] = "'" + value
+    return safe_row

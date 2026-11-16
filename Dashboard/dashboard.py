@@ -2,25 +2,67 @@
 #from flask import Flask, render_template
 
 import csv
+import hmac
+import os
 import re
+import secrets
 import sys
+import time
+from datetime import timedelta
 from pathlib import Path
 
 from flask import (
     Flask,
+    abort,
     jsonify,
     make_response,
+    redirect,
     render_template,
+    request,
+    session,
     send_from_directory,
+    url_for,
 )
 
 REPOSITORY_PATH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_PATH))
 
-from Gateway.database import get_latest_events
+from Gateway.database import apply_retention_policy, get_latest_events, init_database
 from Gateway.image_storage import IMAGE_FOLDER
+from Dashboard.auth import verify_user
 
 app = Flask(__name__)
+SECRET_FILE = REPOSITORY_PATH / "Gateway" / ".dashboard_secret"
+
+
+def _load_secret_key():
+    configured = os.getenv("SMARTSEAL_DASHBOARD_SECRET")
+    if configured:
+        return configured
+
+    try:
+        return SECRET_FILE.read_bytes()
+    except FileNotFoundError:
+        key = secrets.token_bytes(32)
+        try:
+            with SECRET_FILE.open("xb") as secret_file:
+                secret_file.write(key)
+        except FileExistsError:
+            key = SECRET_FILE.read_bytes()
+        if os.name == "posix":
+            SECRET_FILE.chmod(0o600)
+        return key
+
+
+app.config.update(
+    SECRET_KEY=_load_secret_key(),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.getenv("SMARTSEAL_DASHBOARD_HTTPS") == "1",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+)
+init_database()
+_last_retention_check = 0.0
 ARCHIVE_DIRECTORY = REPOSITORY_PATH / "Gateway" / "archives"
 ARCHIVE_FILENAME = re.compile(
     r"SmartSeal_Events_(?:"
@@ -37,6 +79,66 @@ def _archive_path(filename):
     if path.parent != ARCHIVE_DIRECTORY.resolve() or not path.is_file():
         return None
     return path
+
+
+def _csrf_token():
+    token = session.get("csrf_token")
+    if token is None:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": _csrf_token}
+
+
+@app.before_request
+def require_dashboard_account():
+    global _last_retention_check
+    now = time.monotonic()
+    if now - _last_retention_check >= 3600:
+        apply_retention_policy()
+        _last_retention_check = now
+
+    if request.endpoint not in {"login", "static"} and not session.get("username"):
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Authentication required"}), 401
+        return redirect(url_for("login"))
+
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        expected = session.get("csrf_token", "")
+        provided = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token", "")
+        if not expected or not hmac.compare_digest(expected, provided):
+            abort(400, "Invalid CSRF token")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        authenticated_username = verify_user(username, password)
+        if authenticated_username is None:
+            error = "The username or password is incorrect."
+        else:
+            session.clear()
+            session.permanent = True
+            session["username"] = authenticated_username
+            session["csrf_token"] = secrets.token_urlsafe(32)
+            return redirect(url_for("home"))
+
+    response = make_response(render_template("login.html", error=error))
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 @app.route("/")
@@ -174,4 +276,4 @@ def images(filename):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="127.0.0.1", debug=False)
