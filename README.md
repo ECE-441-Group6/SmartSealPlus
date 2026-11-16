@@ -1,14 +1,14 @@
 # SmartSeal+
 
-SmartSeal+ monitors one shipment seal with a Seeed XIAO nRF52840 Sense. The
-seal firmware samples temperature, vibration, and movement, then broadcasts an
+SmartSeal+ monitors a shipment seal using a Seeed XIAO nRF52840 Sense. The
+seal samples temperature, vibration, and movement, then broadcasts an
 authenticated, encrypted BLE manufacturer advertisement. A Python gateway
-receives the advertisement, records events in SQLite, and serves a local Flask
+receives the advertisement, records events in SQLite, and serves a Flask
 dashboard.
 
-This guide documents the encrypted seal firmware in
+This guide covers the encrypted seal firmware in
 `XIAOnRF8540/SmartSeal_Encrypted/` and its BLE advertising gateway. The
-firmware and gateway are configured for seal ID `1`.
+firmware is configured for seal ID `1`.
 
 ## System overview
 
@@ -19,11 +19,9 @@ XIAO nRF52840 Sense
             └─ Gateway/gateway_main.py → SQLite → Flask dashboard
 ```
 
-The advertisement protects sensor contents and authenticates the packet. The
-seal ID and sequence number remain visible and are authenticated as part of
-the packet header. The gateway rejects invalid tags, seal IDs other than 1,
-and stale or replayed sequence numbers. Encryption does not hide the seal's
-presence or prevent radio jamming.
+The advertisement encrypts the sensor data and authenticates the packet
+header. The seal ID and sequence number remain visible. Encryption does not
+hide the seal's presence or prevent radio jamming.
 
 ## Requirements
 
@@ -42,8 +40,10 @@ Gateway and dashboard:
 - Dependencies in `requirements.txt`: Flask, Pillow, Bleak, and Cryptography
 - Raspberry Pi camera for real photographs (optional; Pillow generates a
   simulated image when camera hardware is unavailable)
+- Ollama running locally on the Raspberry Pi for local image analysis
+  (optional)
 
-On Raspberry Pi OS, the system packages are:
+On Raspberry Pi OS, install the system packages:
 
 ```bash
 sudo apt update
@@ -51,7 +51,9 @@ sudo apt install python3-bleak python3-flask python3-pil python3-cryptography
 ```
 
 On Windows, macOS, or another Linux host, install the Python dependencies in a
-virtual environment:
+virtual environment.
+
+Linux or macOS:
 
 ```bash
 python3 -m venv .venv
@@ -59,7 +61,7 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-In PowerShell, activate the environment with:
+PowerShell:
 
 ```powershell
 py -m venv .venv
@@ -88,7 +90,8 @@ format shown in `secrets.example.h`, and keep `SEAL_ID` set to `1`.
 
 The repository ignores both secret files. If the firmware reports corrupted
 sequence storage, do not reset its sequence and keep using the same key. Create
-a new key and nonce prefix, update both sides, and provision the firmware again.
+a new key and nonce prefix, update both sides, and provision the firmware
+again.
 
 ## Build and upload the seal firmware
 
@@ -107,10 +110,10 @@ a new key and nonce prefix, update both sides, and provision the firmware again.
 The firmware reads temperature from A0 and vibration from A2. It samples the
 ADXL345 over I2C at 100 Hz. The main loop runs at about 100 Hz and updates the
 advertisement every 5 seconds while recording. Vibration is detected from ADC
-deviation from a calibrated baseline; movement is detected from changes in
-the accelerometer readings. The current encrypted sketch has no separate
-tamper sensor, so its `tamper` field is always false. Vibration and movement
-are reported separately.
+deviation from a calibrated baseline; movement is detected from changes in the
+accelerometer readings. The current encrypted sketch has no separate tamper
+sensor, so its `tamper` field is always false. Vibration and movement are
+reported separately.
 
 ## Encrypted advertisement format
 
@@ -122,7 +125,7 @@ a 21-byte packet:
 | 0 | Magic value `0xA5` |
 | 1 | Protocol version `3` |
 | 2 | Seal ID, currently `1` |
-| 3–6 | 32-bit little-endian event sequence |
+| 3–6 | 32-bit little-endian sequence number |
 | 7–12 | AES-128-CCM ciphertext |
 | 13–20 | 8-byte authentication tag |
 
@@ -133,39 +136,63 @@ a tamper byte, vibration in hundredths of a volt, and a movement type.
 
 The firmware stores its sequence counter in internal flash and reserves ranges
 before using them so a normal restart does not reuse a nonce. The gateway
-stores the highest accepted sequence in `Gateway/smartseal.db`; deleting or
-restoring an older database also resets the gateway's replay protection state.
+stores event and seal status in `Gateway/smartseal.db`. Preserve that database
+when restarting the gateway.
 
-## Run the gateway and dashboard
+## Run the gateway on the Raspberry Pi
 
-Start the advertisement gateway from the repository root:
+From the repository root, start the gateway with real BLE scanning and local
+Ollama analysis:
 
 ```bash
+export SMARTSEAL_SIMULATION=0
+export SMARTSEAL_AI_PROVIDER=ollama
 python3 Gateway/XIAO/gateway_main.py
 ```
 
-In PowerShell:
+Ollama must be running on the Pi with the configured vision model available.
+The default model is `moondream`.
 
-```powershell
-python Gateway/XIAO/gateway_main.py
+Press D6 on the seal to start recording, then wait for an advertisement. If no
+packet arrives, check that Bluetooth is enabled, the adapter is available to
+the account running Python, and the seal has the matching encrypted firmware
+and keys.
+
+## Run the dashboard
+
+Create an account from the repository root:
+
+```bash
+python3 -m Dashboard.manage_accounts add seal-admin
 ```
 
-The gateway scans for up to 5 seconds per attempt. Press D6 on the seal to
-start recording, then wait for an advertisement. If no packet arrives, check
-that Bluetooth is enabled, the adapter is available to the account running
-Python, and the seal has the matching encrypted firmware and keys.
+The command prompts for a password of at least 12 characters. The password is
+stored as a hash in the local database. There is no public registration; run
+the command again to add another account.
 
-In a separate terminal, run the dashboard:
+In a separate terminal, start the dashboard:
 
 ```bash
 python3 Dashboard/dashboard.py
 ```
 
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000). The dashboard shows live
-events and saved archives. It runs on localhost with Flask debug mode disabled.
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000). Visitors can view the
+dashboard, events, archives, and captured images without signing in. Sign in
+to enable archive deletion. The server listens on localhost by default.
 
-When stopped with Ctrl+C, the gateway writes stored events to a timestamped
-CSV in `Gateway/archives/`. Captured images are stored in `Gateway/images/`.
+The dashboard creates `Gateway/.dashboard_secret` for persistent login
+sessions. The file is hidden on Linux and ignored by Git. Keep it private.
+
+When stopped with Ctrl+C, the gateway writes stored events to a timestamped CSV
+in `Gateway/archives/`. Deleting a saved archive removes its CSV. Captured
+images are removed only when no live event or remaining archive references
+them.
+
+Events and archived CSV rows expire 90 days after their event timestamp.
+Captured images are deleted once no remaining event or archive references
+them. Cleanup runs when the gateway or dashboard initializes, and periodically
+while the dashboard is receiving requests.
+
 Temperature alerts below 2 °C or above 8 °C do not by themselves trigger a
 photo; vibration or movement events trigger capture and optional image
 analysis.
@@ -177,52 +204,50 @@ computer without the XIAO or a BLE adapter. The gateway still loads
 `Gateway/keys.json` during startup, so create that file first as described
 above. Simulation does not check packets against firmware encryption.
 
-In PowerShell:
+PowerShell:
 
 ```powershell
 $env:SMARTSEAL_SIMULATION = "1"
 $env:SMARTSEAL_AI_PROVIDER = "none"
 python3 Gateway/XIAO/gateway_main.py
 ```
-To revert this setting use:
+
+To use real BLE hardware and Ollama again in PowerShell:
+
 ```powershell
 $env:SMARTSEAL_SIMULATION = "0"
 $env:SMARTSEAL_AI_PROVIDER = "ollama"
 python3 Gateway/XIAO/gateway_main.py
 ```
+
 The simulator starts its sequence counter at 1 each time it starts. Since the
-gateway persists replay state, use a separate disposable checkout or database
-when repeating simulation runs; do not delete a database containing real
+gateway stores sequence state, use a separate disposable checkout or database
+when repeating simulation runs. Do not delete a database containing real
 events just to reset a simulation.
 
-## Optional image analysis
+## Optional local image analysis
 
-The gateway uses local Ollama image analysis by default when it captures an
-image. To use sensor-only fallback text instead, set
-`SMARTSEAL_AI_PROVIDER=none`. To use the existing OpenAI integration, set
-`SMARTSEAL_AI_PROVIDER=openai` and `OPENAI_API_KEY` in the gateway environment.
-Images sent to OpenAI are sent to the configured external service.
+The gateway uses Ollama locally when it captures an image. Install and run
+Ollama on the Pi with a vision model such as `moondream`. To use sensor-only
+fallback text, set `SMARTSEAL_AI_PROVIDER=none`. The active analyzer does not
+use OpenAI or send images to an external AI provider.
 
-## Checks
+## Syntax check
 
-Check Python syntax from the repository root with:
+From the repository root:
 
 ```bash
 python3 -m compileall -q Gateway Dashboard
 ```
 
-Some existing test files still target older plaintext or multi-seal packet
-behavior. They are not a reliable verification suite for the encrypted
-version-3, seal-ID-1 workflow until those tests are updated.
-
-## Main paths in this guide
+## Main paths
 
 ```text
 XIAOnRF8540/SmartSeal_Encrypted/   Encrypted BLE seal firmware
 Gateway/ble_scanner.py             Advertisement decryption and validation
 Gateway/XIAO/                      XIAO advertisement gateway entry point
-Gateway/gateway_main.py            Event handling and replay protection
-Gateway/database.py                SQLite storage and CSV archives
-Dashboard/                         Local Flask dashboard
+Gateway/gateway_main.py            Event handling
+Gateway/database.py                SQLite storage, retention, and CSV archives
+Dashboard/                         Flask dashboard and account management
 Gateway/keys.json                  Local gateway secrets (ignored by Git)
 ```
