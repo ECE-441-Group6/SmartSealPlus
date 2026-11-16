@@ -20,6 +20,30 @@ h1 {
     margin-bottom: 24px;
 }
 
+.login-panel {
+    max-width: 420px;
+    margin: 8vh auto;
+    padding: 28px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+}
+
+.login-panel form {
+    display: grid;
+    gap: 12px;
+}
+
+.login-panel input {
+    padding: 10px;
+    border: 1px solid #aab8c7;
+    border-radius: 4px;
+}
+
+.login-error {
+    color: #a31515;
+}
+
 /* Event history table */
 
 table {
@@ -100,7 +124,8 @@ a:hover {
         white-space: nowrap;
     }
 }
-    /* SmartSeal+ sensor status indicators */
+
+/* SmartSeal+ sensor status indicators */
 
 .sensor-status {
     display: inline-block;

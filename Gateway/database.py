@@ -50,7 +50,9 @@ def _delete_unreferenced_images():
                     if (row.get("image_path") or "").strip()
                 )
         except (OSError, csv.Error):
-            continue
+            # If an archive cannot be inspected, preserve all images rather
+            # than risk removing evidence that it may still reference.
+            return
 
     image_folder = IMAGE_FOLDER.resolve()
     for image_path in IMAGE_FOLDER.glob("*"):
