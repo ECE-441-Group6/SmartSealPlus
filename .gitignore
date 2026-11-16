@@ -6,7 +6,6 @@ __pycache__/
 htmlcov/
 .venv/
 venv/
-Gateway/.dashboard_secret
 
 # Local databases and SQLite sidecar files
 *.db
@@ -19,6 +18,7 @@ Gateway/.dashboard_secret
 .env
 .env.*
 Gateway/keys.json
+Gateway/.dashboard_secret
 XIAOnRF8540/Advertising/secrets.h
 XIAOnRF8540/SmartSeal_Encrypted/secrets.h
 XIAOnRF8540/SmartSeal_Encrypted_Test/secrets.h
