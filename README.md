@@ -34,6 +34,12 @@ Seal hardware:
 - Thermistor connected to A0, vibration sensor to A2, record button to D6,
   buzzer to D3, and ADXL345 accelerometer on I2C
 
+Sensorless test seal:
+
+- A spare XIAO nRF52840; the Sense model is not required
+- No sensors, buttons, jumper wires, or other components are connected
+- Arduino IDE and the same Seeed nRF52 board support package used for the seal
+
 Gateway and dashboard:
 
 - Python 3.10 or later
@@ -72,11 +78,12 @@ python -m pip install -r requirements.txt
 
 ## Configure matching encryption keys
 
-The gateway reads `Gateway/keys.json`. Each firmware image reads its local
-`XIAOnRF8540/SmartSeal_Encrypted/secrets.h`. Every seal ID must have a matching
+The gateway reads `Gateway/keys.json`. Each seal firmware image reads its own
+local `secrets.h` under `XIAOnRF8540/SmartSeal_Encrypted/` or
+`XIAOnRF8540/Encrypted_Test_Transmitter/`. Every seal ID must have a matching
 entry in the gateway file, and that seal's firmware key and nonce prefix must
 match the entry. Use a distinct random AES key and nonce prefix for every seal.
-Never use the all-zero example values or commit either secret file.
+Never use the all-zero example values or commit secret files.
 
 For a brand-new installation, this creates random keys for seals 1 and 2:
 
@@ -115,12 +122,14 @@ and add one entry per new seal. The resulting structure looks like this
 }
 ```
 
-The repository ignores both secret files. The first time a seal is provisioned,
-hold D6 while powering it on so it can initialize its sequence storage. On
-normal restarts, do not hold D6 for sequence provisioning; the stored sequence
-continues automatically. If sequence storage is missing or corrupted, do not
-restart at sequence 1 with the existing key. Create a new AES key and nonce
-prefix, update both sides, then hold D6 during boot to provision the new key.
+The repository ignores local key files. For a production seal's first
+provisioning, hold D6 while powering it on to initialize sequence storage. On
+normal restarts, do not hold D6; the stored sequence continues automatically.
+If sequence storage is missing or corrupted, create a new AES key and nonce
+prefix, update both sides, then hold D6 during boot. The sensorless test
+transmitter has no button and initializes blank sequence storage automatically;
+rotate its key and prefix on both sides before powering it on after storage
+loss or corruption.
 
 ## Build and upload the seal firmware
 
@@ -145,6 +154,33 @@ accelerometer readings. The current encrypted sketch has no separate tamper
 sensor, so its `tamper` field is always false. Vibration and movement are
 reported separately.
 
+## Build the sensorless test transmitter
+
+Use a spare XIAO nRF52840 to simulate another seal without connecting sensors
+or other components. The sketch broadcasts authenticated packets immediately
+and cycles through synthetic temperature, tamper, vibration, and movement
+values every five seconds.
+
+1. Copy `XIAOnRF8540/Encrypted_Test_Transmitter/secrets.example.h` to
+   `XIAOnRF8540/Encrypted_Test_Transmitter/secrets.h`. The example uses test
+   seal ID `2`; leave the production seal on ID `1`.
+2. Generate a fresh AES key and nonce prefix for ID 2. Add them under `"2"` in
+   `Gateway/keys.json`, and copy the same values into the test transmitter's
+   `secrets.h`. Do not reuse seal 1's key or prefix.
+3. Open
+   `XIAOnRF8540/Encrypted_Test_Transmitter/Encrypted_Test_Transmitter.ino` in
+   Arduino IDE, select the XIAO nRF52840 board and its serial port, then build
+   and upload.
+4. Open Serial Monitor at 115200 baud. The board initializes blank sequence
+   storage automatically and starts advertising; there is no button or jumper
+   step.
+
+Set `SEAL_ID` and matching key material in each transmitter's own
+`secrets.h`. When seal 1 and seal 2 are both configured in `Gateway/keys.json`
+and advertising, one BLE scan window can collect the latest valid packet from
+each seal. The gateway processes all collected packets and stores sequence
+state independently by seal ID. The gateway supports IDs 1 through 255.
+
 ## Encrypted advertisement format
 
 The BLE manufacturer data contains the 2-byte company ID `0x5353` followed by
@@ -154,7 +190,7 @@ a 21-byte packet:
 |---|---|
 | 0 | Magic value `0xA5` |
 | 1 | Protocol version `3` |
-| 2 | Seal ID, currently `1` |
+| 2 | Seal ID, configured per seal (`1`–`255`) |
 | 3–6 | 32-bit little-endian sequence number |
 | 7–12 | AES-128-CCM ciphertext |
 | 13–20 | 8-byte authentication tag |
@@ -277,6 +313,7 @@ python3 -m compileall -q Gateway Dashboard
 
 ```text
 XIAOnRF8540/SmartSeal_Encrypted/   Encrypted BLE seal firmware
+XIAOnRF8540/Encrypted_Test_Transmitter/ Sensorless encrypted BLE test sender
 Gateway/ble_scanner.py             Advertisement decryption and validation
 Gateway/XIAO/                      XIAO advertisement gateway entry point
 Gateway/gateway_main.py            Event handling
