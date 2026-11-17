@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-import random
 
 from bleak import BleakScanner
 from bleak.exc import BleakError
@@ -48,9 +47,12 @@ async def scan_real_ble():
         await scanner.stop()
 
     if packets_by_seal:
-        packet = random.choice(list(packets_by_seal.values()))
-        print(f"XIAO BLE advertisement received: {packet}")
-        return packet
+        packets = list(packets_by_seal.values())
+        print(f"XIAO BLE packets received from {len(packets)} seal(s).")
+        for packet in packets:
+            print(f"XIAO BLE advertisement: {packet}")
+        # Keep the old single-packet return shape when only one seal was seen.
+        return packets[0] if len(packets) == 1 else packets
 
     if xiao_device is None:
         try:

@@ -232,14 +232,12 @@ async def scan_real_ble():
         await scanner.stop()
 
     if latest_by_seal:
-        # Choose across unique IDs so repeated advertisements from one seal
-        # don't outweigh a less chatty seal during this scan window.
-        packet = random.choice(list(latest_by_seal.values()))
-
-        print("Encrypted BLE packet successfully received.")
-        print("Decoded packet:", packet)
-
-        return packet
+        packets = list(latest_by_seal.values())
+        print(f"Received encrypted packets from {len(packets)} seal(s).")
+        for packet in packets:
+            print("Decoded packet:", packet)
+        # Keep the old single-packet return shape when only one seal was seen.
+        return packets[0] if len(packets) == 1 else packets
 
     print(
         "No valid encrypted SmartSeal packet received."

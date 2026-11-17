@@ -46,80 +46,91 @@ def run_gateway(interval=5, scanner=scan_ble):
     try:
         while True:
             try:
-                raw_packet = scanner()
-                if raw_packet is None:
+                scan_result = scanner()
+                if scan_result is None:
                     print("No sensor packet received; retrying BLE scan.")
                     continue
 
-                packet = parse_packet(raw_packet)
-                if packet is None:
-                    print("Invalid sensor packet. Skipping...")
-                    continue
-
-                if not accept_event(packet):
-                    print(
-                        "Stale or duplicate packet ignored: "
-                        f"seal={packet['seal_id']} "
-                        f"seq={packet['event_sequence']}"
-                    )
-                    continue
-
-                now = time.monotonic()
-                if now - last_stale_check >= max(interval, 5):
-                    for seal_id, last_seen in get_stale_seals(max(interval * 3, 15)):
-                        print(
-                            f"WARNING: seal {seal_id} stopped reporting; "
-                            f"last seen {last_seen}"
-                        )
-                    last_stale_check = now
-
-                print(
-                    f"Event recorded: seal={packet['seal_id']} "
-                    f"seq={packet['event_sequence']}"
+                raw_packets = (
+                    scan_result
+                    if isinstance(scan_result, (list, tuple))
+                    else [scan_result]
                 )
-                alerts = process_alerts(packet)
-                temperature_out_of_range = (
-                    packet["temperature"] is not None
-                    and (
-                        packet["temperature"] < TEMP_LOW
-                        or packet["temperature"] > TEMP_HIGH
-                    )
-                )
-                capture_triggered = (
-                    packet["tamper"]
-                    or packet["vibration"]
-                    or packet["movement_type"] != 0
-                )
-
-                image_filename = None
-                ai_analysis = (
-                    "Temperature out of bounds; image capture skipped."
-                    if temperature_out_of_range and not capture_triggered
-                    else "No issues detected."
-                )
-                if capture_triggered:
+                for raw_packet in raw_packets:
                     try:
-                        image_filename = capture_image(packet)
-                    except Exception as error:
-                        print(f"Camera error: {error}")
-                    if image_filename:
-                        try:
-                            ai_analysis = analyze_image(
-                                str(image_path(image_filename)), packet
+                        packet = parse_packet(raw_packet)
+                        if packet is None:
+                            print("Invalid sensor packet. Skipping...")
+                            continue
+
+                        if not accept_event(packet):
+                            print(
+                                "Stale or duplicate packet ignored: "
+                                f"seal={packet['seal_id']} "
+                                f"seq={packet['event_sequence']}"
                             )
-                        except Exception as error:
-                            print(f"AI analysis error: {error}")
-                            ai_analysis = "Analysis unavailable."
-                    else:
-                        ai_analysis = "Alert detected; image unavailable."
+                            continue
 
-                update_event_artifacts(packet, image_filename, ai_analysis)
+                        now = time.monotonic()
+                        if now - last_stale_check >= max(interval, 5):
+                            for seal_id, last_seen in get_stale_seals(
+                                max(interval * 3, 15)
+                            ):
+                                print(
+                                    f"WARNING: seal {seal_id} stopped reporting; "
+                                    f"last seen {last_seen}"
+                                )
+                            last_stale_check = now
 
-                print("\nPacket Received")
-                print(packet)
-                for alert in alerts:
-                    print("ALERT:", alert)
-                print("Analysis:", ai_analysis)
+                        print(
+                            f"Event recorded: seal={packet['seal_id']} "
+                            f"seq={packet['event_sequence']}"
+                        )
+                        alerts = process_alerts(packet)
+                        temperature_out_of_range = (
+                            packet["temperature"] is not None
+                            and (
+                                packet["temperature"] < TEMP_LOW
+                                or packet["temperature"] > TEMP_HIGH
+                            )
+                        )
+                        capture_triggered = (
+                            packet["tamper"]
+                            or packet["vibration"]
+                            or packet["movement_type"] != 0
+                        )
+
+                        image_filename = None
+                        ai_analysis = (
+                            "Temperature out of bounds; image capture skipped."
+                            if temperature_out_of_range and not capture_triggered
+                            else "No issues detected."
+                        )
+                        if capture_triggered:
+                            try:
+                                image_filename = capture_image(packet)
+                            except Exception as error:
+                                print(f"Camera error: {error}")
+                            if image_filename:
+                                try:
+                                    ai_analysis = analyze_image(
+                                        str(image_path(image_filename)), packet
+                                    )
+                                except Exception as error:
+                                    print(f"AI analysis error: {error}")
+                                    ai_analysis = "Analysis unavailable."
+                            else:
+                                ai_analysis = "Alert detected; image unavailable."
+
+                        update_event_artifacts(packet, image_filename, ai_analysis)
+
+                        print("\nPacket Received")
+                        print(packet)
+                        for alert in alerts:
+                            print("ALERT:", alert)
+                        print("Analysis:", ai_analysis)
+                    except Exception as error:
+                        print(f"Packet processing error: {error}")
                 time.sleep(interval)
             except Exception as error:
                 print(f"Gateway processing error: {error}")
