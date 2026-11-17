@@ -18,16 +18,15 @@ No sensors, buzzer, or accelerometer need to be connected.
    configured with a production ID; preferably assign it a separate test ID.
 4. Open `Encrypted_Test_Transmitter.ino` in Arduino IDE, select the Seeed XIAO
    nRF52840 board, and upload.
-5. On first boot only, hold D6 low while powering/resetting the board to
-   initialize its persistent sequence counter. Use a temporary D6-to-GND
-   jumper; no sensor hardware is needed. Do not repeat provisioning with the
-   same key after sequence storage has been erased.
-6. Open Serial Monitor at 115200 baud. Packets start broadcasting immediately.
+5. Open Serial Monitor at 115200 baud. The first boot initializes its blank
+   sequence storage automatically, and packets start broadcasting immediately.
 
 The sequence counter is persisted with the same two-slot flash scheme as the
 seal firmware. Normal restarts continue safely without reusing an AES-CCM
-nonce. If sequence storage is lost, create a new test key and nonce prefix and
-update both the transmitter and receiver before sending again.
+nonce. If sequence storage is erased or corrupted, install a new test key and
+nonce prefix in both the transmitter and gateway before powering the
+transmitter back on. It will then reinitialize its sequence counter
+automatically.
 
 ## Multiple test transmitters
 

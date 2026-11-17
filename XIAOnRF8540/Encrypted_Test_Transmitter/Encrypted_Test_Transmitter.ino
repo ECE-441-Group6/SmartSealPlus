@@ -19,7 +19,6 @@ constexpr uint8_t HEADER_LENGTH = 7;
 constexpr uint8_t PLAINTEXT_LENGTH = 6;
 constexpr uint8_t PACKET_LENGTH = 21;
 constexpr uint32_t ADVERTISEMENT_INTERVAL_MS = 5000;
-constexpr uint8_t RECORD_BUTTON_PIN = D6;
 
 uint32_t lastAdvertisement = 0;
 uint8_t scenario = 0;
@@ -129,15 +128,15 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
   Serial.println("SmartSeal sensorless BLE test transmitter");
-  pinMode(RECORD_BUTTON_PIN, INPUT_PULLUP);
 
   while (!nRFCrypto.begin()) {
     Serial.println("CryptoCell initialization failed; retrying.");
     delay(1000);
   }
 
-  const bool provisioningRequested = digitalRead(RECORD_BUTTON_PIN) == LOW;
-  if (!initializeSequenceCounter(provisioningRequested)) {
+  // This dedicated test board has no external button. Its first boot
+  // initializes blank sequence storage automatically.
+  if (!initializeSequenceCounter(true)) {
     Serial.println("Sequence storage initialization failed; advertising stopped.");
     while (true) delay(1000);
   }

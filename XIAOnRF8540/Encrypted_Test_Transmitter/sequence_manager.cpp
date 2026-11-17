@@ -194,9 +194,8 @@ bool initializeSequenceCounter(bool allowFirstBootProvisioning) {
             InternalFS.exists("/seq0.bin") ||
             InternalFS.exists("/seq1.bin");
 
-        // Missing or corrupt sequence storage must never silently restart
-        // under the old key. Provisioning requires an explicit boot-time
-        // button press and a newly provisioned key.
+        // If storage was erased or corrupted after packets were sent, install
+        // a new key and nonce prefix before allowing the counter to restart.
         if (!allowFirstBootProvisioning) {
             Serial.println(
                 sequenceFilesExist
@@ -204,16 +203,16 @@ bool initializeSequenceCounter(bool allowFirstBootProvisioning) {
                     : "ERROR: Sequence storage is missing."
             );
             Serial.println(
-                "Provision with a NEW encryption key and hold D6 during boot."
+                "Install a NEW encryption key and nonce prefix, then restart."
             );
             return false;
         }
 
         if (sequenceFilesExist) {
             Serial.println(
-                "Sequence storage is corrupt; explicit provisioning requested."
+                "Sequence storage is corrupt; automatic reinitialization requested."
             );
-            Serial.println("Ensure a NEW encryption key is installed.");
+            Serial.println("Ensure a NEW key and nonce prefix are installed.");
         } else {
             Serial.println("First boot: initializing sequence storage.");
         }
