@@ -1,41 +1,17 @@
 
 """AES-128-CCM decryption for SmartSeal BLE advertisements."""
 
-import json
+import sys
 from pathlib import Path
 
-from cryptography.hazmat.primitives.ciphers.aead import AESCCM
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from Gateway.seal_keys import load_seal_keys
 
 
-def _load_hex_secret(name, length):
-    """Load a fixed-length hexadecimal secret from the local key file."""
-    key_path = Path(__file__).parents[1] / "keys.json"
-    try:
-        with key_path.open(encoding="utf-8") as key_file:
-            value = json.load(key_file)[name]
-    except (OSError, KeyError, json.JSONDecodeError) as error:
-        raise RuntimeError(
-            f"Could not load {name} from {key_path}."
-        ) from error
-
-    try:
-        secret = bytes.fromhex(value)
-    except ValueError as error:
-        raise RuntimeError(
-            f"{name} must contain hexadecimal bytes."
-        ) from error
-
-    if len(secret) != length:
-        raise RuntimeError(
-            f"{name} must be exactly {length} bytes "
-            f"({length * 2} hexadecimal characters)."
-        )
-
-    return secret
-
-
-ENCRYPTION_KEY = _load_hex_secret("SMARTSEAL_AES_KEY", 16)
-NONCE_PREFIX = _load_hex_secret("SMARTSEAL_NONCE_PREFIX", 9)
+SEAL_KEYS = load_seal_keys()
 
 MANUFACTURER_ID = 0x5353
 MAGIC = 0xA5
@@ -47,7 +23,6 @@ PLAINTEXT_LENGTH = 6
 TAG_LENGTH = 8
 PACKET_LENGTH = 21
 
-aes = AESCCM(ENCRYPTION_KEY, tag_length=TAG_LENGTH)
 
 
 def decrypt_advertisement(payload):
@@ -70,13 +45,15 @@ def decrypt_advertisement(payload):
         return None
 
     seal_id = payload[2]
-    if seal_id < 1:
+    seal_crypto = SEAL_KEYS.get(seal_id)
+    if seal_crypto is None:
         return None
+    aes, nonce_prefix = seal_crypto
 
     sequence = int.from_bytes(payload[3:7], "little")
 
     # The sequence counter must never repeat for the same key.
-    nonce = NONCE_PREFIX + payload[3:7]
+    nonce = nonce_prefix + payload[3:7]
 
     # Authenticate the visible header and sequence number.
     aad = payload[:7]

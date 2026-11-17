@@ -1,10 +1,10 @@
-# Provides optional image analysis with a local fallback for simulation.
-# A configured API key enables remote vision analysis; otherwise the gateway
-# produces a short explanation from the sensor readings alone.
+# Provides optional local Ollama image analysis with a sensor-only fallback.
 import base64
+import ipaddress
 import json
 import os
 from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 
 if __package__:
     from .alert_manager import TEMP_HIGH, TEMP_LOW
@@ -16,49 +16,9 @@ def analyze_image(filename, packet):
     provider = os.getenv("SMARTSEAL_AI_PROVIDER", "ollama").lower()
     if provider == "ollama":
         return _analyze_with_ollama(filename, packet)
-
-    api_key = os.getenv("OPENAI_API_KEY")
-    if provider != "openai" or not api_key:
-        return _fallback_analysis(packet)
-
-    with open(filename, "rb") as image_file:
-        # The image API receives the JPEG as a base64 data URL.
-        encoded_image = base64.b64encode(image_file.read()).decode("ascii")
-
-    payload = {
-        "model": os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini"),
-        "max_tokens": 120,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": (
-                        "Describe what happened in this SmartSeal event image in one concise "
-                        f"sentence. Sensor reading: {packet['temperature']} C; "
-                        f"tamper={packet['tamper']}; vibration={packet['vibration']}; "
-                        f"movement_type={packet.get('movement_type', 0)}."
-                    ),
-                },
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}},
-            ],
-        }],
-    }
-    request = Request(
-        "https://api.openai.com/v1/chat/completions",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        method="POST",
-    )
-
-    try:
-        # Send the image and event context to the configured vision model.
-        with urlopen(request, timeout=30) as response:
-            result = json.load(response)
-        return result["choices"][0]["message"]["content"].strip()
-    except Exception as error:
-        # Keep the event usable when the network or vision service is down.
-        return f"AI analysis unavailable; sensor evidence: {_fallback_analysis(packet)} ({error})"
+    # "none" and unknown provider values use sensor data only. No image or
+    # sensor data is sent to an external AI service.
+    return _fallback_analysis(packet)
 
 
 def _analyze_with_ollama(filename, packet):
@@ -98,11 +58,23 @@ def _analyze_with_ollama(filename, packet):
             "stream": False,
         }
 
+        ollama_url = os.getenv(
+            "OLLAMA_URL",
+            "http://127.0.0.1:11434/api/generate",
+        )
+        parsed_url = urlsplit(ollama_url)
+        hostname = (parsed_url.hostname or "").lower()
+        is_loopback = hostname == "localhost"
+        if hostname:
+            try:
+                is_loopback = is_loopback or ipaddress.ip_address(hostname).is_loopback
+            except ValueError:
+                pass
+        if parsed_url.scheme not in {"http", "https"} or not is_loopback:
+            raise ValueError("OLLAMA_URL must point to a local loopback address")
+
         request = Request(
-            os.getenv(
-                "OLLAMA_URL",
-                "http://127.0.0.1:11434/api/generate"
-            ),
+            ollama_url,
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",

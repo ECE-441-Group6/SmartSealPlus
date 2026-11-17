@@ -20,11 +20,10 @@ SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 async def scan_real_ble():
     """Find the XIAO and receive its sensor packet over BLE."""
     xiao_device = None
-    advertised_packet = None
-    packet_received = asyncio.Event()
+    packets_by_seal = {}
 
     def detection_callback(device, advertisement):
-        nonlocal advertised_packet, xiao_device
+        nonlocal xiao_device
         device_name = advertisement.local_name or device.name or ""
         packet = None
         for manufacturer_id, payload in advertisement.manufacturer_data.items():
@@ -37,23 +36,23 @@ async def scan_real_ble():
         if device_name == XIAO_DEVICE_NAME:
             xiao_device = device
         if packet is not None:
-            advertised_packet = packet
+            packets_by_seal[packet["seal_id"]] = packet
             xiao_device = device
-            packet_received.set()
 
     scanner = BleakScanner(detection_callback=detection_callback)
     await scanner.start()
     try:
-        try:
-            await asyncio.wait_for(packet_received.wait(), SCAN_TIMEOUT)
-        except asyncio.TimeoutError:
-            pass
+        await asyncio.sleep(SCAN_TIMEOUT)
     finally:
         await scanner.stop()
 
-    if advertised_packet is not None:
-        print(f"XIAO BLE advertisement received: {advertised_packet}")
-        return advertised_packet
+    if packets_by_seal:
+        packets = list(packets_by_seal.values())
+        print(f"XIAO BLE packets received from {len(packets)} seal(s).")
+        for packet in packets:
+            print(f"XIAO BLE advertisement: {packet}")
+        # Keep the old single-packet return shape when only one seal was seen.
+        return packets[0] if len(packets) == 1 else packets
 
     if xiao_device is None:
         try:

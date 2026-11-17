@@ -1,316 +1,286 @@
 # SmartSeal+
 
-SmartSeal+ monitors a shipment seal using a Seeed XIAO nRF52840 Sense. The XIAO samples temperature and vibration, broadcasts
-sensor readings over BLE, and a Python gateway records events for a local web
+SmartSeal+ monitors a shipment seal using a Seeed XIAO nRF52840 Sense. The
+seal samples temperature, vibration, and movement, then broadcasts an
+authenticated, encrypted BLE manufacturer advertisement. A Python gateway
+receives the advertisement, records events in SQLite, and serves a Flask
 dashboard.
 
-## Current system
+This guide covers the encrypted seal firmware in
+`XIAOnRF8540/SmartSeal_Encrypted/` and its BLE advertising gateway. The
+advertising gateway supports seal IDs `1` through `255`, with a separate AES
+key and nonce prefix configured for each seal.
+
+## System overview
 
 ```text
 XIAO nRF52840 Sense
-  ├─ BLE manufacturer advertisements (company ID 0x5353)
-  │    └─ Gateway/ble_scanner.py → Gateway/gateway_main.py
-  └─ Optional BLE GATT JSON notifications
-       └─ Gateway/GATT/gatt_gateway_main.py
-
-Python gateway + SQLite
-  ├─ temperature/vibration alerts
-  ├─ optional camera capture and image analysis
-  └─ Flask dashboard and CSV session archives
+  └─ AES-128-CCM BLE manufacturer advertisement (company ID 0x5353)
+       └─ Gateway/XIAO/ble_scanner.py
+            └─ Gateway/gateway_main.py → SQLite → Flask dashboard
 ```
 
-The default XIAO advertisement path encrypts sensor packets with AES-128-CCM
-using a distinct key per seal. The optional GATT gateway is a separate
-prototype and does not use this advertisement encryption.
-An alternate GATT gateway is available
-for firmware that exposes the UUIDs in `Gateway/GATT/gatt_ble_scanner.py`; it
-receives JSON notifications, monitors heartbeats, and acknowledges sensor
-events.
-
-The dashboard communicates with the local SQLite database through Flask HTTP
-endpoints; it does not use BLE.
-
-The advertising firmware does not include a separate tamper sensor;
-its tamper field is always `false` and vibration is reported separately. The
-GATT firmware can provide a boolean `tamper` field. Temperature outside the
-2–8 °C range raises an alert but does not by itself trigger a photo. Tamper or
-vibration events trigger a camera capture.
+The advertisement encrypts the sensor data and authenticates the packet
+header. The seal ID and sequence number remain visible. Encryption does not
+hide the seal's presence or prevent radio jamming.
 
 ## Requirements
 
-- Python 3.10 or later
-- A BLE adapter supported by Bleak
-- Seeed XIAO nRF52840 Sense and Arduino IDE for hardware firmware
-- Raspberry Pi camera for real photographs (optional; Pillow creates a
-  simulated image when camera hardware is unavailable)
+Seal hardware:
 
-On Raspberry Pi OS, install the gateway and dashboard dependencies as
-OS-managed packages. This works with the system `python3` without a virtual
-environment and avoids PEP 668's blocked system-wide `pip` installs:
+- Seeed XIAO nRF52840 Sense
+- Arduino IDE and the Seeed nRF52 board support package
+- The board package's Adafruit Bluefruit and Nordic CryptoCell support
+- Thermistor connected to A0, vibration sensor to A2, record button to D6,
+  buzzer to D3, and ADXL345 accelerometer on I2C
+
+Gateway and dashboard:
+
+- Python 3.10 or later
+- BLE adapter supported by Bleak
+- Dependencies in `requirements.txt`: Flask, Pillow, Bleak, and Cryptography
+- Raspberry Pi camera for real photographs (optional; Pillow generates a
+  simulated image when camera hardware is unavailable)
+- Ollama running locally on the Raspberry Pi for local image analysis
+  (optional)
+
+On Raspberry Pi OS, install the system packages:
 
 ```bash
 sudo apt update
 sudo apt install python3-bleak python3-flask python3-pil python3-cryptography
 ```
 
-The Python requirements are Flask, Pillow, Bleak, and Cryptography.
+On Windows, macOS, or another Linux host, install the Python dependencies in a
+virtual environment.
 
-## Provision encryption keys
-
-Generate a fresh 128-bit key for each seal from the repository root:
-
-```bash
-python3 -m Gateway.provision_seal_key 1
-```
-
-This writes the gateway registry to `Gateway/keys.json` and the matching
-firmware header to `XIAOnRF8540/Advertising/secrets.h`. Both files are ignored
-by Git and written with owner-only permissions. Do not copy their contents
-into source files, commit them, or reuse a key for another seal. The command
-can also use custom locations:
+Linux or macOS:
 
 ```bash
-python3 -m Gateway.provision_seal_key 1 \
-  --registry /secure/path/keys.json \
-  --firmware-header /secure/path/secrets.h
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-Set the gateway environment variable to the same registry in the terminal
-that will run the gateway. Use an absolute path, especially when starting the
-gateway from `Gateway/XIAO`:
+PowerShell:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+## Configure matching encryption keys
+
+The gateway reads `Gateway/keys.json`. Each firmware image reads its local
+`XIAOnRF8540/SmartSeal_Encrypted/secrets.h`. Every seal ID must have a matching
+entry in the gateway file, and that seal's firmware key and nonce prefix must
+match the entry. Use a distinct random AES key and nonce prefix for every seal.
+Never use the all-zero example values or commit either secret file.
+
+For a brand-new installation, this creates random keys for seals 1 and 2:
 
 ```bash
-export SMARTSEAL_KEY_REGISTRY="/absolute/path/to/SmartSealPlus/Gateway/keys.json"
+python3 -c 'import json,secrets; from pathlib import Path; ids=(1,2); data={"seals":{str(i):{"SMARTSEAL_AES_KEY":secrets.token_hex(16),"SMARTSEAL_NONCE_PREFIX":secrets.token_hex(9)} for i in ids}}; Path("Gateway/keys.json").write_text(json.dumps(data,indent=2),encoding="utf-8")'
+chmod 600 Gateway/keys.json
 ```
 
-The registry must be a non-empty JSON object mapping decimal seal IDs to
-Base64-encoded 16-byte keys, and on POSIX systems it must not be readable by
-group or other users (`chmod 600 Gateway/keys.json`). Real BLE scanning fails
-closed if the environment variable, file, permissions, encoding, or key length
-is invalid. Simulation mode does not load real keys.
+Change `ids` to the seal IDs you will use. When adding a seal to an existing
+installation, preserve the current key for each existing seal and add a new
+entry with fresh random values; do not regenerate keys for seals already in
+service unless you also reprovision their firmware. The gateway checks that
+each AES key and nonce prefix contain 32 and 18 hexadecimal characters,
+respectively. On POSIX systems it also refuses a key file readable by group or
+other users. Copy each seal's matching values into that seal's `secrets.h` in
+the byte-array format shown in `secrets.example.h`, and set its `SEAL_ID` to
+the corresponding ID. The old top-level single-key `keys.json` format remains
+supported as seal 1.
 
-## Upload the XIAO firmware
+When migrating an existing one-seal file, move its current values under ID 1
+and add one entry per new seal. The resulting structure looks like this
+(replace the labels with the actual hex strings):
 
-1. Open the XIAO firmware sketch you want to use in Arduino IDE:
-   `XIAOnRF8540/Advertising/Advertising.ino` for the modular sensor-advertising
-   firmware, `XIAOnRF8540/SmartSeal_Encrypted/SmartSeal_Encrypted.ino` for
-   AES-CCM BLE advertisements, or `XIAOnRF8540/VT_IntegratedBLE.cpp` for the
-   integrated/GATT experiment.
-   The encrypted sketch is split across `main.cpp`, `sensor_manager.cpp`,
-   `sequence_manager.cpp`, and `ble_manager.cpp`.
-2. The encrypted sketch uses Nordic CryptoCell and internal LittleFS APIs
-   provided by the XIAO nRF52840 board support package; it does not use the
-   Rhys Weatherley Crypto library.
-3. For the encrypted sketch, copy
-   `XIAOnRF8540/SmartSeal_Encrypted/secrets.example.h` to `secrets.h` in the
-   same folder. Set `AES_KEY`, `NONCE_PREFIX`, and `SEAL_ID` to the matching
-   gateway values; do not use the all-zero example values. Keep `secrets.h`
-   private and out of version control.
-4. Select the Seeed XIAO nRF52840 Sense board and its serial port.
-5. Upload the sketch.
-6. Open Serial Monitor at 115200 baud.
-7. Press the record button on D6 to start sampling.
+```json
+{
+  "seals": {
+    "1": {
+      "SMARTSEAL_AES_KEY": "existing 32-character key",
+      "SMARTSEAL_NONCE_PREFIX": "existing 18-character prefix"
+    },
+    "2": {
+      "SMARTSEAL_AES_KEY": "new 32-character key",
+      "SMARTSEAL_NONCE_PREFIX": "new 18-character prefix"
+    }
+  }
+}
+```
 
-The current firmware configuration in `XIAOnRF8540/Advertising/config.h`
-uses:
+The repository ignores both secret files. The first time a seal is provisioned,
+hold D6 while powering it on so it can initialize its sequence storage. On
+normal restarts, do not hold D6 for sequence provisioning; the stored sequence
+continues automatically. If sequence storage is missing or corrupted, do not
+restart at sequence 1 with the existing key. Create a new AES key and nonce
+prefix, update both sides, then hold D6 during boot to provision the new key.
 
-- Record button: D6
-- Temperature input: A0
-- Vibration input: A2
-- Temperature sampling: every 5 seconds
-- Piezo vibration sampling: approximately 1,000 samples per second while
-  recording
-- Vibration baseline calibration: first 1,000 samples (about one second) after
-  recording starts; keep the seal stationary during calibration
-- Manufacturer advertisement: every 5 seconds
-- Serial plotter output: every 5 seconds
+## Build and upload the seal firmware
 
-The firmware reports the calibrated baseline ADC and the calibration noise
-standard deviation in Serial Monitor. It detects vibration using the absolute
-ADC deviation from the baseline. The provisional threshold is at least 100 ADC
-counts, increased to four times the measured calibration noise standard
-deviation when that is higher. To reject isolated electrical spikes, at least
-three threshold-exceeding samples must occur within a 20 ms window. A further
-event is armed after 100 ms below threshold. Detected events are held until the
-next advertisement, without changing the existing five-second schedule.
+1. Copy `XIAOnRF8540/SmartSeal_Encrypted/secrets.example.h` to
+   `XIAOnRF8540/SmartSeal_Encrypted/secrets.h`.
+2. For each physical seal, use a unique `SEAL_ID` and enter the AES key and
+   nonce prefix assigned to that ID in `Gateway/keys.json`. Build and upload a
+   separate firmware image for each seal ID.
+3. Open `XIAOnRF8540/SmartSeal_Encrypted/SmartSeal_Encrypted.ino` in Arduino
+   IDE, select the Seeed XIAO nRF52840 Sense board and its serial port, then
+   build and upload.
+4. Open Serial Monitor at 115200 baud. The firmware initializes the ADXL345,
+   CryptoCell, persistent sequence storage, and BLE advertising.
+5. Press D6 to start or stop recording. On start, the firmware calibrates the
+   vibration sensor; keep the seal still during calibration.
 
-The GATT sensor notification contains a JSON packet with these fields:
+The firmware reads temperature from A0 and vibration from A2. It samples the
+ADXL345 over I2C at 100 Hz. The main loop runs at about 100 Hz and updates the
+advertisement every 5 seconds while recording. Vibration is detected from ADC
+deviation from a calibrated baseline; movement is detected from changes in the
+accelerometer readings. The current encrypted sketch has no separate tamper
+sensor, so its `tamper` field is always false. Vibration and movement are
+reported separately.
 
-| Field | Type |
+## Encrypted advertisement format
+
+The BLE manufacturer data contains the 2-byte company ID `0x5353` followed by
+a 21-byte packet:
+
+| Packet bytes | Contents |
 |---|---|
-| `seal_id` | Integer |
-| `event_sequence` | 32-bit unsigned integer |
-| `temperature` | Number in °C |
-| `tamper` | Boolean vibration-event flag |
-| `vibration` | Number in volts |
+| 0 | Magic value `0xA5` |
+| 1 | Protocol version `3` |
+| 2 | Seal ID, currently `1` |
+| 3–6 | 32-bit little-endian sequence number |
+| 7–12 | AES-128-CCM ciphertext |
+| 13–20 | 8-byte authentication tag |
 
-The gateway writes the acknowledged event sequence to the ACK characteristic
-using a 4-byte little-endian integer.
+The nonce is the 9-byte configured prefix followed by the 4 transmitted
+sequence bytes. The first 7 packet bytes are authenticated as additional data.
+The encrypted plaintext contains signed temperature in tenths of a degree C,
+a tamper byte, vibration in hundredths of a volt, and a movement type.
 
-The encrypted advertising gateway accepts manufacturer ID `0x5353` and
-version-2 packets only. The advertisement's 26-byte payload is version `2`,
-a 7-byte hardware-random nonce, 10 bytes of AES-CCM ciphertext, and an
-8-byte authentication tag. The encrypted plaintext contains the seal ID,
-4-byte little-endian event sequence, signed temperature in tenths of a degree
-Celsius, tamper byte, and 2-byte little-endian vibration in hundredths of a
-volt. The version byte is authenticated as additional data. The seal ID is
-inside the ciphertext and is checked against the key that successfully
-authenticated the packet. Plaintext, legacy, malformed, tampered, unknown-seal,
-and unauthenticated packets are rejected.
+The firmware stores its sequence counter in internal flash and reserves ranges
+before using them so a normal restart does not reuse a nonce. The gateway
+stores event and seal status in `Gateway/smartseal.db`. Preserve that database
+when restarting the gateway.
 
-The ciphertext and authentication tag fit in a BLE manufacturer data field;
-the XIAO name is sent in the scan response. Encryption protects sensor
-contents and authenticates packets, but does not hide the device's presence or
-prevent replay of a previously captured valid packet.
+## Run the gateway on the Raspberry Pi
 
-In Arduino IDE, open `XIAOnRF8540/Advertising/Advertising.ino`, build, and
-upload it to the XIAO. Open Serial Monitor at 115200 baud and press D6; the
-firmware sends sensor advertisements after recording starts. The serial
-monitor reports BLE initialization or advertisement-update failures.
-
-## Run the gateway and dashboard
-
-Run each program in a separate terminal.
-
-Terminal 1 — XIAO advertisement gateway. From the project root:
+From the repository root, start the gateway with real BLE scanning and local
+Ollama analysis:
 
 ```bash
-cd Gateway/XIAO
-python3 gateway_main.py
-```
-
-Or run it from the project root:
-
-```bash
+export SMARTSEAL_SIMULATION=0
+export SMARTSEAL_AI_PROVIDER=ollama
 python3 Gateway/XIAO/gateway_main.py
 ```
 
-The scanner listens for up to 5 seconds per attempt. Press D6 to start
-recording, then wait for the next advertisement. If it receives no packet,
-its output distinguishes no BLE traffic, missing manufacturer data, and an
-unexpected packet format. Make sure the XIAO is running the matching
-`XIAOnRF8540/Advertising/Advertising.ino` firmware, Bluetooth is enabled, and
-the adapter is available to the account running Python.
+Ollama must be running on the Pi with the configured vision model available.
+The default model is `moondream`.
 
-For the alternate GATT gateway, run:
+Press D6 on the seal to start recording, then wait for an advertisement. If no
+packet arrives, check that Bluetooth is enabled, the adapter is available to
+the account running Python, and the seal has the matching encrypted firmware
+and keys. During each scan window, the gateway collects one latest valid
+packet per configured seal ID and processes every collected seal packet; it no
+longer selects just one seal when multiple seals are advertising nearby.
 
-```bash
-python -m Gateway.GATT.gatt_gateway_main
-```
+## Run the dashboard
 
-Terminal 2 — dashboard:
-
-```bash
-python Dashboard/dashboard.py
-```
-
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000). The live dashboard polls
-the gateway every two seconds and displays a sync time and event count. Use
-the **Event history** selector to switch between the current session and
-previously archived sessions.
-
-Set `SMARTSEAL_SIMULATION=1` to exercise the gateway without BLE hardware:
+Create an account from the repository root:
 
 ```bash
-SMARTSEAL_SIMULATION=1 python -m Gateway.gateway_main
+python3 -m Dashboard.manage_accounts add seal-admin
 ```
 
-In PowerShell:
+The command prompts for a password of at least 12 characters. The password is
+stored as a hash in the local database. There is no public registration; run
+the command again to add another account.
+
+In a separate terminal, start the dashboard:
+
+```bash
+python3 Dashboard/dashboard.py
+```
+
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000). Visitors can view the
+dashboard, events, archives, and captured images without signing in. Sign in
+to enable archive deletion. The server listens on localhost by default.
+
+The dashboard creates `Gateway/.dashboard_secret` for persistent login
+sessions. The file is hidden on Linux and ignored by Git. Keep it private.
+
+When stopped with Ctrl+C, the gateway writes stored events to a timestamped CSV
+in `Gateway/archives/`. Deleting a saved archive removes its CSV. Captured
+images are removed only when no live event or remaining archive references
+them.
+
+Events and archived CSV rows expire 90 days after their event timestamp.
+Captured images are deleted once no remaining event or archive references
+them. Cleanup runs when the gateway or dashboard initializes, and periodically
+while the dashboard is receiving requests.
+
+Temperature alerts below 2 °C or above 8 °C do not by themselves trigger a
+photo; vibration or movement events trigger capture and optional image
+analysis.
+
+## Simulation without BLE hardware
+
+Simulation generates packets in memory, so it can be used on a development
+computer without the XIAO or a BLE adapter. The gateway still loads
+`Gateway/keys.json` during startup, so create that file first as described
+above. Simulation does not check packets against firmware encryption.
+
+PowerShell:
 
 ```powershell
-python -m Gateway.gateway_main
+$env:SMARTSEAL_SIMULATION = "1"
+$env:SMARTSEAL_AI_PROVIDER = "none"
+python3 Gateway/XIAO/gateway_main.py
 ```
 
-Simulation generates gateway packets in memory. The GATT gateway does not
-use this simulation mode.
+To use real BLE hardware and Ollama again in PowerShell:
 
-## Event processing and storage
-
-The advertisement gateway:
-
-1. Scans BLE manufacturer advertisements for company ID `0x5353`.
-2. Requires the version-2 AES-CCM packet, validates its tag, and checks its
-   authenticated seal ID against the matching registered key.
-3. Validates packet fields and stores events in `Gateway/smartseal.db`.
-4. Raises low-temperature alerts below 2 °C and high-temperature alerts
-   above 8 °C.
-5. Captures an image for vibration events. Temperature alerts alone do not
-   take a picture.
-6. Stores image filenames and analysis with events when available.
-
-The GATT gateway performs the same validation, alerting, storage, camera, and
-archive operations while receiving JSON notifications and sending event
-sequence acknowledgements.
-
-Rows are unique by `(seal_id, event_sequence)`, so receiving the same sequence
-again does not create another database row.
-
-Each gateway start clears the live event and seal-status tables so the
-dashboard starts with a fresh session. When stopped with Ctrl+C, the gateway
-exports that session's events to a timestamped CSV in `Gateway/archives/`.
-For example:
-
-```text
-Gateway/archives/gateway-events-20261027-154408-123456.csv
+```powershell
+$env:SMARTSEAL_SIMULATION = "0"
+$env:SMARTSEAL_AI_PROVIDER = "ollama"
+python3 Gateway/XIAO/gateway_main.py
 ```
 
-Archives remain available after later gateway starts and can be selected in
-the dashboard. The CSV stores event values and image filenames; captured
-images are stored separately in `Gateway/images/`. A forced process kill or
-power loss may prevent the shutdown archive from being written.
+The simulator starts its sequence counter at 1 each time it starts. Since the
+gateway stores sequence state, use a separate disposable checkout or database
+when repeating simulation runs. Do not delete a database containing real
+events just to reset a simulation.
 
-## Tests
+## Optional local image analysis
+
+The gateway uses Ollama locally when it captures an image. Install and run
+Ollama on the Pi with a vision model such as `moondream`. The gateway accepts
+only loopback Ollama URLs. To use sensor-only fallback text, set
+`SMARTSEAL_AI_PROVIDER=none`. The active analyzer does not use OpenAI or send
+images to an external AI provider.
+
+## Syntax check
 
 From the repository root:
 
 ```bash
-python3 -m unittest Gateway.Test.test_reliability -v
-python3 -m unittest tests.test_ble_advertisements -v
-python3 -m py_compile Gateway/packet_parser.py Gateway/ble_scanner.py \
-  Gateway/key_registry.py Gateway/provision_seal_key.py \
-  Gateway/database.py Gateway/gateway_main.py Dashboard/dashboard.py
+python3 -m compileall -q Gateway Dashboard
 ```
 
-The reliability tests cover packet decoding, duplicate storage,
-event-history clearing, vibration alerts, CSV export, and archiving on gateway
-shutdown. The BLE advertisement tests cover registered and incorrect keys,
-unknown and forged seal IDs, registry errors, tampered tags, malformed packets,
-plaintext and legacy rejection, and receipt by both gateway scanners.
-`py_compile` only checks Python syntax; it does not execute the gateway or
-tests.
-
-## Main project paths
+## Main paths
 
 ```text
-XIAOnRF8540/Advertising/         XIAO manufacturer-advertising firmware
-XIAOnRF8540/VT_IntegratedBLE.cpp Integrated BLE/GATT firmware experiment
-Gateway/                         Shared packet handling, alerts, storage, camera
-Gateway/GATT/                    Persistent BLE GATT scanner and gateway
-Gateway/XIAO/ BLE scanner entry point
-Gateway/archives/                Timestamped CSV archives after gateway shutdown
-Gateway/images/                  Captured or simulated camera images
-Dashboard/                       Flask app, templates, and browser assets
-requirements.txt                 Python dependencies
+XIAOnRF8540/SmartSeal_Encrypted/   Encrypted BLE seal firmware
+Gateway/ble_scanner.py             Advertisement decryption and validation
+Gateway/XIAO/                      XIAO advertisement gateway entry point
+Gateway/gateway_main.py            Event handling
+Gateway/database.py                SQLite storage, retention, and CSV archives
+Dashboard/                         Flask dashboard and account management
+Gateway/keys.json                  Local gateway secrets (ignored by Git)
 ```
-
-### Local image analysis with Ollama
-
-Install and start Ollama, then download the vision model:
-
-```bash
-ollama pull moondream
-ollama serve
-```
-
-The gateway uses Ollama by default at
-`http://127.0.0.1:11434/api/generate`. Optional configuration:
-
-```bash
-export SMARTSEAL_AI_PROVIDER=ollama
-export OLLAMA_VISION_MODEL=moondream
-export OLLAMA_URL=http://127.0.0.1:11434/api/generate
-export OLLAMA_TIMEOUT_SECONDS=60
-```
-
-Set `SMARTSEAL_AI_PROVIDER=none` to use sensor-only fallback text, or
-`SMARTSEAL_AI_PROVIDER=openai` to use the existing OpenAI integration.

@@ -114,9 +114,12 @@ let refreshInProgress = false;
 let refreshRequested = false;
 let selectedArchive = "live";
 const deleteArchiveButton = document.querySelector("#delete-archive");
+const canDeleteArchives = document.querySelector(
+    'meta[name="csrf-token"]'
+).dataset.canDelete === "true";
 
 function updateDeleteArchiveButton() {
-    deleteArchiveButton.disabled = selectedArchive === "live";
+    deleteArchiveButton.disabled = !canDeleteArchives || selectedArchive === "live";
 }
 
 async function refreshEvents() {
@@ -259,20 +262,25 @@ deleteArchiveButton.addEventListener("click", async () => {
         return;
     }
 
-    if (!window.confirm(`Delete ${selectedArchive} and its stored pictures?`)) {
+    if (!window.confirm(`Delete archive ${selectedArchive}?`)) {
         return;
     }
 
     try {
         const response = await fetch(
             `/api/archives/${encodeURIComponent(selectedArchive)}`,
-            { method: "DELETE" }
+            {
+                method: "DELETE",
+                headers: {
+                    "X-CSRF-Token": document.querySelector(
+                        'meta[name="csrf-token"]'
+                    ).content,
+                },
+            }
         );
         if (!response.ok) {
-            if (response.status === 409) {
-                throw new Error(
-                    "This archive contains a protected incident record."
-                );
+            if (response.status === 401) {
+                throw new Error("Sign in to delete archives.");
             }
             throw new Error(`HTTP ${response.status}`);
         }
@@ -285,7 +293,7 @@ deleteArchiveButton.addEventListener("click", async () => {
         await loadArchives();
         await refreshEvents();
         document.querySelector("#gateway-status").textContent =
-            `Deleted ${deletedArchive} and its unshared pictures.`;
+            `Deleted archive ${deletedArchive}.`;
     } catch (error) {
         console.error("Could not delete gateway archive:", error);
         document.querySelector("#gateway-status").textContent =

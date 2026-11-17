@@ -4,12 +4,14 @@
 import os
 import random
 import asyncio
-import json
-from pathlib import Path
 
 from bleak import BleakScanner
 from bleak.exc import BleakError
-from cryptography.hazmat.primitives.ciphers.aead import AESCCM
+
+if __package__:
+    from .seal_keys import load_seal_keys
+else:
+    from seal_keys import load_seal_keys
 
 
 # --------------------------------------------------
@@ -28,38 +30,9 @@ SIMULATION_MODE = (
 
 
 # --------------------------------------------------
-# AES-128-CCM CONFIGURATION
+# PER-SEAL AES-128-CCM CONFIGURATION
 # --------------------------------------------------
-
-def _load_hex_secret(name, length):
-    """Load a fixed-length hexadecimal secret from the local key file."""
-    key_path = Path(__file__).with_name("keys.json")
-    try:
-        with key_path.open(encoding="utf-8") as key_file:
-            value = json.load(key_file)[name]
-    except (OSError, KeyError, json.JSONDecodeError) as error:
-        raise RuntimeError(
-            f"Could not load {name} from {key_path}."
-        ) from error
-
-    try:
-        secret = bytes.fromhex(value)
-    except ValueError as error:
-        raise RuntimeError(
-            f"{name} must contain hexadecimal bytes."
-        ) from error
-
-    if len(secret) != length:
-        raise RuntimeError(
-            f"{name} must be exactly {length} bytes "
-            f"({length * 2} hexadecimal characters)."
-        )
-
-    return secret
-
-
-AES_KEY = _load_hex_secret("SMARTSEAL_AES_KEY", 16)
-NONCE_PREFIX = _load_hex_secret("SMARTSEAL_NONCE_PREFIX", 9)
+SEAL_KEYS = load_seal_keys()
 
 AES_TAG_LENGTH = 8
 
@@ -68,7 +41,6 @@ PROTOCOL_VERSION = 3
 
 EXPECTED_PACKET_LENGTH = 21
 
-aes = AESCCM(AES_KEY, tag_length=AES_TAG_LENGTH)
 
 
 # --------------------------------------------------
@@ -114,8 +86,11 @@ def parse_advertisement(payload):
 
     seal_id = payload[2]
 
-    if seal_id < 1:
+    seal_crypto = SEAL_KEYS.get(seal_id)
+    if seal_crypto is None:
         return None
+
+    aes, nonce_prefix = seal_crypto
 
     # Extract sequence number.
     sequence_bytes = payload[3:7]
@@ -127,7 +102,7 @@ def parse_advertisement(payload):
 
     # Nonce must match the XIAO implementation exactly.
     # Use the transmitted sequence bytes directly.
-    nonce = NONCE_PREFIX + sequence_bytes
+    nonce = nonce_prefix + sequence_bytes
 
     # Authenticate header and sequence.
     aad = payload[0:7]
@@ -227,7 +202,7 @@ def simulated_packet():
 async def scan_real_ble():
     """Scan for encrypted SmartSeal advertisements."""
 
-    packets = []
+    latest_by_seal = {}
 
     def detection_callback(device, advertisement):
 
@@ -242,7 +217,7 @@ async def scan_real_ble():
         packet = parse_advertisement(payload)
 
         if packet is not None:
-            packets.append(packet)
+            latest_by_seal[packet["seal_id"]] = packet
 
     scanner = BleakScanner(
         detection_callback=detection_callback
@@ -256,14 +231,13 @@ async def scan_real_ble():
     finally:
         await scanner.stop()
 
-    if packets:
-        # Return the newest valid packet observed.
-        packet = packets[-1]
-
-        print("Encrypted BLE packet successfully received.")
-        print("Decoded packet:", packet)
-
-        return packet
+    if latest_by_seal:
+        packets = list(latest_by_seal.values())
+        print(f"Received encrypted packets from {len(packets)} seal(s).")
+        for packet in packets:
+            print("Decoded packet:", packet)
+        # Keep the old single-packet return shape when only one seal was seen.
+        return packets[0] if len(packets) == 1 else packets
 
     print(
         "No valid encrypted SmartSeal packet received."

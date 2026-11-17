@@ -2,25 +2,80 @@
 #from flask import Flask, render_template
 
 import csv
+from collections import defaultdict, deque
+import hmac
+import os
 import re
+import secrets
+import stat
 import sys
+import time
+from datetime import timedelta
 from pathlib import Path
+from threading import Lock
 
 from flask import (
     Flask,
+    abort,
     jsonify,
     make_response,
+    redirect,
     render_template,
+    request,
+    session,
     send_from_directory,
+    url_for,
 )
 
 REPOSITORY_PATH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_PATH))
 
-from Gateway.database import get_latest_events
+from Gateway.database import apply_retention_policy, get_latest_events, init_database
 from Gateway.image_storage import IMAGE_FOLDER
+from Dashboard.auth import verify_user
 
 app = Flask(__name__)
+SECRET_FILE = REPOSITORY_PATH / "Gateway" / ".dashboard_secret"
+
+
+def _load_secret_key():
+    configured = os.getenv("SMARTSEAL_DASHBOARD_SECRET")
+    if configured:
+        key = configured.encode("utf-8")
+        if len(key) < 32:
+            raise RuntimeError("SMARTSEAL_DASHBOARD_SECRET must be at least 32 bytes.")
+        return key
+
+    try:
+        key = SECRET_FILE.read_bytes()
+    except FileNotFoundError:
+        key = secrets.token_bytes(32)
+        try:
+            with SECRET_FILE.open("xb") as secret_file:
+                secret_file.write(key)
+        except FileExistsError:
+            key = SECRET_FILE.read_bytes()
+
+    if len(key) < 32:
+        raise RuntimeError(
+            f"{SECRET_FILE} must contain at least 32 random bytes."
+        )
+    if os.name == "posix":
+        mode = stat.S_IMODE(SECRET_FILE.stat().st_mode)
+        if mode & 0o077:
+            SECRET_FILE.chmod(0o600)
+    return key
+
+
+app.config.update(
+    SECRET_KEY=_load_secret_key(),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.getenv("SMARTSEAL_DASHBOARD_HTTPS") == "1",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+)
+init_database()
+_last_retention_check = 0.0
 ARCHIVE_DIRECTORY = REPOSITORY_PATH / "Gateway" / "archives"
 ARCHIVE_FILENAME = re.compile(
     r"SmartSeal_Events_(?:"
@@ -28,6 +83,50 @@ ARCHIVE_FILENAME = re.compile(
     r"|\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d+"
     r")\.csv"
 )
+LOGIN_WINDOW_SECONDS = 15 * 60
+LOGIN_MAX_FAILURES = 8
+_login_failures = defaultdict(deque)
+_login_failures_lock = Lock()
+
+
+def _login_retry_after(client):
+    now = time.monotonic()
+    with _login_failures_lock:
+        attempts = _login_failures.get(client)
+        if not attempts:
+            return 0
+        while attempts and now - attempts[0] >= LOGIN_WINDOW_SECONDS:
+            attempts.popleft()
+        if not attempts:
+            _login_failures.pop(client, None)
+            return 0
+        if len(attempts) < LOGIN_MAX_FAILURES:
+            return 0
+        return max(1, int(LOGIN_WINDOW_SECONDS - (now - attempts[0])))
+
+
+def _record_login_failure(client):
+    now = time.monotonic()
+    with _login_failures_lock:
+        attempts = _login_failures[client]
+        while attempts and now - attempts[0] >= LOGIN_WINDOW_SECONDS:
+            attempts.popleft()
+        attempts.append(now)
+
+        if len(_login_failures) > 1024:
+            for stale_client, stale_attempts in list(_login_failures.items()):
+                while (
+                    stale_attempts
+                    and now - stale_attempts[0] >= LOGIN_WINDOW_SECONDS
+                ):
+                    stale_attempts.popleft()
+                if not stale_attempts:
+                    _login_failures.pop(stale_client, None)
+
+
+def _clear_login_failures(client):
+    with _login_failures_lock:
+        _login_failures.pop(client, None)
 
 
 def _archive_path(filename):
@@ -37,6 +136,79 @@ def _archive_path(filename):
     if path.parent != ARCHIVE_DIRECTORY.resolve() or not path.is_file():
         return None
     return path
+
+
+def _csrf_token():
+    token = session.get("csrf_token")
+    if token is None:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": _csrf_token}
+
+
+@app.before_request
+def require_dashboard_account():
+    global _last_retention_check
+    now = time.monotonic()
+    if now - _last_retention_check >= 3600:
+        apply_retention_policy()
+        _last_retention_check = now
+
+    protected_endpoints = {"delete_archive", "logout"}
+    if request.endpoint in protected_endpoints and not session.get("username"):
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Sign in to manage archives"}), 401
+        return redirect(url_for("login"))
+
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        expected = session.get("csrf_token", "")
+        provided = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token", "")
+        if not expected or not hmac.compare_digest(expected, provided):
+            abort(400, "Invalid CSRF token")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    status_code = 200
+    if request.method == "POST":
+        client = request.remote_addr or "unknown"
+        retry_after = _login_retry_after(client)
+        if retry_after:
+            error = f"Too many failed attempts. Try again in {retry_after} seconds."
+            status_code = 429
+        else:
+            username = request.form.get("username", "")
+            password = request.form.get("password", "")
+            authenticated_username = verify_user(username, password)
+            if authenticated_username is None:
+                _record_login_failure(client)
+                error = "The username or password is incorrect."
+            else:
+                _clear_login_failures(client)
+                session.clear()
+                session.permanent = True
+                session["username"] = authenticated_username
+                session["csrf_token"] = secrets.token_urlsafe(32)
+                return redirect(url_for("home"))
+
+    response = make_response(render_template("login.html", error=error))
+    response.headers["Cache-Control"] = "no-store"
+    response.status_code = status_code
+    if status_code == 429:
+        response.headers["Retry-After"] = str(retry_after)
+    return response
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 @app.route("/")
@@ -110,56 +282,13 @@ def delete_archive(filename):
     if path is None:
         return jsonify({"error": "Archive not found"}), 404
 
-    image_paths = set()
     try:
-        with path.open(newline="", encoding="utf-8") as archive_file:
-            events = list(csv.DictReader(archive_file))
-            if any(
-                (event.get("image_path") or "").strip()
-                or (event.get("ai_analysis") or "").strip()
-                for event in events
-            ):
-                return jsonify({
-                    "error": (
-                        "Archive contains protected incident records. "
-                        "Remove protection before deleting it."
-                    )
-                }), 409
-            for event in events:
-                image_name = (event.get("image_path") or "").strip()
-                if image_name:
-                    image_paths.add(image_name)
-    except (OSError, csv.Error) as error:
-        return jsonify({"error": f"Could not read archive: {error}"}), 500
-
-    referenced_images = set()
-    for other_path in ARCHIVE_DIRECTORY.glob("*.csv"):
-        if other_path == path or not ARCHIVE_FILENAME.fullmatch(other_path.name):
-            continue
-        try:
-            with other_path.open(newline="", encoding="utf-8") as archive_file:
-                for event in csv.DictReader(archive_file):
-                    image_name = (event.get("image_path") or "").strip()
-                    if image_name:
-                        referenced_images.add(image_name)
-        except (OSError, csv.Error) as error:
-            return jsonify(
-                {"error": f"Could not inspect related archives: {error}"}
-            ), 500
-
-    try:
-        image_files = []
-        image_folder = IMAGE_FOLDER.resolve()
-        for image_name in image_paths - referenced_images:
-            image_path = (IMAGE_FOLDER / image_name).resolve()
-            if image_path.parent != image_folder:
-                return jsonify({"error": "Archive contains an invalid image path"}), 400
-            image_files.append(image_path)
-
-        for image_path in image_files:
-            if image_path.is_file():
-                image_path.unlink()
         path.unlink()
+        # Preserve pictures still referenced by live events or other archives;
+        # remove orphaned evidence as part of deleting the selected archive.
+        from Gateway.database import _delete_unreferenced_images
+
+        _delete_unreferenced_images()
     except OSError as error:
         return jsonify({"error": f"Could not delete archive: {error}"}), 500
 
@@ -174,4 +303,4 @@ def images(filename):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="127.0.0.1", debug=False)

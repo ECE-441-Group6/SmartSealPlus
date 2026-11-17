@@ -174,7 +174,7 @@ bool reserveSequenceBlock() {
 }
 
 
-bool initializeSequenceCounter() {
+bool initializeSequenceCounter(bool allowFirstBootProvisioning) {
     // Initialize the internal flash filesystem. to store sequence numbers after shutdown.
     while(!InternalFS.begin()) { 
         Serial.println("ERROR: Failed to initialize internal flash filesystem. Retrying...");
@@ -190,18 +190,34 @@ bool initializeSequenceCounter() {
     bool valid1 = readSequenceSlot(1, highWater1); //readSequenceSlot will update highWater variable
 
     if (!valid0 && !valid1) {
-        // If files exist but neither is valid, do not
-        // silently restart at sequence zero.
-        if (InternalFS.exists("/seq0.bin") ||
-            InternalFS.exists("/seq1.bin")) {
+        const bool sequenceFilesExist =
+            InternalFS.exists("/seq0.bin") ||
+            InternalFS.exists("/seq1.bin");
 
-            Serial.println("ERROR: Sequence records corrupted.");
-            Serial.println("Re-provision with a NEW encryption key.");
+        // Missing or corrupt sequence storage must never silently restart
+        // under the old key. Provisioning requires an explicit boot-time
+        // button press and a newly provisioned key.
+        if (!allowFirstBootProvisioning) {
+            Serial.println(
+                sequenceFilesExist
+                    ? "ERROR: Sequence records corrupted."
+                    : "ERROR: Sequence storage is missing."
+            );
+            Serial.println(
+                "Provision with a NEW encryption key and hold D6 during boot."
+            );
             return false;
         }
 
-        //If neither file exists, this is the first boot.
-        Serial.println("First boot: initializing sequence storage.");
+        if (sequenceFilesExist) {
+            Serial.println(
+                "Sequence storage is corrupt; explicit provisioning requested."
+            );
+            Serial.println("Ensure a NEW encryption key is installed.");
+        } else {
+            Serial.println("First boot: initializing sequence storage.");
+        }
+
         reservedEnd = 0;
         nextSequence = 1;
         activeSlot = -1;
