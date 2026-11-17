@@ -3,13 +3,20 @@ import base64
 import ipaddress
 import json
 import os
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 from urllib.parse import urlsplit
 
 if __package__:
     from .alert_manager import TEMP_HIGH, TEMP_LOW
 else:
     from alert_manager import TEMP_HIGH, TEMP_LOW
+
+
+class _RejectRedirects(HTTPRedirectHandler):
+    """Keep local image analysis from redirecting requests off loopback."""
+
+    def redirect_request(self, request, file_pointer, code, message, headers, new_url):
+        return None
 
 
 def analyze_image(filename, packet):
@@ -80,9 +87,9 @@ def _analyze_with_ollama(filename, packet):
             method="POST",
         )
 
-        with urlopen(
-            request,
-            timeout=float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "60")),
+        opener = build_opener(_RejectRedirects)
+        with opener.open(
+            request, timeout=float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "60"))
         ) as response:
             result = json.load(response)
 

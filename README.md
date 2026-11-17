@@ -127,9 +127,9 @@ provisioning, hold D6 while powering it on to initialize sequence storage. On
 normal restarts, do not hold D6; the stored sequence continues automatically.
 If sequence storage is missing or corrupted, create a new AES key and nonce
 prefix, update both sides, then hold D6 during boot. The sensorless test
-transmitter has no button and initializes blank sequence storage automatically;
-rotate its key and prefix on both sides before powering it on after storage
-loss or corruption.
+transmitter has no button; use its build-time provisioning setting described
+below. If sequence storage is lost or corrupted, rotate its key and prefix on
+both sides before reprovisioning.
 
 ## Build and upload the seal firmware
 
@@ -167,13 +167,20 @@ values every five seconds.
 2. Generate a fresh AES key and nonce prefix for ID 2. Add them under `"2"` in
    `Gateway/keys.json`, and copy the same values into the test transmitter's
    `secrets.h`. Do not reuse seal 1's key or prefix.
-3. Open
+3. Set `ALLOW_SEQUENCE_PROVISIONING` to `1` in `secrets.h` for the first
+   boot. Open
    `XIAOnRF8540/Encrypted_Test_Transmitter/Encrypted_Test_Transmitter.ino` in
    Arduino IDE, select the XIAO nRF52840 board and its serial port, then build
    and upload.
-4. Open Serial Monitor at 115200 baud. The board initializes blank sequence
-   storage automatically and starts advertising; there is no button or jumper
-   step.
+4. Open Serial Monitor at 115200 baud and wait for the sequence storage
+   initialization message.
+5. Set `ALLOW_SEQUENCE_PROVISIONING` back to `0` and upload again without
+   erasing the board's internal filesystem. The transmitter now starts
+   advertising and will fail closed if sequence storage is later lost or
+   corrupted. No button or jumper is needed.
+6. If storage is ever lost or corrupted, install a new key and nonce prefix in
+   both transmitter and gateway, temporarily enable provisioning, and repeat
+   these steps.
 
 Set `SEAL_ID` and matching key material in each transmitter's own
 `secrets.h`. When seal 1 and seal 2 are both configured in `Gateway/keys.json`

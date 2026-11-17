@@ -52,7 +52,7 @@ const char *sequencePath(uint8_t slot) {
 }
 
 
-bool readSequenceSlot(uint8_t slot, uint32_t &highWater) {
+bool readSequenceSlot(uint8_t slot, uint32_t &highWater, bool &mirroredRecord) {
     //Create file object for the internal flash filesystem.
     File file(InternalFS);   //typeName, ObjectName()
 
@@ -72,7 +72,8 @@ bool readSequenceSlot(uint8_t slot, uint32_t &highWater) {
         Serial.println("ERROR: Incomplete read from sequence slot " + String(slot) + ".");
         return false;
     }
-    if (memcmp(record, "SSQ2", 4) != 0) {
+    const bool isMirroredRecord = memcmp(record, "SSQ3", 4) == 0;
+    if (!isMirroredRecord && memcmp(record, "SSQ2", 4) != 0) {
         Serial.println("ERROR: First bytes of sequence slot " + String(slot) + " do not match expected signature.");
         return false;
     }
@@ -86,6 +87,7 @@ bool readSequenceSlot(uint8_t slot, uint32_t &highWater) {
     }
 
     highWater = decodeUint32(record + 4); //highwater0 or 1 depending on slot passed in.
+    mirroredRecord = isMirroredRecord;
     return true;
 }
 
@@ -94,7 +96,7 @@ bool writeSequenceSlot(uint8_t slot, uint32_t highWater) {
 
     uint8_t record[12] = {0};
 
-    memcpy(record, "SSQ2", 4);
+    memcpy(record, "SSQ3", 4);
 
     encodeUint32(record + 4, highWater);
 
@@ -130,12 +132,13 @@ bool writeSequenceSlot(uint8_t slot, uint32_t highWater) {
 
     // Read back and verify.
     uint32_t verifiedValue = 0;
+    bool verifiedMirroredRecord = false;
 
-    if (!readSequenceSlot(slot, verifiedValue)) {
+    if (!readSequenceSlot(slot, verifiedValue, verifiedMirroredRecord)) {
         return false;
     }
 
-    return verifiedValue == highWater;
+    return verifiedValue == highWater && verifiedMirroredRecord;
 }
 
 
@@ -155,16 +158,16 @@ bool reserveSequenceBlock() {
 
     uint32_t newEnd = (uint32_t)proposedEnd;
 
-    uint8_t targetSlot =
-        activeSlot == 0 ? 1 : 0;
-
-    if (!writeSequenceSlot(targetSlot, newEnd)) {
+    // Store the same high-water mark in both slots before using any value in
+    // the new range. A single missing slot then cannot roll the counter back.
+    if (!writeSequenceSlot(0, newEnd) ||
+        !writeSequenceSlot(1, newEnd)) {
         Serial.println("ERROR: Could not save sequence counter.");
         return false;
     }
 
     reservedEnd = newEnd;
-    activeSlot = targetSlot;
+    activeSlot = 0;
 
     Serial.print("Sequence range reserved through: ");
     Serial.println(reservedEnd);
@@ -181,18 +184,55 @@ bool initializeSequenceCounter(bool allowFirstBootProvisioning) {
         delay(1000);
     }
 
+    const bool slot0Exists = InternalFS.exists("/seq0.bin");
+    const bool slot1Exists = InternalFS.exists("/seq1.bin");
+
     //variables that hold the highest reserved sequence number for each slot
     uint32_t highWater0 = 0;
     uint32_t highWater1 = 0;
+    bool mirrored0 = false;
+    bool mirrored1 = false;
 
     //variables that hold if sequences are valid for each slot
-    bool valid0 = readSequenceSlot(0, highWater0); //readSequenceSlot will update highWater variable
-    bool valid1 = readSequenceSlot(1, highWater1); //readSequenceSlot will update highWater variable
+    bool valid0 = readSequenceSlot(0, highWater0, mirrored0);
+    bool valid1 = readSequenceSlot(1, highWater1, mirrored1);
+
+    bool invalidSequenceState =
+        (slot0Exists && !valid0) || (slot1Exists && !valid1);
+    if (!invalidSequenceState && (valid0 || valid1)) {
+        const uint8_t newestSlot =
+            valid0 && (!valid1 || highWater0 >= highWater1) ? 0 : 1;
+        const uint32_t newestHighWater = newestSlot == 0 ? highWater0 : highWater1;
+        const bool newestIsMirrored = newestSlot == 0 ? mirrored0 : mirrored1;
+        const uint64_t reservedBlocks =
+            ((uint64_t)newestHighWater + SEQUENCE_BLOCK_SIZE - 1) /
+            SEQUENCE_BLOCK_SIZE;
+        const uint8_t expectedLegacySlot =
+            (reservedBlocks & 1) ? 0 : 1;
+        if (!newestIsMirrored && newestSlot != expectedLegacySlot) {
+            Serial.println(
+                "ERROR: Legacy sequence state may have rolled back."
+            );
+            invalidSequenceState = true;
+        }
+    }
+
+    if (invalidSequenceState && !allowFirstBootProvisioning) {
+        Serial.println("ERROR: A sequence record exists but is invalid.");
+        Serial.println(
+            "Install a NEW encryption key and nonce prefix, then restart."
+        );
+        return false;
+    }
+    if (invalidSequenceState) {
+        // Explicit provisioning discards both records; the operator must
+        // install a new key/prefix before allowing the counter to restart.
+        valid0 = false;
+        valid1 = false;
+    }
 
     if (!valid0 && !valid1) {
-        const bool sequenceFilesExist =
-            InternalFS.exists("/seq0.bin") ||
-            InternalFS.exists("/seq1.bin");
+        const bool sequenceFilesExist = slot0Exists || slot1Exists;
 
         // If storage was erased or corrupted after packets were sent, install
         // a new key and nonce prefix before allowing the counter to restart.
@@ -213,6 +253,13 @@ bool initializeSequenceCounter(bool allowFirstBootProvisioning) {
                 "Sequence storage is corrupt; automatic reinitialization requested."
             );
             Serial.println("Ensure a NEW key and nonce prefix are installed.");
+            for (uint8_t slot = 0; slot < 2; slot++) {
+                const char *path = sequencePath(slot);
+                if (InternalFS.exists(path) && !InternalFS.remove(path)) {
+                    Serial.println("ERROR: Could not remove a corrupt sequence record.");
+                    return false;
+                }
+            }
         } else {
             Serial.println("First boot: initializing sequence storage.");
         }

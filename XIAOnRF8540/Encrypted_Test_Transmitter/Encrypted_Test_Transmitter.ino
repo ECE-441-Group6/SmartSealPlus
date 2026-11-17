@@ -9,6 +9,10 @@
 #include "secrets.h"
 #include "sequence_manager.h"
 
+#ifndef ALLOW_SEQUENCE_PROVISIONING
+#define ALLOW_SEQUENCE_PROVISIONING 0
+#endif
+
 namespace {
 constexpr uint16_t MANUFACTURER_ID = 0x5353;
 constexpr uint8_t MAGIC = 0xA5;
@@ -134,9 +138,9 @@ void setup() {
     delay(1000);
   }
 
-  // This dedicated test board has no external button. Its first boot
-  // initializes blank sequence storage automatically.
-  if (!initializeSequenceCounter(true)) {
+  // This test board has no external button. Sequence initialization is
+  // enabled only through an explicit build-time provisioning setting.
+  if (!initializeSequenceCounter(ALLOW_SEQUENCE_PROVISIONING)) {
     Serial.println("Sequence storage initialization failed; advertising stopped.");
     while (true) delay(1000);
   }
