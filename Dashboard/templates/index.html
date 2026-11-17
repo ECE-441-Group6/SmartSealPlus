@@ -7,7 +7,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}"
           data-can-delete="{{ 'true' if session.get('username') else 'false' }}">
     <title>SmartSeal+ Monitoring Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='temperature-chart-1') }}">
 </head>
 <body>
 
@@ -32,6 +32,30 @@
 <button id="delete-archive" type="button" disabled>
     {% if session.get('username') %}Delete selected archive{% else %}Sign in to delete archives{% endif %}
 </button>
+
+<section class="temperature-chart-section" aria-labelledby="temperature-chart-title">
+    <button id="toggle-temperature-chart" type="button"
+            aria-expanded="false" aria-controls="temperature-chart-panel">
+        Show temperature graph
+    </button>
+    <div id="temperature-chart-panel" hidden>
+        <h2 id="temperature-chart-title">Temperature history</h2>
+        <label for="temperature-seal-filter">Seal:</label>
+        <select id="temperature-seal-filter">
+            <option value="all">All seals</option>
+        </select>
+        <p id="temperature-chart-empty" role="status" hidden>
+            No temperature readings are available for this selection.
+        </p>
+        <p class="chart-help">Dashed red lines mark the 2°C and 8°C limits.</p>
+        <canvas id="temperature-chart" height="320"
+                role="img" aria-label="Temperature history chart">
+            Temperature history chart. Use the event table for the readings.
+        </canvas>
+        <div id="temperature-chart-legend" class="chart-legend"
+             aria-label="Seal graph legend"></div>
+    </div>
+</section>
 
 <table>
     <thead>
@@ -133,7 +157,7 @@
 </table>
 
 <!-- Automatically refresh sensor readings -->
-<script src="{{ url_for('static', filename='dashboard.js', v='auth-retention-3') }}"></script>
+<script src="{{ url_for('static', filename='dashboard.js', v='temperature-chart-1') }}"></script>
 
 </body>
 </html>

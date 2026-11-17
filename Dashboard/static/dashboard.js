@@ -109,6 +109,240 @@ function formatInitialTimestamps() {
     }
 }
 
+const TEMPERATURE_CHART_COLORS = [
+    "#1769aa", "#c2410c", "#15803d", "#7e22ce", "#be123c",
+    "#0e7490", "#a16207", "#4f46e5", "#4d7c0f", "#a21caf"
+];
+let currentEvents = [];
+
+function chartTimestamp(value) {
+    if (!value) {
+        return null;
+    }
+    let normalized = String(value).replace(" ", "T");
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(normalized)) {
+        normalized += "Z";
+    }
+    const timestamp = new Date(normalized).getTime();
+    return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function temperatureChartRows(events) {
+    return events.map((event) => ({
+        timestamp: chartTimestamp(event[1]),
+        sealId: Number(event[2]),
+        temperature: event[4] === null || event[4] === ""
+            ? null
+            : Number(event[4]),
+    })).filter((event) => (
+        event.timestamp !== null &&
+        event.temperature !== null &&
+        Number.isInteger(event.sealId) &&
+        Number.isFinite(event.temperature)
+    ));
+}
+
+function updateTemperatureSealOptions(rows) {
+    const selector = document.querySelector("#temperature-seal-filter");
+    const previousValue = selector.value || "all";
+    const sealIds = [...new Set(rows.map((row) => row.sealId))]
+        .sort((left, right) => left - right);
+
+    selector.replaceChildren(new Option("All seals", "all"));
+    for (const sealId of sealIds) {
+        selector.add(new Option(`Seal ${sealId}`, String(sealId)));
+    }
+    selector.value = sealIds.includes(Number(previousValue))
+        ? previousValue
+        : "all";
+}
+
+function downsampleChartPoints(points, maximum = 500) {
+    if (points.length <= maximum) {
+        return points;
+    }
+    const sampled = [];
+    const step = (points.length - 1) / (maximum - 1);
+    for (let index = 0; index < maximum; index += 1) {
+        sampled.push(points[Math.round(index * step)]);
+    }
+    return sampled;
+}
+
+function renderTemperatureChart() {
+    const canvas = document.querySelector("#temperature-chart");
+    const emptyMessage = document.querySelector("#temperature-chart-empty");
+    const legend = document.querySelector("#temperature-chart-legend");
+    const chartRows = temperatureChartRows(currentEvents);
+    updateTemperatureSealOptions(chartRows);
+    const sealFilter = document.querySelector("#temperature-seal-filter").value;
+    const rows = chartRows.filter((row) => (
+        sealFilter === "all" || row.sealId === Number(sealFilter)
+    ));
+    const empty = rows.length === 0;
+    emptyMessage.hidden = !empty;
+    canvas.hidden = empty;
+    legend.replaceChildren();
+    if (empty) {
+        return;
+    }
+
+    const grouped = new Map();
+    for (const row of rows) {
+        if (!grouped.has(row.sealId)) {
+            grouped.set(row.sealId, []);
+        }
+        grouped.get(row.sealId).push(row);
+    }
+    for (const points of grouped.values()) {
+        points.sort((left, right) => left.timestamp - right.timestamp);
+    }
+
+    const width = Math.max(320, canvas.clientWidth);
+    const height = 320;
+    const scale = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.style.height = `${height}px`;
+    const context = canvas.getContext("2d");
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    context.clearRect(0, 0, width, height);
+
+    const margin = { top: 20, right: 24, bottom: 58, left: 58 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+    const allPoints = [...grouped.values()].flat();
+    let minTime = Infinity;
+    let maxTime = -Infinity;
+    let minTemperature = Infinity;
+    let maxTemperature = -Infinity;
+    for (const point of allPoints) {
+        minTime = Math.min(minTime, point.timestamp);
+        maxTime = Math.max(maxTime, point.timestamp);
+        minTemperature = Math.min(minTemperature, point.temperature);
+        maxTemperature = Math.max(maxTemperature, point.temperature);
+    }
+    const timeRange = Math.max(maxTime - minTime, 1000);
+    const minY = Math.floor(Math.min(minTemperature, TEMP_LOW) - 1);
+    const maxY = Math.ceil(Math.max(maxTemperature, TEMP_HIGH) + 1);
+    const temperatureRange = Math.max(maxY - minY, 1);
+    const x = (timestamp) => margin.left + ((timestamp - minTime) / timeRange) * plotWidth;
+    const y = (temperature) => margin.top + ((maxY - temperature) / temperatureRange) * plotHeight;
+
+    context.font = "12px Arial, sans-serif";
+    context.textAlign = "right";
+    context.textBaseline = "middle";
+    for (let tick = 0; tick <= 4; tick += 1) {
+        const value = minY + (temperatureRange * tick) / 4;
+        const tickY = y(value);
+        context.strokeStyle = "#dbe3ec";
+        context.lineWidth = 1;
+        context.beginPath();
+        context.moveTo(margin.left, tickY);
+        context.lineTo(width - margin.right, tickY);
+        context.stroke();
+        context.fillStyle = "#526174";
+        context.fillText(`${value.toFixed(1)}°C`, margin.left - 8, tickY);
+    }
+
+    for (const threshold of [TEMP_LOW, TEMP_HIGH]) {
+        const thresholdY = y(threshold);
+        context.strokeStyle = "#c62828";
+        context.setLineDash([5, 4]);
+        context.beginPath();
+        context.moveTo(margin.left, thresholdY);
+        context.lineTo(width - margin.right, thresholdY);
+        context.stroke();
+        context.setLineDash([]);
+    }
+
+    context.strokeStyle = "#66788a";
+    context.beginPath();
+    context.moveTo(margin.left, margin.top);
+    context.lineTo(margin.left, height - margin.bottom);
+    context.lineTo(width - margin.right, height - margin.bottom);
+    context.stroke();
+
+    const dateFormatter = new Intl.DateTimeFormat(undefined, {
+        month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+    });
+    context.fillStyle = "#526174";
+    context.textAlign = "center";
+    context.textBaseline = "top";
+    for (let tick = 0; tick <= 4; tick += 1) {
+        const timestamp = minTime + (timeRange * tick) / 4;
+        const tickX = margin.left + (plotWidth * tick) / 4;
+        context.fillText(dateFormatter.format(new Date(timestamp)), tickX, height - margin.bottom + 10);
+    }
+
+    let colorIndex = 0;
+    for (const [sealId, originalPoints] of grouped) {
+        const color = TEMPERATURE_CHART_COLORS[colorIndex % TEMPERATURE_CHART_COLORS.length];
+        colorIndex += 1;
+        const points = downsampleChartPoints(originalPoints);
+        context.strokeStyle = color;
+        context.lineWidth = 2;
+        context.beginPath();
+        points.forEach((point, index) => {
+            const pointX = x(point.timestamp);
+            const pointY = y(point.temperature);
+            if (index === 0) {
+                context.moveTo(pointX, pointY);
+            } else {
+                context.lineTo(pointX, pointY);
+            }
+        });
+        context.stroke();
+        context.fillStyle = color;
+        for (const point of points) {
+            context.beginPath();
+            context.arc(x(point.timestamp), y(point.temperature), 3, 0, Math.PI * 2);
+            context.fill();
+        }
+
+        const legendItem = document.createElement("span");
+        legendItem.className = "chart-legend-item";
+        const swatch = document.createElement("span");
+        swatch.className = "chart-legend-swatch";
+        swatch.style.backgroundColor = color;
+        swatch.setAttribute("aria-hidden", "true");
+        const label = document.createElement("span");
+        label.textContent = `Seal ${sealId}`;
+        legendItem.append(swatch, label);
+        legend.appendChild(legendItem);
+    }
+}
+
+function refreshTemperatureChart(events) {
+    currentEvents = events;
+    if (!document.querySelector("#temperature-chart-panel").hidden) {
+        renderTemperatureChart();
+    }
+}
+
+document.querySelector("#toggle-temperature-chart").addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    const panel = document.querySelector("#temperature-chart-panel");
+    panel.hidden = !panel.hidden;
+    button.setAttribute("aria-expanded", String(!panel.hidden));
+    button.textContent = panel.hidden
+        ? "Show temperature graph"
+        : "Hide temperature graph";
+    if (!panel.hidden) {
+        renderTemperatureChart();
+    }
+});
+
+document.querySelector("#temperature-seal-filter").addEventListener("change", () => {
+    renderTemperatureChart();
+});
+
+window.addEventListener("resize", () => {
+    if (!document.querySelector("#temperature-chart-panel").hidden) {
+        renderTemperatureChart();
+    }
+});
+
 // Refresh events from the Flask API.
 let refreshInProgress = false;
 let refreshRequested = false;
@@ -141,6 +375,7 @@ async function refreshEvents() {
         }
 
         const events = await response.json();
+        refreshTemperatureChart(events);
 
         // Build the table using safe DOM operations.
         const rows = events.map((event) => {

@@ -247,6 +247,9 @@ python3 Dashboard/dashboard.py
 Open [http://127.0.0.1:5000](http://127.0.0.1:5000). Visitors can view the
 dashboard, events, archives, and captured images without signing in. Sign in
 to enable archive deletion. The server listens on localhost by default.
+Select **Show temperature graph** to view readings over time. The graph can
+show all seal IDs or one selected seal, follows the selected live/archive event
+history, and marks the 2 °C and 8 °C limits.
 
 The dashboard creates `Gateway/.dashboard_secret` for persistent login
 sessions. The file is hidden on Linux and ignored by Git. Keep it private.

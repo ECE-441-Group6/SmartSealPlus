@@ -78,6 +78,86 @@ tbody tr:hover {
     background-color: #eaf3ff;
 }
 
+/* Optional temperature graph */
+
+.temperature-chart-section {
+    margin: 18px 0;
+}
+
+#toggle-temperature-chart {
+    padding: 10px 14px;
+    border: 1px solid #164b78;
+    border-radius: 5px;
+    background: #164b78;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+#temperature-chart-panel {
+    margin-top: 12px;
+    padding: 16px;
+    background: white;
+    border: 1px solid #dbe3ec;
+    border-radius: 8px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
+}
+
+#temperature-chart-panel h2 {
+    margin: 0 0 12px;
+    color: #123b63;
+    font-size: 20px;
+}
+
+#temperature-seal-filter {
+    margin-left: 6px;
+    padding: 7px 9px;
+    border: 1px solid #aab8c7;
+    border-radius: 4px;
+    background: white;
+}
+
+#temperature-chart {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+}
+
+#temperature-chart[hidden] {
+    display: none;
+}
+
+#temperature-chart-empty {
+    color: #526174;
+}
+
+.chart-help {
+    margin: 8px 0 0;
+    color: #526174;
+    font-size: 13px;
+}
+
+.chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    margin-top: 8px;
+}
+
+.chart-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+}
+
+.chart-legend-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 4px;
+    border-radius: 2px;
+}
+
 /* Camera evidence links */
 
 a {
