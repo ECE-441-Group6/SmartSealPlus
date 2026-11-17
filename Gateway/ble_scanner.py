@@ -206,6 +206,7 @@ async def scan_real_ble():
 
     def detection_callback(device, advertisement):
 
+<<<<<<< Updated upstream
         # Only accept the SmartSeal manufacturer ID.
         manufacturer_data = advertisement.manufacturer_data
 
@@ -216,6 +217,20 @@ async def scan_real_ble():
 
         packet = parse_advertisement(payload)
 
+=======
+        payloads = advertisement.manufacturer_data.values()
+        if is_xiao:
+            return   #code below wont run
+
+        # The device name may be placed in a scan response or omitted when the
+        # advertisement is full. The company ID and payload are the reliable
+        # protocol identifiers, so do not require the name here.
+        packet = None
+        for payload in payloads:
+            packet = parse_advertisement(payload)
+            if packet is not None:
+                break
+>>>>>>> Stashed changes
         if packet is not None:
             latest_by_seal[packet["seal_id"]] = packet
 
