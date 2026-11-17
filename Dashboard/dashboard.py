@@ -2,14 +2,17 @@
 #from flask import Flask, render_template
 
 import csv
+from collections import defaultdict, deque
 import hmac
 import os
 import re
 import secrets
+import stat
 import sys
 import time
 from datetime import timedelta
 from pathlib import Path
+from threading import Lock
 
 from flask import (
     Flask,
@@ -38,10 +41,13 @@ SECRET_FILE = REPOSITORY_PATH / "Gateway" / ".dashboard_secret"
 def _load_secret_key():
     configured = os.getenv("SMARTSEAL_DASHBOARD_SECRET")
     if configured:
-        return configured
+        key = configured.encode("utf-8")
+        if len(key) < 32:
+            raise RuntimeError("SMARTSEAL_DASHBOARD_SECRET must be at least 32 bytes.")
+        return key
 
     try:
-        return SECRET_FILE.read_bytes()
+        key = SECRET_FILE.read_bytes()
     except FileNotFoundError:
         key = secrets.token_bytes(32)
         try:
@@ -49,9 +55,16 @@ def _load_secret_key():
                 secret_file.write(key)
         except FileExistsError:
             key = SECRET_FILE.read_bytes()
-        if os.name == "posix":
+
+    if len(key) < 32:
+        raise RuntimeError(
+            f"{SECRET_FILE} must contain at least 32 random bytes."
+        )
+    if os.name == "posix":
+        mode = stat.S_IMODE(SECRET_FILE.stat().st_mode)
+        if mode & 0o077:
             SECRET_FILE.chmod(0o600)
-        return key
+    return key
 
 
 app.config.update(
@@ -70,6 +83,50 @@ ARCHIVE_FILENAME = re.compile(
     r"|\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d+"
     r")\.csv"
 )
+LOGIN_WINDOW_SECONDS = 15 * 60
+LOGIN_MAX_FAILURES = 8
+_login_failures = defaultdict(deque)
+_login_failures_lock = Lock()
+
+
+def _login_retry_after(client):
+    now = time.monotonic()
+    with _login_failures_lock:
+        attempts = _login_failures.get(client)
+        if not attempts:
+            return 0
+        while attempts and now - attempts[0] >= LOGIN_WINDOW_SECONDS:
+            attempts.popleft()
+        if not attempts:
+            _login_failures.pop(client, None)
+            return 0
+        if len(attempts) < LOGIN_MAX_FAILURES:
+            return 0
+        return max(1, int(LOGIN_WINDOW_SECONDS - (now - attempts[0])))
+
+
+def _record_login_failure(client):
+    now = time.monotonic()
+    with _login_failures_lock:
+        attempts = _login_failures[client]
+        while attempts and now - attempts[0] >= LOGIN_WINDOW_SECONDS:
+            attempts.popleft()
+        attempts.append(now)
+
+        if len(_login_failures) > 1024:
+            for stale_client, stale_attempts in list(_login_failures.items()):
+                while (
+                    stale_attempts
+                    and now - stale_attempts[0] >= LOGIN_WINDOW_SECONDS
+                ):
+                    stale_attempts.popleft()
+                if not stale_attempts:
+                    _login_failures.pop(stale_client, None)
+
+
+def _clear_login_failures(client):
+    with _login_failures_lock:
+        _login_failures.pop(client, None)
 
 
 def _archive_path(filename):
@@ -118,21 +175,33 @@ def require_dashboard_account():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
+    status_code = 200
     if request.method == "POST":
-        username = request.form.get("username", "")
-        password = request.form.get("password", "")
-        authenticated_username = verify_user(username, password)
-        if authenticated_username is None:
-            error = "The username or password is incorrect."
+        client = request.remote_addr or "unknown"
+        retry_after = _login_retry_after(client)
+        if retry_after:
+            error = f"Too many failed attempts. Try again in {retry_after} seconds."
+            status_code = 429
         else:
-            session.clear()
-            session.permanent = True
-            session["username"] = authenticated_username
-            session["csrf_token"] = secrets.token_urlsafe(32)
-            return redirect(url_for("home"))
+            username = request.form.get("username", "")
+            password = request.form.get("password", "")
+            authenticated_username = verify_user(username, password)
+            if authenticated_username is None:
+                _record_login_failure(client)
+                error = "The username or password is incorrect."
+            else:
+                _clear_login_failures(client)
+                session.clear()
+                session.permanent = True
+                session["username"] = authenticated_username
+                session["csrf_token"] = secrets.token_urlsafe(32)
+                return redirect(url_for("home"))
 
     response = make_response(render_template("login.html", error=error))
     response.headers["Cache-Control"] = "no-store"
+    response.status_code = status_code
+    if status_code == 429:
+        response.headers["Retry-After"] = str(retry_after)
     return response
 
 

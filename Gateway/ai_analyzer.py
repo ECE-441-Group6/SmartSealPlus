@@ -1,8 +1,10 @@
 # Provides optional local Ollama image analysis with a sensor-only fallback.
 import base64
+import ipaddress
 import json
 import os
 from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 
 if __package__:
     from .alert_manager import TEMP_HIGH, TEMP_LOW
@@ -56,11 +58,23 @@ def _analyze_with_ollama(filename, packet):
             "stream": False,
         }
 
+        ollama_url = os.getenv(
+            "OLLAMA_URL",
+            "http://127.0.0.1:11434/api/generate",
+        )
+        parsed_url = urlsplit(ollama_url)
+        hostname = (parsed_url.hostname or "").lower()
+        is_loopback = hostname == "localhost"
+        if hostname:
+            try:
+                is_loopback = is_loopback or ipaddress.ip_address(hostname).is_loopback
+            except ValueError:
+                pass
+        if parsed_url.scheme not in {"http", "https"} or not is_loopback:
+            raise ValueError("OLLAMA_URL must point to a local loopback address")
+
         request = Request(
-            os.getenv(
-                "OLLAMA_URL",
-                "http://127.0.0.1:11434/api/generate"
-            ),
+            ollama_url,
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",

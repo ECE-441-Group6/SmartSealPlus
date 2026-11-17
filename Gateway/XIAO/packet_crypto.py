@@ -2,6 +2,8 @@
 """AES-128-CCM decryption for SmartSeal BLE advertisements."""
 
 import json
+import os
+import stat
 from pathlib import Path
 
 from cryptography.hazmat.primitives.ciphers.aead import AESCCM
@@ -11,6 +13,11 @@ def _load_hex_secret(name, length):
     """Load a fixed-length hexadecimal secret from the local key file."""
     key_path = Path(__file__).parents[1] / "keys.json"
     try:
+        if os.name == "posix" and stat.S_IMODE(key_path.stat().st_mode) & 0o077:
+            raise RuntimeError(
+                f"{key_path} must not be accessible by group or other users; "
+                "run chmod 600 on the key file."
+            )
         with key_path.open(encoding="utf-8") as key_file:
             value = json.load(key_file)[name]
     except (OSError, KeyError, json.JSONDecodeError) as error:
@@ -40,6 +47,7 @@ NONCE_PREFIX = _load_hex_secret("SMARTSEAL_NONCE_PREFIX", 9)
 MANUFACTURER_ID = 0x5353
 MAGIC = 0xA5
 PROTOCOL_VERSION = 3
+EXPECTED_SEAL_ID = 1
 
 HEADER_LENGTH = 3
 SEQUENCE_LENGTH = 4
@@ -70,7 +78,7 @@ def decrypt_advertisement(payload):
         return None
 
     seal_id = payload[2]
-    if seal_id < 1:
+    if seal_id != EXPECTED_SEAL_ID:
         return None
 
     sequence = int.from_bytes(payload[3:7], "little")

@@ -151,6 +151,8 @@ void setup() {
     pinMode(TEMP_PIN, INPUT);
     pinMode(VIBRATION_PIN, INPUT);
     pinMode(RECORD_BUTTON_PIN, INPUT_PULLUP); //pin reads HIGH when not pressed, LOW when pressed
+    const bool firstBootProvisioningRequested =
+        digitalRead(RECORD_BUTTON_PIN) == LOW;
     pinMode(BUZZER_PIN, OUTPUT);
     digitalWrite(BUZZER_PIN, LOW);
     
@@ -170,7 +172,7 @@ void setup() {
 
 
     // Initialize persistent sequence storage.
-    if (!initializeSequenceCounter()) {
+    if (!initializeSequenceCounter(firstBootProvisioningRequested)) {
         Serial.println("ERROR: Secure sequence initialization failed.");
         while (true) {
             delay(1000);

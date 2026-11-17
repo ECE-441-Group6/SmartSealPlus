@@ -12,8 +12,7 @@ if __package__:
         clear_event_history,
         get_stale_seals,
         init_database,
-        insert_event,
-        record_seen,
+        accept_event,
         update_event_artifacts,
     )
     from .alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
@@ -28,8 +27,7 @@ else:
         clear_event_history,
         get_stale_seals,
         init_database,
-        insert_event,
-        record_seen,
+        accept_event,
         update_event_artifacts,
     )
     from alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
@@ -58,7 +56,14 @@ def run_gateway(interval=5, scanner=scan_ble):
                     print("Invalid sensor packet. Skipping...")
                     continue
 
-                record_seen(packet)
+                if not accept_event(packet):
+                    print(
+                        "Stale or duplicate packet ignored: "
+                        f"seal={packet['seal_id']} "
+                        f"seq={packet['event_sequence']}"
+                    )
+                    continue
+
                 now = time.monotonic()
                 if now - last_stale_check >= max(interval, 5):
                     for seal_id, last_seen in get_stale_seals(max(interval * 3, 15)):
@@ -68,10 +73,8 @@ def run_gateway(interval=5, scanner=scan_ble):
                         )
                     last_stale_check = now
 
-                inserted = insert_event(packet)
-                status = "recorded" if inserted else "duplicate ignored"
                 print(
-                    f"Event {status}: seal={packet['seal_id']} "
+                    f"Event recorded: seal={packet['seal_id']} "
                     f"seq={packet['event_sequence']}"
                 )
                 alerts = process_alerts(packet)

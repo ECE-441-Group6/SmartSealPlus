@@ -20,7 +20,7 @@ def parse_packet(packet):
         if (
             not isinstance(seal_id, int)
             or isinstance(seal_id, bool)
-            or seal_id < 1
+            or seal_id != 1
         ):
             raise ValueError("Invalid seal ID")
 

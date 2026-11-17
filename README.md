@@ -88,10 +88,12 @@ respectively. On POSIX systems it also refuses a key file readable by group or
 other users. Copy the same key and prefix into `secrets.h` in the byte-array
 format shown in `secrets.example.h`, and keep `SEAL_ID` set to `1`.
 
-The repository ignores both secret files. If the firmware reports corrupted
-sequence storage, do not reset its sequence and keep using the same key. Create
-a new key and nonce prefix, update both sides, and provision the firmware
-again.
+The repository ignores both secret files. The first time a seal is provisioned,
+hold D6 while powering it on so it can initialize its sequence storage. On
+normal restarts, do not hold D6 for sequence provisioning; the stored sequence
+continues automatically. If sequence storage is missing or corrupted, do not
+restart at sequence 1 with the existing key. Create a new AES key and nonce
+prefix, update both sides, then hold D6 during boot to provision the new key.
 
 ## Build and upload the seal firmware
 
@@ -228,9 +230,10 @@ events just to reset a simulation.
 ## Optional local image analysis
 
 The gateway uses Ollama locally when it captures an image. Install and run
-Ollama on the Pi with a vision model such as `moondream`. To use sensor-only
-fallback text, set `SMARTSEAL_AI_PROVIDER=none`. The active analyzer does not
-use OpenAI or send images to an external AI provider.
+Ollama on the Pi with a vision model such as `moondream`. The gateway accepts
+only loopback Ollama URLs. To use sensor-only fallback text, set
+`SMARTSEAL_AI_PROVIDER=none`. The active analyzer does not use OpenAI or send
+images to an external AI provider.
 
 ## Syntax check
 

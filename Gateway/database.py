@@ -231,27 +231,30 @@ def insert_event(packet, image_filename=None, ai_analysis=None):
 
 
 def accept_event(packet):
-    """Atomically reject replayed sequences and persist a fresh event."""
+    """Atomically reject stale sequences and persist a fresh event."""
     conn = sqlite3.connect(DB_NAME)
     try:
-        with conn:
-            row = conn.execute(
-                "SELECT last_event_sequence FROM seal_status WHERE seal_id = ?",
+        # Acquire the write reservation before reading the high-water mark so
+        # two gateway processes cannot both accept out-of-order packets.
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT last_event_sequence FROM seal_status WHERE seal_id = ?",
+            (packet["seal_id"],),
+        ).fetchone()
+        last_sequence = row[0] if row and row[0] is not None else None
+        if last_sequence is None:
+            event_row = conn.execute(
+                "SELECT MAX(event_sequence) FROM events WHERE seal_id = ?",
                 (packet["seal_id"],),
             ).fetchone()
-            last_sequence = row[0] if row and row[0] is not None else None
-            if last_sequence is None:
-                event_row = conn.execute(
-                    "SELECT MAX(event_sequence) FROM events WHERE seal_id = ?",
-                    (packet["seal_id"],),
-                ).fetchone()
-                last_sequence = event_row[0] if event_row else None
+            last_sequence = event_row[0] if event_row else None
 
-            sequence = packet["event_sequence"]
-            if last_sequence is not None and sequence <= last_sequence:
-                return False
+        sequence = packet["event_sequence"]
+        if last_sequence is not None and sequence <= last_sequence:
+            conn.rollback()
+            return False
 
-            cur = conn.execute("""
+        cur = conn.execute("""
             INSERT OR IGNORE INTO events
             (seal_id, event_sequence, temperature, tamper, vibration, movement_type)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -263,17 +266,23 @@ def accept_event(packet):
                 packet["vibration"],
                 packet.get("movement_type", 0),
             ))
-            if cur.rowcount != 1:
-                return False
+        if cur.rowcount != 1:
+            conn.rollback()
+            return False
 
-            conn.execute("""
+        conn.execute("""
             INSERT INTO seal_status(seal_id, last_seen, last_event_sequence)
             VALUES (?, CURRENT_TIMESTAMP, ?)
             ON CONFLICT(seal_id) DO UPDATE SET
                 last_seen = excluded.last_seen,
                 last_event_sequence = excluded.last_event_sequence
             """, (packet["seal_id"], sequence))
+        conn.commit()
         return True
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
     finally:
         conn.close()
 
