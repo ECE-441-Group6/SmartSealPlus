@@ -8,7 +8,8 @@ dashboard.
 
 This guide covers the encrypted seal firmware in
 `XIAOnRF8540/SmartSeal_Encrypted/` and its BLE advertising gateway. The
-firmware is configured for seal ID `1`.
+advertising gateway supports seal IDs `1` through `255`, with a separate AES
+key and nonce prefix configured for each seal.
 
 ## System overview
 
@@ -71,22 +72,48 @@ python -m pip install -r requirements.txt
 
 ## Configure matching encryption keys
 
-The gateway reads `Gateway/keys.json`. The firmware reads
-`XIAOnRF8540/SmartSeal_Encrypted/secrets.h`. The AES key and nonce prefix in
-these files must match exactly. Do not use the all-zero example values, commit
-either secret file, or reuse the pair for another seal.
+The gateway reads `Gateway/keys.json`. Each firmware image reads its local
+`XIAOnRF8540/SmartSeal_Encrypted/secrets.h`. Every seal ID must have a matching
+entry in the gateway file, and that seal's firmware key and nonce prefix must
+match the entry. Use a distinct random AES key and nonce prefix for every seal.
+Never use the all-zero example values or commit either secret file.
 
-Generate a random 128-bit AES key and 9-byte nonce prefix for the gateway:
+For a brand-new installation, this creates random keys for seals 1 and 2:
 
 ```bash
-python3 -c 'import json,secrets; from pathlib import Path; Path("Gateway/keys.json").write_text(json.dumps({"SMARTSEAL_AES_KEY":secrets.token_hex(16),"SMARTSEAL_NONCE_PREFIX":secrets.token_hex(9)},indent=2),encoding="utf-8")'
+python3 -c 'import json,secrets; from pathlib import Path; ids=(1,2); data={"seals":{str(i):{"SMARTSEAL_AES_KEY":secrets.token_hex(16),"SMARTSEAL_NONCE_PREFIX":secrets.token_hex(9)} for i in ids}}; Path("Gateway/keys.json").write_text(json.dumps(data,indent=2),encoding="utf-8")'
 chmod 600 Gateway/keys.json
 ```
 
-The gateway checks that these fields contain 32 and 18 hexadecimal characters,
+Change `ids` to the seal IDs you will use. When adding a seal to an existing
+installation, preserve the current key for each existing seal and add a new
+entry with fresh random values; do not regenerate keys for seals already in
+service unless you also reprovision their firmware. The gateway checks that
+each AES key and nonce prefix contain 32 and 18 hexadecimal characters,
 respectively. On POSIX systems it also refuses a key file readable by group or
-other users. Copy the same key and prefix into `secrets.h` in the byte-array
-format shown in `secrets.example.h`, and keep `SEAL_ID` set to `1`.
+other users. Copy each seal's matching values into that seal's `secrets.h` in
+the byte-array format shown in `secrets.example.h`, and set its `SEAL_ID` to
+the corresponding ID. The old top-level single-key `keys.json` format remains
+supported as seal 1.
+
+When migrating an existing one-seal file, move its current values under ID 1
+and add one entry per new seal. The resulting structure looks like this
+(replace the labels with the actual hex strings):
+
+```json
+{
+  "seals": {
+    "1": {
+      "SMARTSEAL_AES_KEY": "existing 32-character key",
+      "SMARTSEAL_NONCE_PREFIX": "existing 18-character prefix"
+    },
+    "2": {
+      "SMARTSEAL_AES_KEY": "new 32-character key",
+      "SMARTSEAL_NONCE_PREFIX": "new 18-character prefix"
+    }
+  }
+}
+```
 
 The repository ignores both secret files. The first time a seal is provisioned,
 hold D6 while powering it on so it can initialize its sequence storage. On
@@ -99,8 +126,9 @@ prefix, update both sides, then hold D6 during boot to provision the new key.
 
 1. Copy `XIAOnRF8540/SmartSeal_Encrypted/secrets.example.h` to
    `XIAOnRF8540/SmartSeal_Encrypted/secrets.h`.
-2. Set `SEAL_ID` to `1` and enter the same `AES_KEY` and `NONCE_PREFIX` values
-   used in `Gateway/keys.json`.
+2. For each physical seal, use a unique `SEAL_ID` and enter the AES key and
+   nonce prefix assigned to that ID in `Gateway/keys.json`. Build and upload a
+   separate firmware image for each seal ID.
 3. Open `XIAOnRF8540/SmartSeal_Encrypted/SmartSeal_Encrypted.ino` in Arduino
    IDE, select the Seeed XIAO nRF52840 Sense board and its serial port, then
    build and upload.

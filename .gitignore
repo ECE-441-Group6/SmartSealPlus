@@ -22,6 +22,7 @@ Gateway/.dashboard_secret
 XIAOnRF8540/Advertising/secrets.h
 XIAOnRF8540/SmartSeal_Encrypted/secrets.h
 XIAOnRF8540/SmartSeal_Encrypted_Test/secrets.h
+XIAOnRF8540/Encrypted_Test_Transmitter/secrets.h
 
 # Generated media and test output
 images/
