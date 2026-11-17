@@ -205,19 +205,6 @@ async def scan_real_ble():
     latest_by_seal = {}
 
     def detection_callback(device, advertisement):
-        nonlocal xiao_device
-        device_name = advertisement.local_name or device.name or ""
-        service_uuids = {
-            uuid.lower() for uuid in (advertisement.service_uuids or [])
-        }
-        is_xiao = (
-            device_name == XIAO_DEVICE_NAME
-            or "0000180f-0000-1000-8000-00805f9b34fb" in service_uuids
-            or "180f" in service_uuids
-        )
-        if is_xiao:
-            xiao_device = device
-
         payloads = advertisement.manufacturer_data.values()
         # The device name may be placed in a scan response or omitted when the
         # advertisement is full. The company ID and payload are the reliable
