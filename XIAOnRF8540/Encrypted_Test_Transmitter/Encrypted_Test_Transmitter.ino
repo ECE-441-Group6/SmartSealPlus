@@ -9,10 +9,6 @@
 #include "secrets.h"
 #include "sequence_manager.h"
 
-#ifndef ALLOW_SEQUENCE_PROVISIONING
-#define ALLOW_SEQUENCE_PROVISIONING 0
-#endif
-
 namespace {
 constexpr uint16_t MANUFACTURER_ID = 0x5353;
 constexpr uint8_t MAGIC = 0xA5;
