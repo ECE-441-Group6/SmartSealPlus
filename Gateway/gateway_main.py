@@ -11,7 +11,7 @@ if __package__:
     from .packet_parser import parse_packet
     from .database import (
         archive_events,
-        clear_event_history,
+        clear_event_history_all,
         get_stale_seals,
         init_database,
         accept_event,
@@ -26,7 +26,7 @@ else:
     from packet_parser import parse_packet
     from database import (
         archive_events,
-        clear_event_history,
+        clear_event_history_all,
         get_stale_seals,
         init_database,
         accept_event,
@@ -77,7 +77,7 @@ def _artifact_worker(artifact_queue):
 
 def run_gateway(interval=5, scanner=scan_ble):
     init_database()
-    clear_event_history()
+    clear_event_history_all()
     print("SmartSeal+ gateway started.")
     print("Previous dashboard events cleared.")
     last_stale_check = 0.0
