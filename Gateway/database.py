@@ -202,6 +202,15 @@ def clear_event_history():
     _delete_unreferenced_images()
 
 
+####
+def clear_event_history_all():
+    conn = sqlite3.connect(DB_NAME)
+    with conn:
+        conn.execute("DELETE FROM events")
+    conn.close()
+    _delete_unreferenced_images()
+
+
 def insert_event(packet, image_filename=None, ai_analysis=None):
     # Store one normalized gateway packet and any evidence generated for it.
     conn = sqlite3.connect(DB_NAME)
