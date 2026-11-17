@@ -1,7 +1,9 @@
 """SmartSeal+ gateway with validation, idempotent storage, and delivery ACKs."""
 
 import csv
+import queue
 import sqlite3
+import threading
 import time
 
 if __package__:
@@ -36,12 +38,57 @@ else:
     from image_storage import image_path
 
 
+def _artifact_worker(artifact_queue):
+    """Capture and analyze alert images without blocking BLE scanning."""
+    while True:
+        item = artifact_queue.get()
+        try:
+            if item is None:
+                return
+
+            packet = item
+            image_filename = None
+            try:
+                image_filename = capture_image(packet)
+            except Exception as error:
+                print(f"Camera error for seal {packet['seal_id']}: {error}")
+
+            if image_filename:
+                try:
+                    ai_analysis = analyze_image(
+                        str(image_path(image_filename)), packet
+                    )
+                except Exception as error:
+                    print(f"AI analysis error for seal {packet['seal_id']}: {error}")
+                    ai_analysis = "Analysis unavailable."
+            else:
+                ai_analysis = "Alert detected; image unavailable."
+
+            update_event_artifacts(packet, image_filename, ai_analysis)
+            print(
+                f"Background image analysis complete: seal={packet['seal_id']} "
+                f"seq={packet['event_sequence']} — {ai_analysis}"
+            )
+        except Exception as error:
+            print(f"Background image processing error: {error}")
+        finally:
+            artifact_queue.task_done()
+
+
 def run_gateway(interval=5, scanner=scan_ble):
     init_database()
     clear_event_history()
     print("SmartSeal+ gateway started.")
     print("Previous dashboard events cleared.")
     last_stale_check = 0.0
+    artifact_queue = queue.Queue(maxsize=64)
+    artifact_thread = threading.Thread(
+        target=_artifact_worker,
+        args=(artifact_queue,),
+        name="smartseal-image-worker",
+        daemon=True,
+    )
+    artifact_thread.start()
 
     try:
         while True:
@@ -100,7 +147,6 @@ def run_gateway(interval=5, scanner=scan_ble):
                             or packet["movement_type"] != 0
                         )
 
-                        image_filename = None
                         ai_analysis = (
                             "Temperature out of bounds; image capture skipped."
                             if temperature_out_of_range and not capture_triggered
@@ -108,21 +154,20 @@ def run_gateway(interval=5, scanner=scan_ble):
                         )
                         if capture_triggered:
                             try:
-                                image_filename = capture_image(packet)
-                            except Exception as error:
-                                print(f"Camera error: {error}")
-                            if image_filename:
-                                try:
-                                    ai_analysis = analyze_image(
-                                        str(image_path(image_filename)), packet
-                                    )
-                                except Exception as error:
-                                    print(f"AI analysis error: {error}")
-                                    ai_analysis = "Analysis unavailable."
-                            else:
-                                ai_analysis = "Alert detected; image unavailable."
-
-                        update_event_artifacts(packet, image_filename, ai_analysis)
+                                artifact_queue.put_nowait(packet)
+                                ai_analysis = "Image analysis queued."
+                            except queue.Full:
+                                ai_analysis = (
+                                    "Image analysis skipped; background queue is full."
+                                )
+                                print(
+                                    "Image analysis queue full; skipping image work "
+                                    f"for seal={packet['seal_id']} "
+                                    f"seq={packet['event_sequence']}"
+                                )
+                            update_event_artifacts(packet, None, ai_analysis)
+                        else:
+                            update_event_artifacts(packet, None, ai_analysis)
 
                         print("\nPacket Received")
                         print(packet)
@@ -138,6 +183,11 @@ def run_gateway(interval=5, scanner=scan_ble):
     except KeyboardInterrupt:
         print("\nSmartSeal+ gateway stopped.")
     finally:
+        # Drain queued image work before archiving so completed image paths and
+        # analysis results are reflected in the archive.
+        artifact_queue.put(None)
+        artifact_queue.join()
+        artifact_thread.join()
         try:
             archive_path = archive_events()
             if archive_path is not None:
