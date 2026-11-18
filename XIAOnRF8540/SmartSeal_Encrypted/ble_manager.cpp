@@ -220,7 +220,7 @@ void startEncryptedAdvertising(const uint8_t *packet) {
 
 void stopEncryptedAdvertising() {
     Bluefruit.Advertising.stop();
-
+}
 
 void initializeBle() {
   Bluefruit.begin();
