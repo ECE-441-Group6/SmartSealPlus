@@ -77,9 +77,23 @@ def _artifact_worker(artifact_queue):
 
 def run_gateway(interval=5, scanner=scan_ble):
     init_database()
+
+    # Recover readings left in the live table if the previous gateway process
+    # was terminated before its shutdown handler could archive them. Archive
+    # must succeed before clearing the table or accepting this session's data.
+    try:
+        previous_archive = archive_events()
+    except (OSError, sqlite3.Error, csv.Error) as error:
+        raise RuntimeError(
+            "Could not archive the previous gateway session; refusing to "
+            "clear its dashboard events."
+        ) from error
+    if previous_archive is not None:
+        print(f"Previous gateway event archive saved: {previous_archive}")
+
     clear_event_history_all()
     print("SmartSeal+ gateway started.")
-    print("Previous dashboard events cleared.")
+    print("Previous session archived; starting with an empty live dashboard.")
     last_stale_check = 0.0
     artifact_queue = queue.Queue(maxsize=64)
     artifact_thread = threading.Thread(
@@ -194,6 +208,9 @@ def run_gateway(interval=5, scanner=scan_ble):
                 print(f"Gateway event archive saved: {archive_path}")
             else:
                 print("No gateway events to archive.")
+            # A successful archive lets the next run start with a clean live
+            # dashboard without archiving the same session a second time.
+            clear_event_history_all()
         except (OSError, sqlite3.Error, csv.Error) as error:
             print(f"ERROR: Could not archive gateway events: {error}")
 

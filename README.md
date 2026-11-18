@@ -266,7 +266,10 @@ The dashboard creates `Gateway/.dashboard_secret` for persistent login
 sessions. The file is hidden on Linux and ignored by Git. Keep it private.
 
 When stopped with Ctrl+C, the gateway writes stored events to a timestamped CSV
-in `Gateway/archives/`. Deleting a saved archive removes its CSV. Captured
+in `Gateway/archives/`, then clears the live event list. At startup, it archives
+any events left in the live list by an unclean previous stop before clearing the
+list and receiving new session events. This avoids mixing old live readings
+with a new gateway session. Deleting a saved archive removes its CSV. Captured
 images are removed only when no live event or remaining archive references
 them.
 
