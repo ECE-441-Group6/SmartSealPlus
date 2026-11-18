@@ -7,7 +7,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}"
           data-can-delete="{{ 'true' if session.get('username') else 'false' }}">
     <title>SmartSeal+ Monitoring Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='sensor-charts-1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='sensor-charts-2') }}">
 </head>
 <body>
 
@@ -33,6 +33,7 @@
     {% if session.get('username') %}Delete selected archive{% else %}Sign in to delete archives{% endif %}
 </button>
 
+<div class="sensor-chart-grid">
 <section class="temperature-chart-section" aria-labelledby="temperature-chart-title">
     <button id="toggle-temperature-chart" type="button"
             aria-expanded="false" aria-controls="temperature-chart-panel">
@@ -80,6 +81,7 @@
              aria-label="Seal graph legend"></div>
     </div>
 </section>
+</div>
 
 <table>
     <thead>
