@@ -30,7 +30,12 @@ from flask import (
 REPOSITORY_PATH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_PATH))
 
-from Gateway.database import apply_retention_policy, get_latest_events, init_database
+from Gateway.database import (
+    ARCHIVE_DIRECTORY,
+    apply_retention_policy,
+    get_latest_events,
+    init_database,
+)
 from Gateway.image_storage import IMAGE_FOLDER
 from Dashboard.auth import verify_user
 
@@ -69,6 +74,8 @@ def _load_secret_key():
 
 app.config.update(
     SECRET_KEY=_load_secret_key(),
+    # This dashboard has no upload endpoints; reject oversized form bodies.
+    MAX_CONTENT_LENGTH=16 * 1024,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.getenv("SMARTSEAL_DASHBOARD_HTTPS") == "1",
@@ -76,7 +83,6 @@ app.config.update(
 )
 init_database()
 _last_retention_check = 0.0
-ARCHIVE_DIRECTORY = REPOSITORY_PATH / "Gateway" / "archives"
 ARCHIVE_FILENAME = re.compile(
     r"SmartSeal_Events_(?:"
     r"\d{2}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-[AP]M"
@@ -87,6 +93,25 @@ LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_MAX_FAILURES = 8
 _login_failures = defaultdict(deque)
 _login_failures_lock = Lock()
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; base-uri 'self'; object-src 'none'; "
+        "frame-ancestors 'none'; form-action 'self'; connect-src 'self'; "
+        "img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'",
+    )
+    if app.config["SESSION_COOKIE_SECURE"]:
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000"
+        )
+    return response
 
 
 def _login_retry_after(client):
@@ -289,8 +314,9 @@ def delete_archive(filename):
         from Gateway.database import _delete_unreferenced_images
 
         _delete_unreferenced_images()
-    except OSError as error:
-        return jsonify({"error": f"Could not delete archive: {error}"}), 500
+    except OSError:
+        app.logger.exception("Could not delete archive %s", filename)
+        return jsonify({"error": "Could not delete the selected archive."}), 500
 
     return jsonify({"deleted": filename})
 
@@ -299,7 +325,9 @@ def delete_archive(filename):
 @app.route("/images/<path:filename>")
 def images(filename):
     # Serve captured or simulated evidence images from the gateway storage.
-    return send_from_directory(IMAGE_FOLDER, filename)
+    response = send_from_directory(IMAGE_FOLDER, filename)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 if __name__ == "__main__":

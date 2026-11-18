@@ -278,9 +278,10 @@ analysis.
 ## Simulation without BLE hardware
 
 Simulation generates packets in memory, so it can be used on a development
-computer without the XIAO or a BLE adapter. The gateway still loads
-`Gateway/keys.json` during startup, so create that file first as described
-above. Simulation does not check packets against firmware encryption.
+computer without the XIAO, BLE adapter, or encryption key file. It uses the
+separate `Gateway/simulation/` data directory, so its sequence state and
+records do not affect production seals or the production database. The
+simulation directory is ignored by Git.
 
 PowerShell:
 
@@ -288,6 +289,14 @@ PowerShell:
 $env:SMARTSEAL_SIMULATION = "1"
 $env:SMARTSEAL_AI_PROVIDER = "none"
 python3 Gateway/XIAO/gateway_main.py
+```
+
+In a second PowerShell window, set simulation mode there too before starting
+the dashboard so it reads the same simulation database:
+
+```powershell
+$env:SMARTSEAL_SIMULATION = "1"
+python3 Dashboard/dashboard.py
 ```
 
 To use real BLE hardware and Ollama again in PowerShell:
@@ -298,10 +307,10 @@ $env:SMARTSEAL_AI_PROVIDER = "ollama"
 python3 Gateway/XIAO/gateway_main.py
 ```
 
-The simulator starts its sequence counter at 1 each time it starts. Since the
-gateway stores sequence state, use a separate disposable checkout or database
-when repeating simulation runs. Do not delete a database containing real
-events just to reset a simulation.
+Set `SMARTSEAL_SIMULATION` to `0` in both the gateway and dashboard terminals
+when returning to real data. Simulation packets are synthetic and do not use
+the seal's BLE encryption; the isolated simulation database resets its own
+replay state at gateway startup without changing production replay protection.
 
 ## Optional local image analysis
 

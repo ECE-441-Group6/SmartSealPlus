@@ -1,9 +1,16 @@
 # Handles naming and storing captured tamper-event images.
+import os
 from pathlib import Path
 
-IMAGE_FOLDER = Path(__file__).resolve().parent / "images"
+STORAGE_DIRECTORY = Path(__file__).resolve().parent
+if os.getenv("SMARTSEAL_SIMULATION", "0") == "1":
+    STORAGE_DIRECTORY = STORAGE_DIRECTORY / "simulation"
+
+IMAGE_FOLDER = STORAGE_DIRECTORY / "images"
 # Ensure the dashboard can serve the destination before capture begins.
-IMAGE_FOLDER.mkdir(exist_ok=True)
+IMAGE_FOLDER.mkdir(mode=0o700, parents=True, exist_ok=True)
+if os.name == "posix":
+    IMAGE_FOLDER.chmod(0o700)
 
 
 def image_path(name):

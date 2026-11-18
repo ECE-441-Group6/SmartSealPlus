@@ -19,6 +19,7 @@ venv/
 .env.*
 Gateway/keys.json
 Gateway/.dashboard_secret
+Gateway/simulation/
 XIAOnRF8540/Advertising/secrets.h
 XIAOnRF8540/SmartSeal_Encrypted/secrets.h
 XIAOnRF8540/SmartSeal_Encrypted_Test/secrets.h

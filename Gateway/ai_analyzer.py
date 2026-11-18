@@ -3,7 +3,12 @@ import base64
 import ipaddress
 import json
 import os
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import (
+    HTTPRedirectHandler,
+    ProxyHandler,
+    Request,
+    build_opener,
+)
 from urllib.parse import urlsplit
 
 if __package__:
@@ -87,7 +92,9 @@ def _analyze_with_ollama(filename, packet):
             method="POST",
         )
 
-        opener = build_opener(_RejectRedirects)
+        # Ollama is required to be local. Do not let environment proxy
+        # settings route image or sensor data outside the Pi.
+        opener = build_opener(ProxyHandler({}), _RejectRedirects)
         with opener.open(
             request, timeout=float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "60"))
         ) as response:

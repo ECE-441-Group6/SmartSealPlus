@@ -32,7 +32,7 @@ SIMULATION_MODE = (
 # --------------------------------------------------
 # PER-SEAL AES-128-CCM CONFIGURATION
 # --------------------------------------------------
-SEAL_KEYS = load_seal_keys()
+SEAL_KEYS = {} if SIMULATION_MODE else load_seal_keys()
 
 AES_TAG_LENGTH = 8
 

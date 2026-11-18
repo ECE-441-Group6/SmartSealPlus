@@ -6,7 +6,12 @@ from pathlib import Path
 import sqlite3
 import tempfile
 
-DB_NAME = Path(__file__).resolve().parent / "smartseal.db"
+SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
+DATA_DIRECTORY = Path(__file__).resolve().parent
+if SIMULATION_MODE:
+    DATA_DIRECTORY = DATA_DIRECTORY / "simulation"
+
+DB_NAME = DATA_DIRECTORY / "smartseal.db"
 IMAGE_FOLDER = DB_NAME.parent / "images"
 ARCHIVE_DIRECTORY = DB_NAME.parent / "archives"
 RETENTION_DAYS = 90
@@ -133,6 +138,11 @@ def apply_retention_policy():
 
 def init_database():
     # Create the local SQLite database and its event table if they do not exist.
+    DB_NAME.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name == "posix" and SIMULATION_MODE:
+        DB_NAME.parent.chmod(0o700)
+    if os.name == "posix" and DB_NAME.exists() and not DB_NAME.is_symlink():
+        DB_NAME.chmod(0o600)
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
 
@@ -185,6 +195,14 @@ def init_database():
 
     conn.commit()
     conn.close()
+    if os.name == "posix":
+        DB_NAME.chmod(0o600)
+        for directory in (IMAGE_FOLDER, ARCHIVE_DIRECTORY):
+            directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+            directory.chmod(0o700)
+            for stored_file in directory.iterdir():
+                if stored_file.is_file() and not stored_file.is_symlink():
+                    stored_file.chmod(0o600)
     apply_retention_policy()
 
 
@@ -199,6 +217,22 @@ def clear_event_history():
             """
         )
     conn.close()
+    _delete_unreferenced_images()
+
+
+def clear_event_history_all():
+    """Clear current events; keep production replay state intact."""
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        with conn:
+            conn.execute("DELETE FROM events")
+            # Simulation has an isolated database, so its synthetic counter
+            # can safely restart. Real seal replay marks stay in the real DB.
+            if SIMULATION_MODE:
+                conn.execute("DELETE FROM seal_status")
+    finally:
+        conn.close()
+    # Keep images still referenced by CSV archives; remove only true orphans.
     _delete_unreferenced_images()
 
 
@@ -394,6 +428,9 @@ def archive_events():
             "ai_analysis",
         ))
         writer.writerows(_spreadsheet_safe_row(row) for row in rows)
+
+    if os.name == "posix":
+        archive_path.chmod(0o600)
 
     return archive_path
 

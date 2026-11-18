@@ -2,6 +2,7 @@
 
 import atexit
 from datetime import datetime, timezone
+import os
 
 if __package__:
     from .image_storage import image_path
@@ -47,11 +48,15 @@ def capture_image(packet):
     try:
         # The dashboard serves this file from the gateway image directory.
         _get_camera().capture_file(str(path))
+        if os.name == "posix":
+            path.chmod(0o600)
         print(f"Image captured: {path}")
     except Exception as error:
         # A missing camera module or unavailable hardware should not lose the event.
         _close_camera()
         _create_simulated_image(path, packet)
+        if os.name == "posix":
+            path.chmod(0o600)
         print(f"Simulated image captured: {path} (camera unavailable: {error})")
 
     return filename

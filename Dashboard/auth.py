@@ -15,13 +15,15 @@ USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
 
 
 def create_user(username, password):
+    if not isinstance(username, str) or not isinstance(password, str):
+        raise ValueError("Username and password must be text.")
     username = username.strip()
     if not USERNAME_PATTERN.fullmatch(username):
         raise ValueError(
             "Username must be 3-32 characters: letters, numbers, dot, dash, underscore."
         )
-    if len(password) < 12:
-        raise ValueError("Password must be at least 12 characters.")
+    if not 12 <= len(password) <= 1024:
+        raise ValueError("Password must be 12-1024 characters.")
 
     password_hash = generate_password_hash(password, method="scrypt")
     conn = sqlite3.connect(DB_NAME)
@@ -38,6 +40,14 @@ def create_user(username, password):
 
 
 def verify_user(username, password):
+    if (
+        not isinstance(username, str)
+        or len(username) > 256
+        or not isinstance(password, str)
+        or len(password) > 1024
+    ):
+        return None
+
     conn = sqlite3.connect(DB_NAME)
     try:
         row = conn.execute(
