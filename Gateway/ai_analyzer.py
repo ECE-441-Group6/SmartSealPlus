@@ -108,9 +108,12 @@ def _analyze_with_ollama(filename, packet):
         return analysis
 
     except Exception as error:
+        # Exception strings from urllib can include the configured local URL
+        # or filesystem paths. Keep those details out of the public dashboard.
+        print(f"Ollama analysis unavailable ({type(error).__name__}).")
         return (
             "AI analysis unavailable; sensor evidence: "
-            f"{_fallback_analysis(packet)} ({error})"
+            f"{_fallback_analysis(packet)}"
         )
 
 def _fallback_analysis(packet):

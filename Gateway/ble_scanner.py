@@ -4,6 +4,7 @@
 import os
 import random
 import asyncio
+import time
 
 from bleak import BleakScanner
 from bleak.exc import BleakError
@@ -40,6 +41,9 @@ MAGIC = 0xA5
 PROTOCOL_VERSION = 4
 
 EXPECTED_PACKET_LENGTH = 21
+AUTH_FAILURE_LOG_INTERVAL = 30.0
+_last_auth_failure_log = 0.0
+_suppressed_auth_failures = 0
 
 
 
@@ -110,6 +114,7 @@ def parse_advertisement(payload):
     # Ciphertext and authentication tag.
     ciphertext_and_tag = payload[7:21]
 
+    global _last_auth_failure_log, _suppressed_auth_failures
     try:
         plaintext = aes.decrypt(
             nonce,
@@ -118,10 +123,18 @@ def parse_advertisement(payload):
         )
 
     except Exception:
-        print(
-            f"Rejected packet from seal {seal_id}: "
-            "AES-CCM authentication failed."
-        )
+        # A nearby transmitter can spoof the visible seal ID and flood the
+        # scanner with invalid tags. Rate-limit logs so radio spam cannot
+        # exhaust disk space when stdout is captured by a service manager.
+        _suppressed_auth_failures += 1
+        now = time.monotonic()
+        if now - _last_auth_failure_log >= AUTH_FAILURE_LOG_INTERVAL:
+            print(
+                "Rejected BLE advertisements with invalid authentication "
+                f"tags ({_suppressed_auth_failures} since last report)."
+            )
+            _suppressed_auth_failures = 0
+            _last_auth_failure_log = now
         return None
 
     # Expected plaintext:
