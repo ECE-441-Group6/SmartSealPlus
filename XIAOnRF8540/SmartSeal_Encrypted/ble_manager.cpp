@@ -81,39 +81,6 @@ bool createEncryptedPacket(
         return false;
     }
 
-    uint32_t sequence;
-
-    if (!getNextSequence(sequence)) {
-        return false;
-    }
-
-    // -------------------------------------------------
-    // Build packet header
-    // -------------------------------------------------
-
-    packet[0] = MAGIC;
-    packet[1] = PROTOCOL_VERSION;
-    packet[2] = SEAL_ID;
-
-    encodeUint32(packet + 3, sequence);
-
-    // -------------------------------------------------
-    // Build 13-byte nonce
-    // -------------------------------------------------
-
-    uint8_t nonce[NONCE_LENGTH];
-
-    memcpy(nonce, NONCE_PREFIX, 9);
-
-    // Use exactly the same sequence bytes as the
-    // transmitted packet. Python uses payload[3:7].
-
-    memcpy(nonce + 9, packet + 3, 4);
-
-    // -------------------------------------------------
-    // Build plaintext sensor data
-    // -------------------------------------------------
-
     int16_t temperatureTenths =
         (int16_t)lroundf(temperatureC * 10.0f);
 
@@ -131,6 +98,32 @@ bool createEncryptedPacket(
     if (movementCode > MOVEMENT_SHAKE) {
         return false;
     }
+
+    // Validate all caller-provided values before allocating a nonce sequence.
+    // Invalid readings should not create gaps in the sequence stream.
+    uint32_t sequence;
+    if (!getNextSequence(sequence)) {
+        return false;
+    }
+
+    // -------------------------------------------------
+    // Build packet header and nonce
+    // -------------------------------------------------
+
+    packet[0] = MAGIC;
+    packet[1] = PROTOCOL_VERSION;
+    packet[2] = SEAL_ID;
+    encodeUint32(packet + 3, sequence);
+
+    uint8_t nonce[NONCE_LENGTH];
+    memcpy(nonce, NONCE_PREFIX, 9);
+
+    // Use exactly the same sequence bytes as the transmitted packet.
+    memcpy(nonce + 9, packet + 3, 4);
+
+    // -------------------------------------------------
+    // Build plaintext sensor data
+    // -------------------------------------------------
 
     uint8_t plaintext[PLAINTEXT_LENGTH];
 

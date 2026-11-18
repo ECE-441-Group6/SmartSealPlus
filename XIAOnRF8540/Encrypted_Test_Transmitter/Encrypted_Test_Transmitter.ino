@@ -9,6 +9,12 @@
 #include "secrets.h"
 #include "sequence_manager.h"
 
+// Keep the test sketch buildable when a local secrets.h does not define the
+// provisioning flag. Enable it explicitly only for first-time provisioning.
+#ifndef ALLOW_SEQUENCE_PROVISIONING
+#define ALLOW_SEQUENCE_PROVISIONING 0
+#endif
+
 namespace {
 constexpr uint16_t MANUFACTURER_ID = 0x5353;
 constexpr uint8_t MAGIC = 0xA5;
