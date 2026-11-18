@@ -722,4 +722,5 @@ setInterval(() => {
         refreshEvents();
     }
 }, 2000);
-setInterval(loadArchives, 10000);
+setInterval(loadArchives, 2000);
+window.addEventListener("focus", loadArchives);

@@ -259,7 +259,11 @@ def events_api():
 @app.route("/api/archives")
 def archives_api():
     if not ARCHIVE_DIRECTORY.is_dir():
-        return jsonify([])
+        response = jsonify([])
+        response.headers["Cache-Control"] = (
+            "no-store, no-cache, must-revalidate, max-age=0"
+        )
+        return response
 
     archives = sorted(
         (
@@ -270,7 +274,9 @@ def archives_api():
         reverse=True,
     )
     response = jsonify(archives)
-    response.headers["Cache-Control"] = "no-store"
+    response.headers["Cache-Control"] = (
+        "no-store, no-cache, must-revalidate, max-age=0"
+    )
     return response
 
 #passes csv headers to front end, assumes csv has these headers only (check csv header and info creation)
