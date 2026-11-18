@@ -78,13 +78,14 @@ tbody tr:hover {
     background-color: #eaf3ff;
 }
 
-/* Optional temperature graph */
+/* Optional sensor history graphs */
 
 .temperature-chart-section {
     margin: 18px 0;
 }
 
-#toggle-temperature-chart {
+#toggle-temperature-chart,
+#toggle-vibration-chart {
     padding: 10px 14px;
     border: 1px solid #164b78;
     border-radius: 5px;
@@ -94,7 +95,8 @@ tbody tr:hover {
     cursor: pointer;
 }
 
-#temperature-chart-panel {
+#temperature-chart-panel,
+#vibration-chart-panel {
     margin-top: 12px;
     padding: 16px;
     background: white;
@@ -103,13 +105,15 @@ tbody tr:hover {
     box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
 }
 
-#temperature-chart-panel h2 {
+#temperature-chart-panel h2,
+#vibration-chart-panel h2 {
     margin: 0 0 12px;
     color: #123b63;
     font-size: 20px;
 }
 
-#temperature-seal-filter {
+#temperature-seal-filter,
+#vibration-seal-filter {
     margin-left: 6px;
     padding: 7px 9px;
     border: 1px solid #aab8c7;
@@ -117,17 +121,20 @@ tbody tr:hover {
     background: white;
 }
 
-#temperature-chart {
+#temperature-chart,
+#vibration-chart {
     display: block;
     width: 100%;
     margin-top: 10px;
 }
 
-#temperature-chart[hidden] {
+#temperature-chart[hidden],
+#vibration-chart[hidden] {
     display: none;
 }
 
-#temperature-chart-empty {
+#temperature-chart-empty,
+#vibration-chart-empty {
     color: #526174;
 }
 

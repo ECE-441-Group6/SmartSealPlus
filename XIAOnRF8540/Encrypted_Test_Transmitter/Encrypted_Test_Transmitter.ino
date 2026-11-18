@@ -12,7 +12,7 @@
 namespace {
 constexpr uint16_t MANUFACTURER_ID = 0x5353;
 constexpr uint8_t MAGIC = 0xA5;
-constexpr uint8_t PROTOCOL_VERSION = 3;
+constexpr uint8_t PROTOCOL_VERSION = 4;
 constexpr uint8_t NONCE_LENGTH = 13;
 constexpr uint8_t TAG_LENGTH = 8;
 constexpr uint8_t HEADER_LENGTH = 7;

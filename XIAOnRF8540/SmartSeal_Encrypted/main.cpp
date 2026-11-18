@@ -83,7 +83,7 @@ void publishSensorData() {
 
     if (!createEncryptedPacket(
             temperature,
-            vibration.detected,
+            vibration.magnitudeVolts,
             movementCode,
             encryptedPacket)) {
 
@@ -101,7 +101,9 @@ void publishSensorData() {
     Serial.println(temperature, 1);
 
     Serial.print("Vibration: ");
-    Serial.println(vibration.detected ? 1 : 0);
+    Serial.print(vibration.detected ? "DETECTED, peak magnitude: " : "NONE, magnitude: ");
+    Serial.print(vibration.magnitudeVolts, 3);
+    Serial.println(" V");
     Serial.print("Movement type: ");
     Serial.println(movementCode);
 
@@ -112,14 +114,9 @@ void publishSensorData() {
         Serial.print(vibration.voltage, 3);
         Serial.print(" V, baseline: ");
         Serial.print(vibration.baseline, 1);
-        Serial.print(", deviation: ");
+        Serial.print(", latest deviation: ");
         Serial.print(vibration.deviation, 1);
-        Serial.print(" ADC (");
-        Serial.print(
-            vibration.deviation * ADC_REFERENCE_VOLTAGE / ADC_MAX,
-            3
-        );
-        Serial.println(" V)");
+        Serial.println(" ADC");
     }
 
     Serial.print("Encrypted packet: ");

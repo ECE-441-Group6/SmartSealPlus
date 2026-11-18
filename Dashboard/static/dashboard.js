@@ -53,10 +53,13 @@ function tamperStatus(value) {
 
 // Generate a colored vibration indicator.
 function vibrationStatus(value) {
-    const detected = value === true || value === 1;
+    const magnitude = Number(value);
+    const detected = Number.isFinite(magnitude) && magnitude > 0;
 
     return detected
-        ? '<span class="sensor-status sensor-warning">DETECTED</span>'
+        ? `<span class="sensor-status sensor-warning">
+            DETECTED (${magnitude.toFixed(2)} V)
+        </span>`
         : '<span class="sensor-status sensor-normal">NORMAL</span>';
 }
 
@@ -318,6 +321,161 @@ function refreshTemperatureChart(events) {
     if (!document.querySelector("#temperature-chart-panel").hidden) {
         renderTemperatureChart();
     }
+    refreshVibrationChart(events);
+}
+
+function vibrationChartRows(events) {
+    return events.map((event) => ({
+        timestamp: chartTimestamp(event[1]),
+        sealId: Number(event[2]),
+        magnitude: event[6] === null || event[6] === ""
+            ? null
+            : Number(event[6]),
+    })).filter((event) => (
+        event.timestamp !== null &&
+        event.magnitude !== null &&
+        Number.isInteger(event.sealId) &&
+        Number.isFinite(event.magnitude) &&
+        event.magnitude >= 0
+    ));
+}
+
+function renderVibrationChart() {
+    const canvas = document.querySelector("#vibration-chart");
+    const emptyMessage = document.querySelector("#vibration-chart-empty");
+    const legend = document.querySelector("#vibration-chart-legend");
+    const rows = vibrationChartRows(currentEvents);
+    const selector = document.querySelector("#vibration-seal-filter");
+    const previousValue = selector.value || "all";
+    const sealIds = [...new Set(rows.map((row) => row.sealId))]
+        .sort((left, right) => left - right);
+    selector.replaceChildren(new Option("All seals", "all"));
+    for (const sealId of sealIds) {
+        selector.add(new Option(`Seal ${sealId}`, String(sealId)));
+    }
+    selector.value = sealIds.includes(Number(previousValue))
+        ? previousValue
+        : "all";
+
+    const selectedRows = rows.filter((row) => (
+        selector.value === "all" || row.sealId === Number(selector.value)
+    ));
+    legend.replaceChildren();
+    emptyMessage.hidden = selectedRows.length > 0;
+    canvas.hidden = selectedRows.length === 0;
+    if (selectedRows.length === 0) {
+        return;
+    }
+
+    const grouped = new Map();
+    for (const row of selectedRows) {
+        if (!grouped.has(row.sealId)) grouped.set(row.sealId, []);
+        grouped.get(row.sealId).push(row);
+    }
+    for (const points of grouped.values()) {
+        points.sort((left, right) => left.timestamp - right.timestamp);
+    }
+
+    const width = Math.max(320, canvas.clientWidth);
+    const height = 320;
+    const scale = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.style.height = `${height}px`;
+    const context = canvas.getContext("2d");
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    context.clearRect(0, 0, width, height);
+
+    const margin = { top: 20, right: 24, bottom: 58, left: 58 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+    const allPoints = [...grouped.values()].flat();
+    const timeBounds = allPoints.reduce((bounds, point) => ({
+        min: Math.min(bounds.min, point.timestamp),
+        max: Math.max(bounds.max, point.timestamp),
+    }), { min: Infinity, max: -Infinity });
+    const minTime = timeBounds.min;
+    const maxTime = timeBounds.max;
+    const maxMagnitude = allPoints.reduce(
+        (maximum, point) => Math.max(maximum, point.magnitude),
+        0.1
+    );
+    const maxY = Math.ceil(maxMagnitude * 10) / 10 || 0.1;
+    const timeRange = Math.max(maxTime - minTime, 1000);
+    const x = (timestamp) => margin.left + ((timestamp - minTime) / timeRange) * plotWidth;
+    const y = (magnitude) => margin.top + ((maxY - magnitude) / maxY) * plotHeight;
+
+    context.font = "12px Arial, sans-serif";
+    context.textAlign = "right";
+    context.textBaseline = "middle";
+    for (let tick = 0; tick <= 4; tick += 1) {
+        const value = (maxY * tick) / 4;
+        const tickY = y(value);
+        context.strokeStyle = "#dbe3ec";
+        context.lineWidth = 1;
+        context.beginPath();
+        context.moveTo(margin.left, tickY);
+        context.lineTo(width - margin.right, tickY);
+        context.stroke();
+        context.fillStyle = "#526174";
+        context.fillText(`${value.toFixed(2)} V`, margin.left - 8, tickY);
+    }
+    context.strokeStyle = "#66788a";
+    context.beginPath();
+    context.moveTo(margin.left, margin.top);
+    context.lineTo(margin.left, height - margin.bottom);
+    context.lineTo(width - margin.right, height - margin.bottom);
+    context.stroke();
+
+    const dateFormatter = new Intl.DateTimeFormat(undefined, {
+        month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+    });
+    context.fillStyle = "#526174";
+    context.textAlign = "center";
+    context.textBaseline = "top";
+    for (let tick = 0; tick <= 4; tick += 1) {
+        const timestamp = minTime + (timeRange * tick) / 4;
+        const tickX = margin.left + (plotWidth * tick) / 4;
+        context.fillText(dateFormatter.format(new Date(timestamp)), tickX, height - margin.bottom + 10);
+    }
+
+    let colorIndex = 0;
+    for (const [sealId, originalPoints] of grouped) {
+        const color = TEMPERATURE_CHART_COLORS[colorIndex % TEMPERATURE_CHART_COLORS.length];
+        colorIndex += 1;
+        const points = downsampleChartPoints(originalPoints);
+        context.strokeStyle = color;
+        context.lineWidth = 2;
+        context.beginPath();
+        points.forEach((point, index) => {
+            if (index === 0) context.moveTo(x(point.timestamp), y(point.magnitude));
+            else context.lineTo(x(point.timestamp), y(point.magnitude));
+        });
+        context.stroke();
+        context.fillStyle = color;
+        for (const point of points) {
+            context.beginPath();
+            context.arc(x(point.timestamp), y(point.magnitude), 3, 0, Math.PI * 2);
+            context.fill();
+        }
+        const item = document.createElement("span");
+        item.className = "chart-legend-item";
+        const swatch = document.createElement("span");
+        swatch.className = "chart-legend-swatch";
+        swatch.style.backgroundColor = color;
+        swatch.setAttribute("aria-hidden", "true");
+        const label = document.createElement("span");
+        label.textContent = `Seal ${sealId}`;
+        item.append(swatch, label);
+        legend.appendChild(item);
+    }
+}
+
+function refreshVibrationChart(events) {
+    currentEvents = events;
+    if (!document.querySelector("#vibration-chart-panel").hidden) {
+        renderVibrationChart();
+    }
 }
 
 document.querySelector("#toggle-temperature-chart").addEventListener("click", (event) => {
@@ -337,9 +495,27 @@ document.querySelector("#temperature-seal-filter").addEventListener("change", ()
     renderTemperatureChart();
 });
 
+document.querySelector("#toggle-vibration-chart").addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    const panel = document.querySelector("#vibration-chart-panel");
+    panel.hidden = !panel.hidden;
+    button.setAttribute("aria-expanded", String(!panel.hidden));
+    button.textContent = panel.hidden
+        ? "Show vibration graph"
+        : "Hide vibration graph";
+    if (!panel.hidden) renderVibrationChart();
+});
+
+document.querySelector("#vibration-seal-filter").addEventListener("change", () => {
+    renderVibrationChart();
+});
+
 window.addEventListener("resize", () => {
     if (!document.querySelector("#temperature-chart-panel").hidden) {
         renderTemperatureChart();
+    }
+    if (!document.querySelector("#vibration-chart-panel").hidden) {
+        renderVibrationChart();
     }
 });
 

@@ -10,7 +10,7 @@ from unittest.mock import patch
 from Gateway import database
 from Gateway import gateway_main
 from Gateway.alert_manager import process_alerts
-from Gateway.ble_scanner import parse_advertisement
+from Gateway.ble_scanner import PROTOCOL_VERSION, parse_advertisement
 from Gateway.packet_parser import parse_packet
 
 
@@ -36,7 +36,7 @@ class ReliabilityTests(unittest.TestCase):
             int(temperature * 10)
         )
         payload = (
-            bytes([0xA5, 1, seal_id])
+            bytes([0xA5, PROTOCOL_VERSION, seal_id])
             + sequence.to_bytes(4, "little")
             + temperature_tenths.to_bytes(2, "little", signed=True)
             + bytes([int(tamper)])

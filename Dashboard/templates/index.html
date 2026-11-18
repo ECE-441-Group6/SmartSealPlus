@@ -7,7 +7,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}"
           data-can-delete="{{ 'true' if session.get('username') else 'false' }}">
     <title>SmartSeal+ Monitoring Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='temperature-chart-1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='sensor-charts-1') }}">
 </head>
 <body>
 
@@ -53,6 +53,30 @@
             Temperature history chart. Use the event table for the readings.
         </canvas>
         <div id="temperature-chart-legend" class="chart-legend"
+             aria-label="Seal graph legend"></div>
+    </div>
+</section>
+
+<section class="temperature-chart-section" aria-labelledby="vibration-chart-title">
+    <button id="toggle-vibration-chart" type="button"
+            aria-expanded="false" aria-controls="vibration-chart-panel">
+        Show vibration graph
+    </button>
+    <div id="vibration-chart-panel" hidden>
+        <h2 id="vibration-chart-title">Vibration magnitude history</h2>
+        <label for="vibration-seal-filter">Seal:</label>
+        <select id="vibration-seal-filter">
+            <option value="all">All seals</option>
+        </select>
+        <p id="vibration-chart-empty" role="status" hidden>
+            No vibration readings are available for this selection.
+        </p>
+        <p class="chart-help">Peak sensor deviation from baseline, in volts.</p>
+        <canvas id="vibration-chart" height="320"
+                role="img" aria-label="Vibration magnitude history chart">
+            Vibration magnitude history chart. Use the event table for the readings.
+        </canvas>
+        <div id="vibration-chart-legend" class="chart-legend"
              aria-label="Seal graph legend"></div>
     </div>
 </section>
@@ -114,11 +138,11 @@
                 {% endif %}
             </td>
 
-            <!-- Vibration status -->
+            <!-- Vibration magnitude; zero means no detected event. -->
             <td>
-                {% if event[6] %}
+                {% if event[6] is not none and event[6]|float > 0 %}
                     <span class="sensor-status sensor-warning">
-                        DETECTED
+                        DETECTED ({{ "%.2f"|format(event[6]|float) }} V)
                     </span>
                 {% else %}
                     <span class="sensor-status sensor-normal">
@@ -157,7 +181,7 @@
 </table>
 
 <!-- Automatically refresh sensor readings -->
-<script src="{{ url_for('static', filename='dashboard.js', v='temperature-chart-1') }}"></script>
+<script src="{{ url_for('static', filename='dashboard.js', v='sensor-charts-1') }}"></script>
 
 </body>
 </html>

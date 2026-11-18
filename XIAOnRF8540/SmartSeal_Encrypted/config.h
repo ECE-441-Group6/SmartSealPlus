@@ -11,7 +11,7 @@
 
 constexpr uint16_t MANUFACTURER_ID = 0x5353;
 constexpr uint8_t MAGIC = 0xA5;
-constexpr uint8_t PROTOCOL_VERSION = 3;
+constexpr uint8_t PROTOCOL_VERSION = 4;
 constexpr uint32_t ADVERTISEMENT_INTERVAL_MS = 5000;
 constexpr uint32_t BUTTON_DEBOUNCE_MS = 40;
 constexpr uint16_t ADC_MAX = 4095;

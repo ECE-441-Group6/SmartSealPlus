@@ -10,7 +10,7 @@ from Gateway.ble_scanner import parse_advertisement
 
 def sensor_packet(seal_id=1, sequence=1, temperature=5.2, tamper=False, vibration=0):
     return (
-        bytes([0xA5, 1, seal_id])
+        bytes([0xA5, ble_scanner.PROTOCOL_VERSION, seal_id])
         + sequence.to_bytes(4, "little")
         + round(temperature * 10).to_bytes(2, "little", signed=True)
         + bytes([int(tamper)])

@@ -8,6 +8,7 @@ struct VibrationReading {
     float baseline;
     float deviation;
     float voltage;
+    float magnitudeVolts;
 };
 
 float readTemperatureC();

@@ -10,6 +10,7 @@ float vibrationThreshold = 40.0f;
 VibrationReading latestVibration = {};
 uint8_t vibrationHits = 0;
 bool vibrationLatched = false;
+float peakDeviationSincePacket = 0.0f;
 }
 
 // Assumption:
@@ -72,6 +73,7 @@ void calibrateVibrationSensor() {
     latestVibration = {};
     vibrationHits = 0;
     vibrationLatched = false;
+    peakDeviationSincePacket = 0.0f;
 
     Serial.print("Vibration baseline: ");
     Serial.println(vibrationBaseline);
@@ -95,6 +97,10 @@ void updateVibrationSensor() {
         ((float)reading / ADC_MAX) * ADC_REFERENCE_VOLTAGE;
 
     if (difference > vibrationThreshold) {
+        peakDeviationSincePacket = fmaxf(
+            peakDeviationSincePacket,
+            difference
+        );
         if (vibrationHits < REQUIRED_HITS) {
             vibrationHits++;
         }
@@ -111,7 +117,11 @@ void updateVibrationSensor() {
 VibrationReading detectVibration() {
 
     latestVibration.detected = vibrationLatched;
+    latestVibration.magnitudeVolts = vibrationLatched
+        ? peakDeviationSincePacket * ADC_REFERENCE_VOLTAGE / ADC_MAX
+        : 0.0f;
     vibrationLatched = false;
+    peakDeviationSincePacket = 0.0f;
 
     return latestVibration;
 }

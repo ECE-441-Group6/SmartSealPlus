@@ -6,7 +6,7 @@ void initializeBle();
 void stopEncryptedAdvertising();
 bool createEncryptedPacket(
   float temperatureC,
-  bool vibrationDetected,
+  float vibrationMagnitudeVolts,
   uint8_t movementCode,
   uint8_t *packet
 );

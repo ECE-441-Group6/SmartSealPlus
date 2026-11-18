@@ -37,7 +37,7 @@ SEAL_KEYS = {} if SIMULATION_MODE else load_seal_keys()
 AES_TAG_LENGTH = 8
 
 MAGIC = 0xA5
-PROTOCOL_VERSION = 3
+PROTOCOL_VERSION = 4
 
 EXPECTED_PACKET_LENGTH = 21
 
@@ -53,7 +53,7 @@ def parse_advertisement(payload):
 
     Expected packet:
         Byte 0:       Magic (0xA5)
-        Byte 1:       Protocol version (3)
+        Byte 1:       Protocol version (4)
         Byte 2:       Seal ID
         Bytes 3-6:    Sequence number (little-endian)
         Bytes 7-12:   Encrypted sensor data
@@ -127,7 +127,7 @@ def parse_advertisement(payload):
     # Expected plaintext:
     # Bytes 0-1: temperature * 10 (signed little-endian)
     # Byte 2:    tamper (0 or 1)
-    # Bytes 3-4: vibration * 100 (unsigned little-endian)
+    # Bytes 3-4: peak vibration deviation in hundredths of a volt
     # Byte 5: movement type
 
     if len(plaintext) != 6:
@@ -157,7 +157,7 @@ def parse_advertisement(payload):
         return None
 
     temperature = temperature_raw / 10.0
-    vibration = vibration_raw / 100.0
+    vibration_magnitude_volts = vibration_raw / 100.0
 
     print(
         f"Decryption successful: seal={seal_id}, "
@@ -169,7 +169,7 @@ def parse_advertisement(payload):
         "event_sequence": sequence,
         "temperature": temperature,
         "tamper": bool(tamper_raw),
-        "vibration": vibration,
+        "vibration": vibration_magnitude_volts,
         "movement_type": movement_type,
     }
 

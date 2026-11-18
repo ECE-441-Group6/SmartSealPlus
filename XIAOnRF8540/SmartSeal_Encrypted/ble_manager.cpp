@@ -69,7 +69,7 @@ bool encryptSensorData(
 
 bool createEncryptedPacket(
     float temperatureC,
-    bool vibrationDetected,
+    float vibrationMagnitudeVolts,
     uint8_t movementCode,
     uint8_t *packet
 ) {
@@ -117,8 +117,16 @@ bool createEncryptedPacket(
     int16_t temperatureTenths =
         (int16_t)lroundf(temperatureC * 10.0f);
 
-    uint16_t vibrationValue =
-        vibrationDetected ? 100 : 0;
+    if (!isfinite(vibrationMagnitudeVolts) ||
+        vibrationMagnitudeVolts < 0.0f ||
+        vibrationMagnitudeVolts > 655.35f) {
+        return false;
+    }
+
+    // Store the peak sensor deviation in hundredths of a volt.
+    const uint16_t vibrationMagnitude = static_cast<uint16_t>(
+        lroundf(vibrationMagnitudeVolts * 100.0f)
+    );
 
     if (movementCode > MOVEMENT_SHAKE) {
         return false;
@@ -135,8 +143,8 @@ bool createEncryptedPacket(
     // Tamper is currently not connected to this sketch.
     plaintext[2] = 0;
 
-    plaintext[3] = vibrationValue & 0xFF;
-    plaintext[4] = (vibrationValue >> 8) & 0xFF;
+    plaintext[3] = vibrationMagnitude & 0xFF;
+    plaintext[4] = (vibrationMagnitude >> 8) & 0xFF;
     plaintext[5] = movementCode;
 
     // -------------------------------------------------
