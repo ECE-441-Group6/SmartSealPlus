@@ -121,6 +121,7 @@ ARCHIVE_FILENAME = re.compile(
 )
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_MAX_FAILURES = 8
+MAX_TRACKED_LOGIN_CLIENTS = 4096
 _login_failures = defaultdict(deque)
 _login_failures_lock = Lock()
 
@@ -179,6 +180,15 @@ def _record_login_failure(client):
                     stale_attempts.popleft()
                 if not stale_attempts:
                     _login_failures.pop(stale_client, None)
+
+        # Keep attacker-controlled remote addresses from growing this
+        # in-memory throttle table without bound.
+        while len(_login_failures) > MAX_TRACKED_LOGIN_CLIENTS:
+            oldest_client = min(
+                _login_failures,
+                key=lambda address: _login_failures[address][0],
+            )
+            _login_failures.pop(oldest_client, None)
 
 
 def _clear_login_failures(client):

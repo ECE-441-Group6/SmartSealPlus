@@ -12,6 +12,12 @@ else:
 
 
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
+# Use the same scrypt cost for unknown usernames so login timing does not
+# disclose whether an account name exists.
+_DUMMY_PASSWORD_HASH = generate_password_hash(
+    "SmartSeal-invalid-account-password-placeholder",
+    method="scrypt",
+)
 
 
 def create_user(username, password):
@@ -58,6 +64,8 @@ def verify_user(username, password):
     finally:
         conn.close()
 
-    if row is None or not check_password_hash(row[1], password):
+    password_hash = row[1] if row is not None else _DUMMY_PASSWORD_HASH
+    password_matches = check_password_hash(password_hash, password)
+    if row is None or not password_matches:
         return None
     return row[0]

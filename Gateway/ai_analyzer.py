@@ -17,6 +17,10 @@ else:
     from alert_manager import TEMP_HIGH, TEMP_LOW
 
 
+MAX_ANALYSIS_IMAGE_BYTES = 16 * 1024 * 1024
+MAX_OLLAMA_RESPONSE_BYTES = 1024 * 1024
+
+
 class _RejectRedirects(HTTPRedirectHandler):
     """Keep local image analysis from redirecting requests off loopback."""
 
@@ -36,9 +40,10 @@ def analyze_image(filename, packet):
 def _analyze_with_ollama(filename, packet):
     try:
         with open(filename, "rb") as image_file:
-            encoded_image = base64.b64encode(
-                image_file.read()
-            ).decode("ascii")
+            image_bytes = image_file.read(MAX_ANALYSIS_IMAGE_BYTES + 1)
+        if len(image_bytes) > MAX_ANALYSIS_IMAGE_BYTES:
+            raise ValueError("Image exceeds the local analysis size limit")
+        encoded_image = base64.b64encode(image_bytes).decode("ascii")
 
         prompt = (
             "You are inspecting a medical cold-chain security seal called SmartSeal+. "
@@ -68,6 +73,7 @@ def _analyze_with_ollama(filename, packet):
             "prompt": prompt,
             "images": [encoded_image],
             "stream": False,
+            "options": {"num_predict": 256},
         }
 
         ollama_url = os.getenv(
@@ -98,7 +104,13 @@ def _analyze_with_ollama(filename, packet):
         with opener.open(
             request, timeout=float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "60"))
         ) as response:
-            result = json.load(response)
+            response_bytes = response.read(MAX_OLLAMA_RESPONSE_BYTES + 1)
+        if len(response_bytes) > MAX_OLLAMA_RESPONSE_BYTES:
+            raise ValueError("Ollama response exceeds the configured size limit")
+        result = json.loads(response_bytes.decode("utf-8"))
+
+        if not isinstance(result, dict):
+            raise ValueError("Ollama returned an invalid response")
 
         analysis = result.get("response", "").strip()
 
