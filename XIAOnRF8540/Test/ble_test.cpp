@@ -1,4 +1,4 @@
-//Run with xiaobletest.py in Gateway/Test folder
+// Run with tests/manual/xiao_advertisement_scanner.py from the repository root.
 #include <bluefruit.h>
 
 BLEService smartSealService(

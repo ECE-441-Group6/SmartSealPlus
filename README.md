@@ -349,12 +349,21 @@ only loopback Ollama URLs. To use sensor-only fallback text, set
 `SMARTSEAL_AI_PROVIDER=none`. The active analyzer does not use OpenAI or send
 images to an external AI provider.
 
-## Syntax check
+## Tests and syntax check
 
-From the repository root:
+Run the automated tests from the repository root:
 
 ```bash
-python3 -m compileall -q Gateway Dashboard
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+Manual Raspberry Pi tools and hardware diagnostics are in `tests/manual/`.
+They are not part of the automated test suite.
+
+To compile-check the Python programs without running them:
+
+```bash
+python3 -m compileall -q Gateway Dashboard GATT tests
 ```
 
 ## Main paths
@@ -368,4 +377,11 @@ Gateway/gateway_main.py            Event handling
 Gateway/database.py                SQLite storage, retention, and CSV archives
 Dashboard/                         Flask dashboard and account management
 Gateway/keys.json                  Local gateway secrets (ignored by Git)
+GATT/                              Separate legacy BLE GATT implementation
+tests/                              Automated tests and manual hardware tools
 ```
+
+`Gateway/` contains the active BLE advertising gateway programs and their
+runtime data. GATT code, including the legacy accelerometer receiver, is kept
+separately under `GATT/` and is not imported by the advertising gateway.
+Gateway tests and hardware diagnostics are kept under `tests/`.
