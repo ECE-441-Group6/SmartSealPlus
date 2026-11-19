@@ -135,7 +135,9 @@ def add_security_headers(response):
         "Content-Security-Policy",
         "default-src 'self'; base-uri 'self'; object-src 'none'; "
         "frame-ancestors 'none'; form-action 'self'; connect-src 'self'; "
-        "img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: https://unpkg.com https://*.tile.openstreetmap.org; "
+        "script-src 'self' https://unpkg.com; "
+        "style-src 'self' 'unsafe-inline' https://unpkg.com",
     )
     if app.config["SESSION_COOKIE_SECURE"]:
         response.headers.setdefault(
@@ -330,6 +332,10 @@ def archive_events_api(filename):
                 int(event["movement_type"]) if event.get("movement_type") else 0,
                 event.get("image_path") or None,
                 event.get("ai_analysis") or None,
+                float(event["gps_latitude"])
+                if event.get("gps_latitude") not in (None, "") else None,
+                float(event["gps_longitude"])
+                if event.get("gps_longitude") not in (None, "") else None,
             ])
 
     response = jsonify(rows)

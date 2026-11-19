@@ -45,6 +45,8 @@ Gateway and dashboard:
 - Python 3.10 or later
 - BLE adapter supported by Bleak
 - Dependencies in `requirements.txt`: Flask, Pillow, Bleak, and Cryptography
+- Adafruit Ultimate GPS Breakout v3 connected to the Pi's UART (optional for
+  GPS event locations; `pyserial` is installed from `requirements.txt`)
 - Raspberry Pi camera for real photographs (optional; Pillow generates a
   simulated image when camera hardware is unavailable)
 - Ollama running locally on the Raspberry Pi for local image analysis
@@ -54,7 +56,7 @@ On Raspberry Pi OS, install the system packages:
 
 ```bash
 sudo apt update
-sudo apt install python3-bleak python3-flask python3-pil python3-cryptography
+sudo apt install python3-bleak python3-flask python3-pil python3-cryptography python3-serial
 ```
 
 On Windows, macOS, or another Linux host, install the Python dependencies in a
@@ -261,6 +263,14 @@ to enable archive deletion. The server listens on localhost by default.
 Select **Show temperature graph** to view readings over time. The graph can
 show all seal IDs or one selected seal, follows the selected live/archive event
 history, and marks the 2 °C and 8 °C limits.
+The event locations map plots GPS fixes read by the gateway when it receives
+each seal advertisement. Attach the Pi's GPS antenna with a clear view of the
+sky; the default serial port is `/dev/serial0` at 9600 baud. Configure a
+different receiver with `SMARTSEAL_GPS_PORT` and `SMARTSEAL_GPS_BAUD`. The map
+shows up to the 500 most recent located events, while each located event has
+its own coordinate in the event table and archives. Coordinates approximate
+the gateway's position at receipt time, so the Pi must travel with the cargo
+and remain within BLE range of the seals. Map tiles require internet access.
 
 The dashboard creates `Gateway/.dashboard_secret` for persistent login
 sessions. The file is hidden on Linux and ignored by Git. Keep it private.

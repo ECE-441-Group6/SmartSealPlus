@@ -478,6 +478,109 @@ function refreshVibrationChart(events) {
     }
 }
 
+let locationMap = null;
+let locationLayers = null;
+let previousLocationSignature = null;
+const locationMapEmpty = document.querySelector("#location-map-empty");
+
+if (window.L) {
+    locationMap = L.map("location-map").setView([0, 0], 2);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+        referrerPolicy: "strict-origin-when-cross-origin",
+    }).addTo(locationMap);
+    locationLayers = L.featureGroup().addTo(locationMap);
+} else {
+    locationMapEmpty.textContent =
+        "The map library could not load. Event coordinates remain available in the table.";
+}
+
+function eventLocation(event) {
+    const latitude = Number(event[10]);
+    const longitude = Number(event[11]);
+    if (
+        event[10] === null || event[10] === "" ||
+        event[11] === null || event[11] === "" ||
+        !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+        latitude < -90 || latitude > 90 ||
+        longitude < -180 || longitude > 180
+    ) {
+        return null;
+    }
+    return { latitude, longitude };
+}
+
+function refreshLocationMap(events) {
+    const locatedEvents = events
+        .map((event) => ({ event, location: eventLocation(event) }))
+        .filter((row) => row.location !== null);
+    // Keep map rendering responsive when a long shipment history contains
+    // many events. Every row still retains its own location in the table.
+    const mapEvents = locatedEvents.slice(0, 500);
+    const signature = JSON.stringify(mapEvents.map(({ event, location }) => [
+        event[0], event[1], event[2], event[3],
+        location.latitude, location.longitude,
+    ]));
+
+    locationMapEmpty.hidden = locatedEvents.length > 0;
+    if (!locationMap || signature === previousLocationSignature) {
+        return;
+    }
+    previousLocationSignature = signature;
+    locationLayers.clearLayers();
+
+    const routePoints = [...mapEvents]
+        .sort((left, right) => chartTimestamp(left.event[1]) - chartTimestamp(right.event[1]))
+        .map(({ location }) => [location.latitude, location.longitude]);
+
+    for (const { event, location } of mapEvents) {
+        const marker = L.marker([location.latitude, location.longitude]);
+        const popup = document.createElement("div");
+        const title = document.createElement("strong");
+        title.textContent = `Seal ${event[2]} — ${formatTimestamp(event[1])}`;
+        const coordinates = document.createElement("div");
+        coordinates.textContent =
+            `Approx. location: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
+        popup.append(title, coordinates);
+        marker.bindPopup(popup);
+        locationLayers.addLayer(marker);
+    }
+
+    if (routePoints.length > 1) {
+        locationLayers.addLayer(L.polyline(routePoints, {
+            color: "#1261a0",
+            weight: 3,
+            opacity: 0.7,
+        }));
+    }
+
+    if (routePoints.length === 1) {
+        locationMap.setView(routePoints[0], 15);
+    } else if (routePoints.length > 1) {
+        locationMap.fitBounds(locationLayers.getBounds().pad(0.12), { maxZoom: 15 });
+    }
+    window.setTimeout(() => locationMap.invalidateSize(), 0);
+}
+
+function appendLocationCell(row, event) {
+    const cell = document.createElement("td");
+    const location = eventLocation(event);
+    if (location) {
+        const link = document.createElement("a");
+        const lat = location.latitude.toFixed(6);
+        const lon = location.longitude.toFixed(6);
+        link.href = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = `${lat}, ${lon}`;
+        cell.appendChild(link);
+    } else {
+        cell.textContent = "Unavailable";
+    }
+    row.appendChild(cell);
+}
+
 document.querySelector("#toggle-temperature-chart").addEventListener("click", (event) => {
     const button = event.currentTarget;
     const panel = document.querySelector("#temperature-chart-panel");
@@ -552,6 +655,7 @@ async function refreshEvents() {
 
         const events = await response.json();
         refreshTemperatureChart(events);
+        refreshLocationMap(events);
 
         // Build the table using safe DOM operations.
         const rows = events.map((event) => {
@@ -582,6 +686,8 @@ async function refreshEvents() {
             const movementCell = document.createElement("td");
             movementCell.innerHTML = movementStatus(event[7]);
             row.appendChild(movementCell);
+
+            appendLocationCell(row, event);
 
             // Camera evidence link
             const imageCell = document.createElement("td");

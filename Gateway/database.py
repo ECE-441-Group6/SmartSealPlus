@@ -157,18 +157,24 @@ def init_database():
         vibration REAL,
         movement_type INTEGER DEFAULT 0,
         image_path TEXT,
-        ai_analysis TEXT
+        ai_analysis TEXT,
+        gps_latitude REAL,
+        gps_longitude REAL
     )
     """)
 
     # Add newer columns when opening a database created by an older version.
-    for column in ("event_sequence", "movement_type", "image_path", "ai_analysis"):
+    for column in (
+        "event_sequence", "movement_type", "image_path", "ai_analysis",
+        "gps_latitude", "gps_longitude",
+    ):
         try:
-            column_type = (
-                "INTEGER"
-                if column in ("event_sequence", "movement_type")
-                else "TEXT"
-            )
+            if column in ("event_sequence", "movement_type"):
+                column_type = "INTEGER"
+            elif column in ("gps_latitude", "gps_longitude"):
+                column_type = "REAL"
+            else:
+                column_type = "TEXT"
             cur.execute(f"ALTER TABLE events ADD COLUMN {column} {column_type}")
         except sqlite3.OperationalError:
             pass
@@ -244,8 +250,8 @@ def insert_event(packet, image_filename=None, ai_analysis=None):
     cur.execute("""
     INSERT OR IGNORE INTO events
     (seal_id, event_sequence, temperature, tamper, vibration, movement_type,
-     image_path, ai_analysis)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     image_path, ai_analysis, gps_latitude, gps_longitude)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
     (
         packet["seal_id"],
@@ -255,7 +261,9 @@ def insert_event(packet, image_filename=None, ai_analysis=None):
         packet["vibration"],
         packet.get("movement_type", 0),
         image_filename,
-        ai_analysis
+        ai_analysis,
+        packet.get("gps_latitude"),
+        packet.get("gps_longitude"),
     ))
 
     inserted = cur.rowcount == 1
@@ -290,8 +298,9 @@ def accept_event(packet):
 
         cur = conn.execute("""
             INSERT OR IGNORE INTO events
-            (seal_id, event_sequence, temperature, tamper, vibration, movement_type)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (seal_id, event_sequence, temperature, tamper, vibration, movement_type,
+             gps_latitude, gps_longitude)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 packet["seal_id"],
                 sequence,
@@ -299,6 +308,8 @@ def accept_event(packet):
                 int(packet["tamper"]),
                 packet["vibration"],
                 packet.get("movement_type", 0),
+                packet.get("gps_latitude"),
+                packet.get("gps_longitude"),
             ))
         if cur.rowcount != 1:
             conn.rollback()
@@ -380,7 +391,8 @@ def get_latest_events():
 
     cur.execute("""
     SELECT id, timestamp, seal_id, event_sequence, temperature, tamper,
-           vibration, movement_type, image_path, ai_analysis
+           vibration, movement_type, image_path, ai_analysis,
+           gps_latitude, gps_longitude
     FROM events
     ORDER BY timestamp DESC, id DESC
     """)
@@ -397,7 +409,8 @@ def archive_events():
     try:
         rows = conn.execute("""
         SELECT id, timestamp, seal_id, event_sequence, temperature, tamper,
-               vibration, movement_type, image_path, ai_analysis
+               vibration, movement_type, image_path, ai_analysis,
+               gps_latitude, gps_longitude
         FROM events
         ORDER BY timestamp ASC, id ASC
         """).fetchall()
@@ -426,6 +439,8 @@ def archive_events():
             "movement_type",
             "image_path",
             "ai_analysis",
+            "gps_latitude",
+            "gps_longitude",
         ))
         writer.writerows(_spreadsheet_safe_row(row) for row in rows)
 

@@ -3,3 +3,4 @@ Werkzeug>=3.1.9
 Pillow>=13.0.0
 bleak>=0.22
 cryptography>=48.0.1
+pyserial>=3.5

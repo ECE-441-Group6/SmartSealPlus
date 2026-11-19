@@ -1,6 +1,7 @@
 """SmartSeal+ gateway with validation, idempotent storage, and delivery ACKs."""
 
 import csv
+import os
 import queue
 import sqlite3
 import threading
@@ -21,6 +22,7 @@ if __package__:
     from .ai_analyzer import analyze_image
     from .camera_manager import capture_image
     from .image_storage import image_path
+    from .gps_tracker import GPSLocationTracker
 else:
     from ble_scanner import scan_ble
     from packet_parser import parse_packet
@@ -36,6 +38,7 @@ else:
     from ai_analyzer import analyze_image
     from camera_manager import capture_image
     from image_storage import image_path
+    from gps_tracker import GPSLocationTracker
 
 
 def _artifact_worker(artifact_queue):
@@ -77,6 +80,10 @@ def _artifact_worker(artifact_queue):
 
 def run_gateway(interval=5, scanner=scan_ble):
     init_database()
+    gps_tracker = None
+    if os.getenv("SMARTSEAL_SIMULATION", "0") != "1":
+        gps_tracker = GPSLocationTracker()
+        gps_tracker.start()
 
     # Recover readings left in the live table if the previous gateway process
     # was terminated before its shutdown handler could archive them. Archive
@@ -123,6 +130,11 @@ def run_gateway(interval=5, scanner=scan_ble):
                         if packet is None:
                             print("Invalid sensor packet. Skipping...")
                             continue
+
+                        # Stamp each seal event with the most recent fresh fix
+                        # from the gateway's GPS receiver, if one is available.
+                        if gps_tracker is not None:
+                            packet.update(gps_tracker.latest_fix() or {})
 
                         if not accept_event(packet):
                             print(
@@ -197,6 +209,8 @@ def run_gateway(interval=5, scanner=scan_ble):
     except KeyboardInterrupt:
         print("\nSmartSeal+ gateway stopped.")
     finally:
+        if gps_tracker is not None:
+            gps_tracker.stop()
         # Drain queued image work before archiving so completed image paths and
         # analysis results are reflected in the archive.
         artifact_queue.put(None)
