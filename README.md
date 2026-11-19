@@ -257,6 +257,18 @@ In a separate terminal, start the dashboard:
 python3 Dashboard/dashboard.py
 ```
 
+To run the dashboard and gateway together in one terminal, use the repository
+root launcher instead:
+
+```bash
+python3 run_smartseal.py
+```
+
+On Windows PowerShell, run `python .\run_smartseal.py`. The launcher starts the
+dashboard before the gateway, passes through the current environment settings,
+and stops both when you press Ctrl+C. It gives the gateway time to finish its
+normal shutdown and archive the current session.
+
 Open [http://127.0.0.1:5000](http://127.0.0.1:5000). Visitors can view the
 dashboard, events, archives, and captured images without signing in. Sign in
 to enable archive deletion. The server listens on localhost by default.
