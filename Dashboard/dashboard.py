@@ -51,15 +51,45 @@ def _load_secret_key():
             raise RuntimeError("SMARTSEAL_DASHBOARD_SECRET must be at least 32 bytes.")
         return key
 
+    if SECRET_FILE.is_symlink():
+        raise RuntimeError(f"{SECRET_FILE} must not be a symbolic link.")
+
+    def read_created_secret():
+        # Another dashboard process may have won the exclusive create race and
+        # still be writing the 32-byte key. Wait briefly instead of accepting
+        # a partial secret or failing spuriously during concurrent startup.
+        key = b""
+        for _ in range(50):
+            try:
+                key = SECRET_FILE.read_bytes()
+            except FileNotFoundError:
+                key = b""
+            if len(key) >= 32:
+                return key
+            time.sleep(0.02)
+        return key
+
     try:
+        if os.name == "posix" and SECRET_FILE.exists():
+            # Restrict an existing key before reading it, rather than leaving
+            # a permissive mode in place during dashboard startup.
+            SECRET_FILE.chmod(0o600)
         key = SECRET_FILE.read_bytes()
     except FileNotFoundError:
         key = secrets.token_bytes(32)
         try:
-            with SECRET_FILE.open("xb") as secret_file:
-                secret_file.write(key)
+            descriptor = os.open(
+                SECRET_FILE,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
         except FileExistsError:
-            key = SECRET_FILE.read_bytes()
+            key = read_created_secret()
+        else:
+            with os.fdopen(descriptor, "wb") as secret_file:
+                secret_file.write(key)
+                secret_file.flush()
+                os.fsync(secret_file.fileno())
 
     if len(key) < 32:
         raise RuntimeError(
