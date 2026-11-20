@@ -102,6 +102,37 @@ tbody tr:hover {
     color: white;
     font-size: 14px;
     cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.16);
+    transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+#toggle-temperature-chart:hover,
+#toggle-vibration-chart:hover,
+#toggle-location-map:hover {
+    background: #1d6399;
+    box-shadow: 0 7px 16px rgba(18, 59, 99, 0.28);
+    transform: translateY(-3px);
+}
+
+#toggle-temperature-chart:focus-visible,
+#toggle-vibration-chart:focus-visible,
+#toggle-location-map:focus-visible {
+    outline: 3px solid #82c7ff;
+    outline-offset: 3px;
+}
+
+#toggle-temperature-chart:active,
+#toggle-vibration-chart:active,
+#toggle-location-map:active {
+    transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #toggle-temperature-chart,
+    #toggle-vibration-chart,
+    #toggle-location-map {
+        transition: none;
+    }
 }
 
 #temperature-chart-panel,
