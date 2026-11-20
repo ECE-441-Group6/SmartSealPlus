@@ -158,6 +158,9 @@ def run_gateway(interval=5, scanner=scan_ble):
                                 f"seq={packet['event_sequence']}"
                             )
                             continue
+                        artifact_queued = packet.pop(
+                            "_artifact_queued", capture_triggered
+                        )
 
                         now = time.monotonic()
                         if now - last_stale_check >= max(interval, 5):
@@ -188,7 +191,13 @@ def run_gateway(interval=5, scanner=scan_ble):
                             else "No issues detected."
                         )
                         if capture_triggered:
-                            ai_analysis = "Image analysis queued."
+                            ai_analysis = (
+                                "Image analysis queued."
+                                if artifact_queued
+                                else "Image analysis skipped; persistent queue is full."
+                            )
+                            if not artifact_queued:
+                                update_event_artifacts(packet, None, ai_analysis)
                         else:
                             update_event_artifacts(packet, None, ai_analysis)
 

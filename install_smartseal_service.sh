@@ -29,6 +29,9 @@ Wants=network-online.target bluetooth.target
 Type=simple
 User=${service_user}
 WorkingDirectory=${project_dir}
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
 Environment=SMARTSEAL_DASHBOARD_HOST=0.0.0.0
 Environment=SMARTSEAL_DASHBOARD_PORT=5000
 Environment=SMARTSEAL_SIMULATION=0

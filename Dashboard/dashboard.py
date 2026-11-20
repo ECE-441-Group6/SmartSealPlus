@@ -26,6 +26,7 @@ from flask import (
     send_from_directory,
     url_for,
 )
+from waitress import serve
 
 REPOSITORY_PATH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_PATH))
@@ -383,13 +384,20 @@ def images(filename):
 
 
 if __name__ == "__main__":
-    # Listen on all Pi network interfaces so other devices on the same LAN
-    # can open the dashboard. Keep the port configurable for local setups.
-    app.run(
+    # Use a production WSGI server for LAN access instead of Flask's
+    # development server. Bound resources to limit the effect of slow or
+    # oversized client requests on the Pi.
+    serve(
+        app,
         host=os.getenv(
             "SMARTSEAL_DASHBOARD_HOST",
             "0.0.0.0" if os.name == "posix" else "127.0.0.1",
         ),
         port=int(os.getenv("SMARTSEAL_DASHBOARD_PORT", "5000")),
-        debug=False,
+        threads=4,
+        connection_limit=64,
+        channel_timeout=30,
+        max_request_header_size=8192,
+        max_request_body_size=16 * 1024,
+        clear_untrusted_proxy_headers=True,
     )

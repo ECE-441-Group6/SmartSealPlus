@@ -275,7 +275,10 @@ On the Raspberry Pi, the dashboard listens on all network interfaces at port
 view the dashboard, events, archives, and captured images without signing in.
 Sign in to enable archive deletion. This makes read-only dashboard data
 available to devices on the local network; do not forward port 5000 to the
-public internet.
+public internet. The dashboard uses Waitress with bounded request sizes,
+connection counts, and idle connection timeouts. HTTP traffic on the LAN is
+not encrypted, so use only a trusted network; do not enter account passwords
+over untrusted Wi-Fi.
 
 To start the dashboard and gateway automatically when Raspberry Pi OS boots,
 from the repository root run:

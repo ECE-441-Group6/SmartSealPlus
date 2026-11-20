@@ -16,6 +16,7 @@ DB_NAME = DATA_DIRECTORY / "smartseal.db"
 IMAGE_FOLDER = DB_NAME.parent / "images"
 ARCHIVE_DIRECTORY = DB_NAME.parent / "archives"
 RETENTION_DAYS = 90
+MAX_ARTIFACT_JOBS = 64
 
 
 def _utc_cutoff():
@@ -104,6 +105,10 @@ def apply_retention_policy():
                     expired_ids.append((event_id,))
             if expired_ids:
                 conn.executemany("DELETE FROM events WHERE id = ?", expired_ids)
+        conn.execute(
+            "DELETE FROM artifact_jobs WHERE datetime(created_at) < ?",
+            (cutoff.strftime("%Y-%m-%d %H:%M:%S"),),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -333,6 +338,10 @@ def accept_event(packet, artifact_required=False):
             conn.rollback()
             return False
 
+        queue_artifact = artifact_required and conn.execute(
+            "SELECT COUNT(*) FROM artifact_jobs"
+        ).fetchone()[0] < MAX_ARTIFACT_JOBS
+
         cur = conn.execute("""
             INSERT OR IGNORE INTO events
             (seal_id, event_sequence, temperature, tamper, vibration, movement_type,
@@ -346,7 +355,13 @@ def accept_event(packet, artifact_required=False):
                 packet["vibration"],
                 packet.get("movement_type", 0),
                 None,
-                "Image analysis queued." if artifact_required else None,
+                (
+                    "Image analysis queued."
+                    if queue_artifact
+                    else "Image analysis skipped; persistent queue is full."
+                    if artifact_required
+                    else None
+                ),
                 packet.get("gps_latitude"),
                 packet.get("gps_longitude"),
             ))
@@ -361,7 +376,7 @@ def accept_event(packet, artifact_required=False):
                 last_seen = excluded.last_seen,
                 last_event_sequence = excluded.last_event_sequence
             """, (packet["seal_id"], sequence))
-        if artifact_required:
+        if queue_artifact:
             conn.execute(
                 """
                 INSERT INTO artifact_jobs
@@ -370,6 +385,10 @@ def accept_event(packet, artifact_required=False):
                 """,
                 (packet["seal_id"], sequence, json.dumps(packet)),
             )
+        elif artifact_required:
+            packet["_artifact_queued"] = False
+        if queue_artifact:
+            packet["_artifact_queued"] = True
         conn.commit()
         return True
     except Exception:
