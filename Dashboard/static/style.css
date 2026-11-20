@@ -78,18 +78,20 @@ tbody tr:hover {
     background-color: #eaf3ff;
 }
 
-/* Optional sensor history graphs */
+/* Event source and graph/map actions */
 
-.sensor-chart-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
-    align-items: start;
-    margin: 18px 0;
+.dashboard-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 18px 0 24px;
 }
 
-.temperature-chart-section {
-    min-width: 0;
+.event-history-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
 }
 
 #toggle-temperature-chart,
@@ -230,11 +232,7 @@ tbody tr:hover {
     font-size: 13px;
 }
 
-.location-section {
-    margin: 20px 0;
-}
-
-.location-section h2 {
+.map-modal-content h2 {
     margin: 0 0 8px;
     color: #123b63;
     font-size: 20px;
@@ -309,10 +307,6 @@ a:hover {
 /* Responsive layout */
 
 @media (max-width: 768px) {
-    .sensor-chart-grid {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
     body {
         padding: 12px;
     }

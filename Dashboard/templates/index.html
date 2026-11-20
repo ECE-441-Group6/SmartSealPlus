@@ -28,20 +28,24 @@
     Connecting to gateway data...
 </p>
 
-<label for="event-source">Event history:</label>
-<select id="event-source" aria-label="Event history">
-    <option value="live">Current gateway session</option>
-</select>
-<button id="delete-archive" type="button" disabled>
-    {% if session.get('username') %}Delete selected archive{% else %}Sign in to delete archives{% endif %}
-</button>
-
-<div class="sensor-chart-grid">
-<section class="temperature-chart-section">
-    <button id="toggle-temperature-chart" type="button"
-            aria-haspopup="dialog" aria-controls="temperature-chart-dialog">
-        Show temperature graph
+<div class="dashboard-controls">
+    <div class="event-history-control">
+        <label for="event-source">Event history:</label>
+        <select id="event-source" aria-label="Event history">
+            <option value="live">Current gateway session</option>
+        </select>
+    </div>
+    <button id="delete-archive" type="button" disabled>
+        {% if session.get('username') %}Delete selected archive{% else %}Sign in to delete archives{% endif %}
     </button>
+    <button id="toggle-temperature-chart" type="button"
+            aria-haspopup="dialog" aria-controls="temperature-chart-dialog">Temperature graph</button>
+    <button id="toggle-vibration-chart" type="button"
+            aria-haspopup="dialog" aria-controls="vibration-chart-dialog">Vibration graph</button>
+    <button id="toggle-location-map" type="button" aria-haspopup="dialog"
+            aria-controls="location-map-dialog">Event map</button>
+</div>
+
     <div id="temperature-chart-dialog" class="modal-overlay" hidden>
       <section class="modal-content" role="dialog" aria-modal="true"
                aria-labelledby="temperature-chart-title" tabindex="-1">
@@ -65,13 +69,7 @@
         </div>
       </section>
     </div>
-</section>
 
-<section class="temperature-chart-section">
-    <button id="toggle-vibration-chart" type="button"
-            aria-haspopup="dialog" aria-controls="vibration-chart-dialog">
-        Show vibration graph
-    </button>
     <div id="vibration-chart-dialog" class="modal-overlay" hidden>
       <section class="modal-content" role="dialog" aria-modal="true"
                aria-labelledby="vibration-chart-title" tabindex="-1">
@@ -95,12 +93,7 @@
         </div>
       </section>
     </div>
-</section>
-</div>
 
-<section class="location-section" aria-labelledby="location-title">
-    <button id="toggle-location-map" type="button" aria-haspopup="dialog"
-            aria-controls="location-map-dialog">Show event map</button>
     <div id="location-map-dialog" class="modal-overlay" hidden>
       <section class="modal-content map-modal-content" role="dialog" aria-modal="true"
                aria-labelledby="location-title" tabindex="-1">
@@ -117,7 +110,6 @@
         </p>
       </section>
     </div>
-</section>
 
 <table>
     <thead>
