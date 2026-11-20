@@ -64,6 +64,8 @@ void updateRecordButton(uint32_t now) {
 
 void publishSensorData() {
 
+    // Sample sensors locally, then encrypt one complete reading set before it
+    // is exposed through the BLE advertising payload.
     float temperature = readTemperatureC();
 
     const VibrationReading vibration = detectVibration();
@@ -91,6 +93,7 @@ void publishSensorData() {
         return;
     }
 
+    // Replacing the advertising data publishes this sequence's latest reading.
     startEncryptedAdvertising(encryptedPacket);
     clearMovementCode();
 

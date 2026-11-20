@@ -13,6 +13,8 @@ if [[ -z "${service_user}" || "${service_user}" == "root" ]]; then
 fi
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Prefer the repository virtual environment so the service uses its installed
+# BLE, camera, database, and dashboard dependencies after boot.
 python_bin="${project_dir}/.venv/bin/python"
 if [[ ! -x "${python_bin}" ]]; then
     python_bin="/usr/bin/python3"
@@ -29,6 +31,7 @@ Wants=network-online.target bluetooth.target
 Type=simple
 User=${service_user}
 WorkingDirectory=${project_dir}
+# Keep files created by the gateway private and prevent privilege escalation.
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

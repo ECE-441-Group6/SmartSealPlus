@@ -19,6 +19,8 @@ else:
 # BLE CONFIGURATION
 # --------------------------------------------------
 
+# Keep this company identifier and the packet version aligned with config.h
+# in the encrypted XIAO firmware. The advertisement contains one seal packet.
 MANUFACTURER_ID = 0x5353
 XIAO_DEVICE_NAME = "SmartSeal-XIAO"
 ESP_DEVICE_NAMES = {"SmartSeal-01"}
@@ -72,7 +74,8 @@ def parse_advertisement(payload):
 
     payload = bytes(payload)
 
-    # Bleak normally removes the manufacturer/company ID.
+    # Bleak normally exposes the company ID as the manufacturer_data map key.
+    # Some adapters include its little-endian bytes in the payload as well.
     # Accept it if a backend includes it.
     if payload.startswith(b"\x53\x53"):
         payload = payload[2:]
@@ -104,11 +107,13 @@ def parse_advertisement(payload):
         byteorder="little"
     )
 
-    # Nonce must match the XIAO implementation exactly.
+    # AES-CCM requires a nonce that is never reused with the same key. The
+    # seal combines its per-device 9-byte prefix with the 4-byte sequence.
     # Use the transmitted sequence bytes directly.
     nonce = nonce_prefix + sequence_bytes
 
-    # Authenticate header and sequence.
+    # Authenticate the cleartext header too, so seal ID/version/sequence cannot
+    # be modified without failing the AES-CCM tag check.
     aad = payload[0:7]
 
     # Ciphertext and authentication tag.
@@ -215,6 +220,8 @@ def simulated_packet():
 async def scan_real_ble():
     """Scan for encrypted SmartSeal advertisements."""
 
+    # Keep the latest valid packet from each seal seen during this scan window;
+    # a single window can therefore collect several nearby seals.
     latest_by_seal = {}
 
     def detection_callback(device, advertisement):
@@ -247,7 +254,8 @@ async def scan_real_ble():
         print(f"Received encrypted packets from {len(packets)} seal(s).")
         for packet in packets:
             print("Decoded packet:", packet)
-        # Keep the old single-packet return shape when only one seal was seen.
+        # Preserve the single-packet API for one seal while returning a list
+        # when multiple seals were heard in the same scan window.
         return packets[0] if len(packets) == 1 else packets
 
     print(

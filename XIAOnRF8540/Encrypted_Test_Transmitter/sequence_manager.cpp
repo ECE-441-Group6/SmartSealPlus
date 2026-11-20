@@ -7,6 +7,8 @@
 using namespace Adafruit_LittleFS_Namespace;
 
 namespace {
+// Reserve a block at once to reduce flash writes. Power loss can skip unused
+// numbers, but must never make the test device reuse a nonce under its key.
 constexpr uint32_t SEQUENCE_BLOCK_SIZE = 1024;
 
 uint64_t nextSequence = 1;
@@ -16,6 +18,7 @@ bool sequenceStorageReady = false;
 }
 
 namespace {
+// This checksum detects damaged flash records; it is not an authentication tag.
 uint32_t calculateChecksum(const uint8_t *data, size_t length) {
 
     uint32_t hash = 2166136261UL;
@@ -53,7 +56,7 @@ const char *sequencePath(uint8_t slot) {
 
 
 bool readSequenceSlot(uint8_t slot, uint32_t &highWater, bool &mirroredRecord) {
-    //Create file object for the internal flash filesystem.
+    // Read one redundant high-water record from the XIAO internal filesystem.
     File file(InternalFS);   //typeName, ObjectName()
 
 
@@ -78,7 +81,7 @@ bool readSequenceSlot(uint8_t slot, uint32_t &highWater, bool &mirroredRecord) {
         return false;
     }
 
-    //verify checksum to validate record data has not been corrupted.
+    // Verify the record format and checksum before trusting its counter value.
     uint32_t storedChecksum = decodeUint32(record + 8); //Pass point to the 9th byte
     uint32_t calculatedChecksum = calculateChecksum(record, 8); //Calculate checksum based on first 8 bytes
     if (storedChecksum != calculatedChecksum) {
@@ -106,8 +109,8 @@ bool writeSequenceSlot(uint8_t slot, uint32_t highWater) {
 
     const char *path = sequencePath(slot);
 
-    // Delete the older copy in this slot.
-    // The other slot remains intact.
+    // Replace one copy while the other remains intact, then read back to
+    // verify the flash write before this value is used for packet nonces.
 
     if (InternalFS.exists(path)) {
         if (!InternalFS.remove(path)) {
@@ -158,8 +161,8 @@ bool reserveSequenceBlock() {
 
     uint32_t newEnd = (uint32_t)proposedEnd;
 
-    // Store the same high-water mark in both slots before using any value in
-    // the new range. A single missing slot then cannot roll the counter back.
+    // Persist the new high-water mark in both slots before using any value in
+    // the range. Mirroring protects against one damaged/missing flash record.
     if (!writeSequenceSlot(0, newEnd) ||
         !writeSequenceSlot(1, newEnd)) {
         Serial.println("ERROR: Could not save sequence counter.");
@@ -178,7 +181,8 @@ bool reserveSequenceBlock() {
 
 
 bool initializeSequenceCounter(bool allowFirstBootProvisioning) {
-    // Initialize the internal flash filesystem. to store sequence numbers after shutdown.
+    // Sequence persistence is essential: without it, reboot could reuse a CCM
+    // nonce. Fail closed unless the operator explicitly provisions the device.
     while(!InternalFS.begin()) { 
         Serial.println("ERROR: Failed to initialize internal flash filesystem. Retrying...");
         delay(1000);
@@ -282,9 +286,8 @@ bool initializeSequenceCounter(bool allowFirstBootProvisioning) {
         nextSequence = (uint64_t)reservedEnd + 1;
     }
 
-    // Reserve a fresh range BEFORE using any sequence number.
-    // After a restart, unused numbers from the old range
-    // are deliberately skipped.
+    // Reserve a fresh range before advertising. Restarting skips any unused
+    // values from the previous block rather than risking nonce reuse.
 
     if (!reserveSequenceBlock()) {
         return false;
@@ -317,6 +320,8 @@ bool getNextSequence(uint32_t &sequence) {
         return false;
     }
 
+    // Hand out each value once; the gateway uses it for replay checks and the
+    // seal uses its exact bytes in both the packet and AES-CCM nonce.
     sequence = (uint32_t)nextSequence;
 
     nextSequence++;

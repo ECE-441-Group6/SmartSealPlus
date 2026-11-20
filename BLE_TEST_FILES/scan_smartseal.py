@@ -1,4 +1,5 @@
-#The purpose of this file is to scan for the SmartSeal+ BLE device and display its information.
+# TEST UTILITY ONLY: inspect the legacy readable SmartSeal advertisement.
+# It does not authenticate or decrypt production encrypted packets.
 #Run the following command to execute this script:
 #cd ~/SmartSealPlus/TestFiles
 #python3 scan_smartseal.py

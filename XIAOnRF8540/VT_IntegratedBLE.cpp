@@ -151,6 +151,8 @@ void sendMessage(const char* message) {
 void advertiseGatewayPacket(float temperatureF, int vibrationADC) {
   if (!isfinite(temperatureF)) return;
 
+  // Legacy readable test payload. This is a separate prototype format, not
+  // the authenticated AES-CCM v4 packet used by the production encrypted seal.
   char packet[24];
   int packetLength = snprintf(
     packet,
@@ -166,6 +168,8 @@ void advertiseGatewayPacket(float temperatureF, int vibrationADC) {
     return;
   }
 
+  // Prefix the application text with the 16-bit manufacturer/company ID in
+  // BLE-required little-endian order.
   uint8_t manufacturerData[sizeof(packet) + 2];
   manufacturerData[0] = (uint8_t)(GATEWAY_MANUFACTURER_ID & 0xFF);
   manufacturerData[1] = (uint8_t)(GATEWAY_MANUFACTURER_ID >> 8);

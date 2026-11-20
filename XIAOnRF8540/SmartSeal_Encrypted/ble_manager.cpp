@@ -12,6 +12,8 @@
 #include "sequence_manager.h"
 
 namespace {
+// Sequence values are serialized little-endian so the gateway builds the same
+// nonce bytes from the transmitted packet.
 void encodeUint32(uint8_t *destination, uint32_t value) {
   destination[0] = value & 0xFF;
   destination[1] = (value >> 8) & 0xFF;
@@ -28,6 +30,8 @@ bool encryptSensorData(
     uint8_t *tag
 ) {
 
+    // CryptoCell's AES-CCM operation produces ciphertext and a separate tag.
+    // The key is copied from the local, untracked secrets.h configuration.
     CRYS_AESCCM_Key_t ccmKey = {0};
 
     // Copy the 128-bit key into CryptoCell's key buffer.
@@ -74,6 +78,8 @@ bool createEncryptedPacket(
     uint8_t *packet
 ) {
 
+    // Reject invalid readings before consuming a sequence number; the sequence
+    // is also the changing part of the CCM nonce.
     if (!isfinite(temperatureC) ||
         temperatureC < -3276.8f ||
         temperatureC > 3276.7f) {
@@ -125,6 +131,8 @@ bool createEncryptedPacket(
     // Build plaintext sensor data
     // -------------------------------------------------
 
+    // Plaintext layout: temperature x10 (signed LE), tamper flag,
+    // vibration magnitude x100 (unsigned LE), movement code.
     uint8_t plaintext[PLAINTEXT_LENGTH];
 
     uint16_t temperatureRaw =
@@ -179,6 +187,8 @@ bool createEncryptedPacket(
 
 void startEncryptedAdvertising(const uint8_t *packet) {
 
+    // The BLE manufacturer field is company ID (little-endian) followed by
+    // the fixed-size encrypted packet defined above.
     uint8_t manufacturerData[23];
 
     // Company ID, little-endian.
@@ -213,8 +223,10 @@ void startEncryptedAdvertising(const uint8_t *packet) {
 
     Bluefruit.ScanResponse.addName();
 
+    // Use BLE advertising interval units (0.625 ms): range 20 to 152.5 ms.
     Bluefruit.Advertising.setInterval(32, 244);
 
+    // Duration zero means advertise until stopEncryptedAdvertising() is called.
     Bluefruit.Advertising.start(0);
 }
 

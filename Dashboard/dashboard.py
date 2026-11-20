@@ -394,10 +394,14 @@ if __name__ == "__main__":
             "0.0.0.0" if os.name == "posix" else "127.0.0.1",
         ),
         port=int(os.getenv("SMARTSEAL_DASHBOARD_PORT", "5000")),
+        # Keep concurrent application work small for the Pi's memory and CPU.
         threads=4,
+        # Reject excess connections and close clients that stay idle too long.
         connection_limit=64,
         channel_timeout=30,
+        # Bound headers and bodies before Flask needs to parse a request.
         max_request_header_size=8192,
         max_request_body_size=16 * 1024,
+        # Do not let untrusted proxy headers alter request metadata.
         clear_untrusted_proxy_headers=True,
     )

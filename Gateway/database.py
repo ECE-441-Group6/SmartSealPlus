@@ -16,6 +16,7 @@ DB_NAME = DATA_DIRECTORY / "smartseal.db"
 IMAGE_FOLDER = DB_NAME.parent / "images"
 ARCHIVE_DIRECTORY = DB_NAME.parent / "archives"
 RETENTION_DAYS = 90
+# Bound durable work so delayed AI analysis cannot consume unbounded disk space.
 MAX_ARTIFACT_JOBS = 64
 
 
@@ -338,6 +339,8 @@ def accept_event(packet, artifact_required=False):
             conn.rollback()
             return False
 
+        # Count and insert under the same write transaction so simultaneous
+        # event handling cannot exceed the durable queue limit.
         queue_artifact = artifact_required and conn.execute(
             "SELECT COUNT(*) FROM artifact_jobs"
         ).fetchone()[0] < MAX_ARTIFACT_JOBS
@@ -385,6 +388,7 @@ def accept_event(packet, artifact_required=False):
                 """,
                 (packet["seal_id"], sequence, json.dumps(packet)),
             )
+        # Let the caller report backpressure while still saving the sensor event.
         elif artifact_required:
             packet["_artifact_queued"] = False
         if queue_artifact:

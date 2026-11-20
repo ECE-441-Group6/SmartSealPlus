@@ -1,5 +1,5 @@
-# The purpose of this file is to verify BLE advertising from the SmartSeal+
-# device and the XIAO nRF52840.
+# TEST UTILITY ONLY: inspect legacy readable manufacturer payloads from older
+# sketches. It does not authenticate or decrypt production encrypted packets.
 #Run the following command to execute this script:
 #cd ~/SmartSealPlus/TestFiles
 #python3 verify_smartseal_ble.py

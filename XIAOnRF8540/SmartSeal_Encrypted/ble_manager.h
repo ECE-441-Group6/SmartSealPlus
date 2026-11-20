@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+// Initialize the radio, construct authenticated sensor packets, and publish
+// those packets in BLE manufacturer data (no GATT connection is used).
 void initializeBle();
 void stopEncryptedAdvertising();
 bool createEncryptedPacket(

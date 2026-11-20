@@ -16,6 +16,8 @@
 #endif
 
 namespace {
+// Keep these wire constants synchronized with production config.h and the
+// Raspberry Pi's encrypted advertisement parser.
 constexpr uint16_t MANUFACTURER_ID = 0x5353;
 constexpr uint8_t MAGIC = 0xA5;
 constexpr uint8_t PROTOCOL_VERSION = 4;
@@ -32,6 +34,8 @@ uint8_t scenario = 0;
 bool encryptPlaintext(const uint8_t *plaintext, const uint8_t *aad,
                       const uint8_t *nonce, uint8_t *ciphertext,
                       uint8_t *tag) {
+  // Match the production seal's AES-CCM key size, AAD, tag, and plaintext size
+  // so the gateway can authenticate packets from this sensorless test board.
   CRYS_AESCCM_Key_t ccmKey = {0};
   memcpy(ccmKey, AES_KEY, sizeof(AES_KEY));
   CRYS_AESCCM_Mac_Res_t mac = {0};
@@ -66,6 +70,8 @@ bool makeTestPacket(uint8_t *packet) {
   static const uint8_t movements[] = {0, 0, 1, 4};
   const uint8_t sample = scenario++ % 4;
 
+  // The visible header is authenticated as AAD; six sensor bytes are encrypted
+  // and the eight-byte CCM tag is appended to form the 21-byte packet.
   packet[0] = MAGIC;
   packet[1] = PROTOCOL_VERSION;
   packet[2] = SEAL_ID;
@@ -74,6 +80,7 @@ bool makeTestPacket(uint8_t *packet) {
   packet[5] = (sequence >> 16) & 0xFF;
   packet[6] = (sequence >> 24) & 0xFF;
 
+  // Match production nonce construction: per-seal prefix followed by sequence.
   uint8_t nonce[NONCE_LENGTH];
   memcpy(nonce, NONCE_PREFIX, 9);
   memcpy(nonce + 9, packet + 3, 4);
@@ -105,6 +112,8 @@ bool makeTestPacket(uint8_t *packet) {
 }
 
 void advertise(const uint8_t *packet) {
+  // Put the company ID before the SmartSeal packet in the BLE manufacturer
+  // field; BLE stacks may instead expose that ID separately to the scanner.
   uint8_t manufacturerData[2 + PACKET_LENGTH];
   manufacturerData[0] = MANUFACTURER_ID & 0xFF;
   manufacturerData[1] = MANUFACTURER_ID >> 8;
@@ -117,11 +126,14 @@ void advertise(const uint8_t *packet) {
   Bluefruit.Advertising.addTxPower();
   Bluefruit.Advertising.addManufacturerData(
       manufacturerData, sizeof(manufacturerData));
+  // Interval values use 0.625 ms units; start indefinitely until updated.
   Bluefruit.Advertising.setInterval(32, 244);
   Bluefruit.Advertising.start(0);
 }
 
 void sendSample() {
+  // Use a new persistent sequence for every transmission so a captured packet
+  // cannot be replayed as a fresh test event by the gateway.
   uint8_t packet[PACKET_LENGTH];
   if (makeTestPacket(packet)) {
     advertise(packet);

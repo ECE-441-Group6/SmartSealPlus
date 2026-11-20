@@ -5,6 +5,11 @@ from numbers import Real
 
 
 def parse_packet(packet):
+    """Validate decoded advertisement fields before database or alert use.
+
+    BLE authentication proves the packet came from a provisioned key holder;
+    these checks separately enforce the gateway's expected value types/ranges.
+    """
     try:
         if packet is None:
             raise ValueError("No packet received")

@@ -18,12 +18,14 @@ SIMULATION_MODE = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
 
 
 async def scan_real_ble():
-    """Find the XIAO and receive its sensor packet over BLE."""
+    """Collect authenticated XIAO manufacturer advertisements for one window."""
     xiao_device = None
     packets_by_seal = {}
 
     def detection_callback(device, advertisement):
         nonlocal xiao_device
+        # Use the name only to report discovery; packet acceptance is based on
+        # the encrypted, authenticated manufacturer payload.
         device_name = advertisement.local_name or device.name or ""
         packet = None
         for manufacturer_id, payload in advertisement.manufacturer_data.items():
@@ -42,6 +44,8 @@ async def scan_real_ble():
     scanner = BleakScanner(detection_callback=detection_callback)
     await scanner.start()
     try:
+        # Bleak delivers each received advertisement to the callback until this
+        # window closes; scan all seals before handing packets to the gateway.
         await asyncio.sleep(SCAN_TIMEOUT)
     finally:
         await scanner.stop()

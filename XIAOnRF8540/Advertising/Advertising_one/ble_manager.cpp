@@ -6,6 +6,8 @@
 #include "config.h"
 
 namespace {
+// Legacy plaintext advertisement prototype. Production seals must use
+// SmartSeal_Encrypted for AES-CCM confidentiality and authentication.
 constexpr char DEVICE_NAME[] = "SmartSeal-XIAO";
 constexpr uint16_t GATEWAY_MANUFACTURER_ID = 0x5353;
 constexpr uint8_t PACKET_VERSION = 1;
@@ -15,6 +17,7 @@ constexpr uint8_t SEAL_ID = 1;
 uint32_t advertisementSequence = 0;
 
 void addManufacturerPacket(const uint8_t *packet, size_t packetLength) {
+  // Manufacturer data begins with the 16-bit company identifier, little-endian.
   uint8_t manufacturerData[14];
   manufacturerData[0] =
     static_cast<uint8_t>(GATEWAY_MANUFACTURER_ID & 0xFF);
@@ -67,6 +70,8 @@ bool updateGatewayAdvertisement(
   const uint16_t vibrationValue = vibrationDetected ? 100 : 0;  //if vibration is detected, send 100, otherwise send 0
   const uint32_t sequence = ++advertisementSequence;
 
+  // Prototype v1 format: marker/version/seal/sequence/sensor fields; unlike
+  // production v4 packets, these values are visible and unauthenticated.
   const uint8_t packet[12] = {
     0xA5,   //start byte?
     PACKET_VERSION,

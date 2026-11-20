@@ -29,6 +29,7 @@ def load_seal_keys(key_path=None):
     The old top-level SMARTSEAL_AES_KEY/SMARTSEAL_NONCE_PREFIX format remains
     supported as seal 1, so existing one-seal deployments keep working.
     """
+    # Load secrets from the ignored local file, never from the example template.
     key_path = Path(key_path) if key_path else Path(__file__).with_name("keys.json")
     try:
         if os.name == "posix" and stat.S_IMODE(key_path.stat().st_mode) & 0o077:
@@ -79,6 +80,8 @@ def load_seal_keys(key_path=None):
             seal_id,
             9,
         )
+        # Reject identical key/nonce domains across seal IDs; CCM nonce reuse
+        # with one AES key can reveal plaintext and undermine authentication.
         nonce_domain = (aes_key, nonce_prefix)
         if nonce_domain in nonce_domains:
             raise RuntimeError(

@@ -158,6 +158,8 @@ def run_gateway(interval=5, scanner=scan_ble):
                                 f"seq={packet['event_sequence']}"
                             )
                             continue
+                        # The database may accept the event but skip the image
+                        # job when its bounded persistent queue is full.
                         artifact_queued = packet.pop(
                             "_artifact_queued", capture_triggered
                         )
