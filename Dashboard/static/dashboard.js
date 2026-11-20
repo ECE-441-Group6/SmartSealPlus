@@ -318,7 +318,7 @@ function renderTemperatureChart() {
 
 function refreshTemperatureChart(events) {
     currentEvents = events;
-    if (!document.querySelector("#temperature-chart-panel").hidden) {
+    if (!document.querySelector("#temperature-chart-dialog").hidden) {
         renderTemperatureChart();
     }
     refreshVibrationChart(events);
@@ -473,7 +473,7 @@ function renderVibrationChart() {
 
 function refreshVibrationChart(events) {
     currentEvents = events;
-    if (!document.querySelector("#vibration-chart-panel").hidden) {
+    if (!document.querySelector("#vibration-chart-dialog").hidden) {
         renderVibrationChart();
     }
 }
@@ -581,17 +581,40 @@ function appendLocationCell(row, event) {
     row.appendChild(cell);
 }
 
-document.querySelector("#toggle-temperature-chart").addEventListener("click", (event) => {
-    const button = event.currentTarget;
-    const panel = document.querySelector("#temperature-chart-panel");
-    panel.hidden = !panel.hidden;
-    button.setAttribute("aria-expanded", String(!panel.hidden));
-    button.textContent = panel.hidden
-        ? "Show temperature graph"
-        : "Hide temperature graph";
-    if (!panel.hidden) {
-        renderTemperatureChart();
+function openModal(modal, trigger) {
+    modal.hidden = false;
+    document.body.classList.add("modal-open");
+    modal.dataset.triggerId = trigger.id;
+    modal.querySelector(".modal-content").focus();
+}
+
+function closeModal(modal) {
+    if (modal.hidden) return;
+    modal.hidden = true;
+    if (![...document.querySelectorAll(".modal-overlay")].some((item) => !item.hidden)) {
+        document.body.classList.remove("modal-open");
     }
+    const trigger = document.getElementById(modal.dataset.triggerId);
+    if (trigger) trigger.focus();
+}
+
+document.querySelectorAll(".modal-overlay").forEach((modal) => {
+    modal.addEventListener("click", (event) => {
+        if (event.target === modal) closeModal(modal);
+    });
+    modal.querySelector(".modal-close").addEventListener("click", () => closeModal(modal));
+});
+
+document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const openModalElement = [...document.querySelectorAll(".modal-overlay")]
+        .find((modal) => !modal.hidden);
+    if (openModalElement) closeModal(openModalElement);
+});
+
+document.querySelector("#toggle-temperature-chart").addEventListener("click", (event) => {
+    openModal(document.querySelector("#temperature-chart-dialog"), event.currentTarget);
+    renderTemperatureChart();
 });
 
 document.querySelector("#temperature-seal-filter").addEventListener("change", () => {
@@ -599,14 +622,13 @@ document.querySelector("#temperature-seal-filter").addEventListener("change", ()
 });
 
 document.querySelector("#toggle-vibration-chart").addEventListener("click", (event) => {
-    const button = event.currentTarget;
-    const panel = document.querySelector("#vibration-chart-panel");
-    panel.hidden = !panel.hidden;
-    button.setAttribute("aria-expanded", String(!panel.hidden));
-    button.textContent = panel.hidden
-        ? "Show vibration graph"
-        : "Hide vibration graph";
-    if (!panel.hidden) renderVibrationChart();
+    openModal(document.querySelector("#vibration-chart-dialog"), event.currentTarget);
+    renderVibrationChart();
+});
+
+document.querySelector("#toggle-location-map").addEventListener("click", (event) => {
+    openModal(document.querySelector("#location-map-dialog"), event.currentTarget);
+    window.setTimeout(() => locationMap?.invalidateSize(), 0);
 });
 
 document.querySelector("#vibration-seal-filter").addEventListener("change", () => {
@@ -614,11 +636,14 @@ document.querySelector("#vibration-seal-filter").addEventListener("change", () =
 });
 
 window.addEventListener("resize", () => {
-    if (!document.querySelector("#temperature-chart-panel").hidden) {
+    if (!document.querySelector("#temperature-chart-dialog").hidden) {
         renderTemperatureChart();
     }
-    if (!document.querySelector("#vibration-chart-panel").hidden) {
+    if (!document.querySelector("#vibration-chart-dialog").hidden) {
         renderVibrationChart();
+    }
+    if (!document.querySelector("#location-map-dialog").hidden) {
+        locationMap?.invalidateSize();
     }
 });
 

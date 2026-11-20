@@ -93,7 +93,8 @@ tbody tr:hover {
 }
 
 #toggle-temperature-chart,
-#toggle-vibration-chart {
+#toggle-vibration-chart,
+#toggle-location-map {
     padding: 10px 14px;
     border: 1px solid #164b78;
     border-radius: 5px;
@@ -105,12 +106,58 @@ tbody tr:hover {
 
 #temperature-chart-panel,
 #vibration-chart-panel {
-    margin-top: 12px;
     padding: 16px;
     background: white;
     border: 1px solid #dbe3ec;
     border-radius: 8px;
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
+}
+
+.modal-overlay[hidden] {
+    display: none;
+}
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(10, 22, 36, 0.68);
+}
+
+.modal-content {
+    position: relative;
+    width: min(100%, 1000px);
+    max-height: min(90vh, 900px);
+    overflow: auto;
+    padding: 18px;
+    border-radius: 10px;
+    background: white;
+    box-shadow: 0 12px 42px rgba(0, 0, 0, 0.3);
+    outline: none;
+}
+
+.modal-close {
+    position: sticky;
+    top: 0;
+    float: right;
+    z-index: 1;
+    width: 38px;
+    height: 38px;
+    margin: -6px -6px 0 8px;
+    border: 0;
+    border-radius: 50%;
+    background: #164b78;
+    color: white;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.modal-open {
+    overflow: hidden;
 }
 
 #temperature-chart-panel h2,
@@ -154,11 +201,6 @@ tbody tr:hover {
 
 .location-section {
     margin: 20px 0;
-    padding: 16px;
-    background: white;
-    border: 1px solid #dbe3ec;
-    border-radius: 8px;
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
 }
 
 .location-section h2 {
@@ -173,6 +215,10 @@ tbody tr:hover {
     border: 1px solid #dbe3ec;
     border-radius: 5px;
     background: #eaf0f5;
+}
+
+.map-modal-content #location-map {
+    height: min(65vh, 620px);
 }
 
 #location-map-empty {
@@ -237,6 +283,15 @@ a:hover {
     }
 
     body {
+        padding: 12px;
+    }
+
+    .modal-overlay {
+        padding: 10px;
+    }
+
+    .modal-content {
+        max-height: 94vh;
         padding: 12px;
     }
 

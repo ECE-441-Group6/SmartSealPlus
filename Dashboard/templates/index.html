@@ -7,7 +7,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}"
           data-can-delete="{{ 'true' if session.get('username') else 'false' }}">
     <title>SmartSeal+ Monitoring Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='event-map-1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='modal-graphs-map-1') }}">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin="anonymous">
@@ -37,12 +37,16 @@
 </button>
 
 <div class="sensor-chart-grid">
-<section class="temperature-chart-section" aria-labelledby="temperature-chart-title">
+<section class="temperature-chart-section">
     <button id="toggle-temperature-chart" type="button"
-            aria-expanded="false" aria-controls="temperature-chart-panel">
+            aria-haspopup="dialog" aria-controls="temperature-chart-dialog">
         Show temperature graph
     </button>
-    <div id="temperature-chart-panel" hidden>
+    <div id="temperature-chart-dialog" class="modal-overlay" hidden>
+      <section class="modal-content" role="dialog" aria-modal="true"
+               aria-labelledby="temperature-chart-title" tabindex="-1">
+        <button class="modal-close" type="button" aria-label="Close temperature graph">×</button>
+        <div id="temperature-chart-panel">
         <h2 id="temperature-chart-title">Temperature history</h2>
         <label for="temperature-seal-filter">Seal:</label>
         <select id="temperature-seal-filter">
@@ -58,15 +62,21 @@
         </canvas>
         <div id="temperature-chart-legend" class="chart-legend"
              aria-label="Seal graph legend"></div>
+        </div>
+      </section>
     </div>
 </section>
 
-<section class="temperature-chart-section" aria-labelledby="vibration-chart-title">
+<section class="temperature-chart-section">
     <button id="toggle-vibration-chart" type="button"
-            aria-expanded="false" aria-controls="vibration-chart-panel">
+            aria-haspopup="dialog" aria-controls="vibration-chart-dialog">
         Show vibration graph
     </button>
-    <div id="vibration-chart-panel" hidden>
+    <div id="vibration-chart-dialog" class="modal-overlay" hidden>
+      <section class="modal-content" role="dialog" aria-modal="true"
+               aria-labelledby="vibration-chart-title" tabindex="-1">
+        <button class="modal-close" type="button" aria-label="Close vibration graph">×</button>
+        <div id="vibration-chart-panel">
         <h2 id="vibration-chart-title">Vibration magnitude history</h2>
         <label for="vibration-seal-filter">Seal:</label>
         <select id="vibration-seal-filter">
@@ -82,21 +92,31 @@
         </canvas>
         <div id="vibration-chart-legend" class="chart-legend"
              aria-label="Seal graph legend"></div>
+        </div>
+      </section>
     </div>
 </section>
 </div>
 
 <section class="location-section" aria-labelledby="location-title">
-    <h2 id="location-title">Event locations</h2>
-    <p class="chart-help">
+    <button id="toggle-location-map" type="button" aria-haspopup="dialog"
+            aria-controls="location-map-dialog">Show event map</button>
+    <div id="location-map-dialog" class="modal-overlay" hidden>
+      <section class="modal-content map-modal-content" role="dialog" aria-modal="true"
+               aria-labelledby="location-title" tabindex="-1">
+        <button class="modal-close" type="button" aria-label="Close event map">×</button>
+        <h2 id="location-title">Event locations</h2>
+        <p class="chart-help">
         Approximate GPS position of the gateway when each seal event was received.
         The map shows up to 500 recent events; every event with a GPS fix has a
         coordinate in the table. Map tiles require internet access.
-    </p>
-    <div id="location-map" role="application" aria-label="Map of seal event locations"></div>
-    <p id="location-map-empty" role="status">
+        </p>
+        <div id="location-map" role="application" aria-label="Map of seal event locations"></div>
+        <p id="location-map-empty" role="status">
         No event locations are available. Connect the gateway GPS and wait for a fix.
-    </p>
+        </p>
+      </section>
+    </div>
 </section>
 
 <table>
@@ -216,7 +236,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
         crossorigin="anonymous"></script>
-<script src="{{ url_for('static', filename='dashboard.js', v='event-map-1') }}"></script>
+<script src="{{ url_for('static', filename='dashboard.js', v='modal-graphs-map-1') }}"></script>
 
 </body>
 </html>
