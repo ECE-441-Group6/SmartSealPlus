@@ -2,7 +2,6 @@
 
 import csv
 import os
-import queue
 import sqlite3
 import threading
 import time
@@ -17,6 +16,11 @@ if __package__:
         init_database,
         accept_event,
         update_event_artifacts,
+        recover_artifact_jobs,
+        claim_artifact_job,
+        save_artifact_image,
+        retry_artifact_job,
+        complete_artifact_job,
     )
     from .alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
     from .ai_analyzer import analyze_image
@@ -33,6 +37,11 @@ else:
         init_database,
         accept_event,
         update_event_artifacts,
+        recover_artifact_jobs,
+        claim_artifact_job,
+        save_artifact_image,
+        retry_artifact_job,
+        complete_artifact_job,
     )
     from alert_manager import TEMP_HIGH, TEMP_LOW, process_alerts
     from ai_analyzer import analyze_image
@@ -41,45 +50,46 @@ else:
     from gps_tracker import GPSLocationTracker
 
 
-def _artifact_worker(artifact_queue):
-    """Capture and analyze alert images without blocking BLE scanning."""
+def _artifact_worker(stop_event):
+    """Process durable image jobs without blocking BLE scanning."""
     while True:
-        item = artifact_queue.get()
+        if stop_event.is_set():
+            return
+        job = None
         try:
-            if item is None:
-                return
+            job = claim_artifact_job()
+            if job is None:
+                stop_event.wait(1)
+                continue
 
-            packet = item
-            image_filename = None
-            try:
+            job_id, packet, image_filename = job
+            if not image_filename or not image_path(image_filename).is_file():
                 image_filename = capture_image(packet)
-            except Exception as error:
-                print(f"Camera error for seal {packet['seal_id']}: {error}")
+                save_artifact_image(job_id, image_filename)
 
-            if image_filename:
-                try:
-                    ai_analysis = analyze_image(
-                        str(image_path(image_filename)), packet
-                    )
-                except Exception as error:
-                    print(f"AI analysis error for seal {packet['seal_id']}: {error}")
-                    ai_analysis = "Analysis unavailable."
+            if image_filename and image_path(image_filename).is_file():
+                ai_analysis = analyze_image(str(image_path(image_filename)), packet)
             else:
                 ai_analysis = "Alert detected; image unavailable."
 
-            update_event_artifacts(packet, image_filename, ai_analysis)
+            complete_artifact_job(job_id, packet, image_filename, ai_analysis)
             print(
                 f"Background image analysis complete: seal={packet['seal_id']} "
                 f"seq={packet['event_sequence']} — {ai_analysis}"
             )
         except Exception as error:
             print(f"Background image processing error: {error}")
-        finally:
-            artifact_queue.task_done()
+            if job is not None:
+                try:
+                    retry_artifact_job(job[0])
+                except Exception as retry_error:
+                    print(f"Could not preserve image-analysis job: {retry_error}")
+            stop_event.wait(5)
 
 
 def run_gateway(interval=5, scanner=scan_ble):
     init_database()
+    recover_artifact_jobs()
     gps_tracker = None
     if os.getenv("SMARTSEAL_SIMULATION", "0") != "1":
         gps_tracker = GPSLocationTracker()
@@ -102,10 +112,10 @@ def run_gateway(interval=5, scanner=scan_ble):
     print("SmartSeal+ gateway started.")
     print("Previous session archived; starting with an empty live dashboard.")
     last_stale_check = 0.0
-    artifact_queue = queue.Queue(maxsize=64)
+    artifact_stop = threading.Event()
     artifact_thread = threading.Thread(
         target=_artifact_worker,
-        args=(artifact_queue,),
+        args=(artifact_stop,),
         name="smartseal-image-worker",
         daemon=True,
     )
@@ -136,7 +146,12 @@ def run_gateway(interval=5, scanner=scan_ble):
                         if gps_tracker is not None:
                             packet.update(gps_tracker.latest_fix() or {})
 
-                        if not accept_event(packet):
+                        capture_triggered = (
+                            packet["tamper"]
+                            or packet["vibration"]
+                            or packet["movement_type"] != 0
+                        )
+                        if not accept_event(packet, artifact_required=capture_triggered):
                             print(
                                 "Stale or duplicate packet ignored: "
                                 f"seal={packet['seal_id']} "
@@ -167,31 +182,13 @@ def run_gateway(interval=5, scanner=scan_ble):
                                 or packet["temperature"] > TEMP_HIGH
                             )
                         )
-                        capture_triggered = (
-                            packet["tamper"]
-                            or packet["vibration"]
-                            or packet["movement_type"] != 0
-                        )
-
                         ai_analysis = (
                             "Temperature out of bounds; image capture skipped."
                             if temperature_out_of_range and not capture_triggered
                             else "No issues detected."
                         )
                         if capture_triggered:
-                            try:
-                                artifact_queue.put_nowait(packet)
-                                ai_analysis = "Image analysis queued."
-                            except queue.Full:
-                                ai_analysis = (
-                                    "Image analysis skipped; background queue is full."
-                                )
-                                print(
-                                    "Image analysis queue full; skipping image work "
-                                    f"for seal={packet['seal_id']} "
-                                    f"seq={packet['event_sequence']}"
-                                )
-                            update_event_artifacts(packet, None, ai_analysis)
+                            ai_analysis = "Image analysis queued."
                         else:
                             update_event_artifacts(packet, None, ai_analysis)
 
@@ -211,10 +208,9 @@ def run_gateway(interval=5, scanner=scan_ble):
     finally:
         if gps_tracker is not None:
             gps_tracker.stop()
-        # Drain queued image work before archiving so completed image paths and
-        # analysis results are reflected in the archive.
-        artifact_queue.put(None)
-        artifact_queue.join()
+        # Let an in-progress job finish. Unprocessed durable jobs will resume
+        # the next time the gateway starts.
+        artifact_stop.set()
         artifact_thread.join()
         try:
             archive_path = archive_events()

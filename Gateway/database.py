@@ -1,6 +1,7 @@
 # Saves sensor readings and events so they can be reviewed later.
 import csv
 from datetime import datetime, timedelta, timezone
+import json
 import os
 from pathlib import Path
 import sqlite3
@@ -41,6 +42,12 @@ def _delete_unreferenced_images():
             row[0] for row in conn.execute(
                 "SELECT image_path FROM events "
                 "WHERE image_path IS NOT NULL AND image_path != ''"
+            )
+        )
+        referenced.update(
+            row[0] for row in conn.execute(
+                "SELECT image_filename FROM artifact_jobs "
+                "WHERE image_filename IS NOT NULL AND image_filename != ''"
             )
         )
     finally:
@@ -216,6 +223,18 @@ def init_database():
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
     """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS artifact_jobs(
+        job_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        seal_id INTEGER NOT NULL,
+        event_sequence INTEGER NOT NULL,
+        packet_json TEXT NOT NULL,
+        image_filename TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(seal_id, event_sequence)
+    )
+    """)
 
     conn.commit()
     conn.close()
@@ -290,7 +309,7 @@ def insert_event(packet, image_filename=None, ai_analysis=None):
     return inserted
 
 
-def accept_event(packet):
+def accept_event(packet, artifact_required=False):
     """Atomically reject stale sequences and persist a fresh event."""
     conn = sqlite3.connect(DB_NAME)
     try:
@@ -317,8 +336,8 @@ def accept_event(packet):
         cur = conn.execute("""
             INSERT OR IGNORE INTO events
             (seal_id, event_sequence, temperature, tamper, vibration, movement_type,
-             gps_latitude, gps_longitude)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             image_path, ai_analysis, gps_latitude, gps_longitude)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 packet["seal_id"],
                 sequence,
@@ -326,6 +345,8 @@ def accept_event(packet):
                 int(packet["tamper"]),
                 packet["vibration"],
                 packet.get("movement_type", 0),
+                None,
+                "Image analysis queued." if artifact_required else None,
                 packet.get("gps_latitude"),
                 packet.get("gps_longitude"),
             ))
@@ -340,6 +361,15 @@ def accept_event(packet):
                 last_seen = excluded.last_seen,
                 last_event_sequence = excluded.last_event_sequence
             """, (packet["seal_id"], sequence))
+        if artifact_required:
+            conn.execute(
+                """
+                INSERT INTO artifact_jobs
+                    (seal_id, event_sequence, packet_json, status)
+                VALUES (?, ?, ?, 'pending')
+                """,
+                (packet["seal_id"], sequence, json.dumps(packet)),
+            )
         conn.commit()
         return True
     except Exception:
@@ -367,6 +397,130 @@ def update_event_artifacts(packet, image_filename=None, ai_analysis=None):
     )
     conn.commit()
     conn.close()
+
+
+def recover_artifact_jobs():
+    """Make interrupted work available to the background worker again."""
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE artifact_jobs SET status = 'pending' WHERE status = 'processing'"
+            )
+    finally:
+        conn.close()
+
+
+def claim_artifact_job():
+    """Atomically claim one durable image-analysis job."""
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """
+            SELECT job_id, packet_json, image_filename
+            FROM artifact_jobs WHERE status = 'pending'
+            ORDER BY job_id LIMIT 1
+            """
+        ).fetchone()
+        if row is None:
+            conn.commit()
+            return None
+        conn.execute(
+            "UPDATE artifact_jobs SET status = 'processing' WHERE job_id = ?",
+            (row[0],),
+        )
+        conn.commit()
+        return row[0], json.loads(row[1]), row[2]
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def save_artifact_image(job_id, image_filename):
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE artifact_jobs SET image_filename = ? WHERE job_id = ?",
+                (image_filename, job_id),
+            )
+    finally:
+        conn.close()
+
+
+def retry_artifact_job(job_id):
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE artifact_jobs SET status = 'pending' WHERE job_id = ?",
+                (job_id,),
+            )
+    finally:
+        conn.close()
+
+
+def _update_archived_event_artifacts(packet, image_filename, ai_analysis):
+    for archive_path in ARCHIVE_DIRECTORY.glob("*.csv"):
+        try:
+            with archive_path.open(newline="", encoding="utf-8") as archive_file:
+                reader = csv.DictReader(archive_file)
+                fieldnames = reader.fieldnames
+                rows = list(reader)
+        except (OSError, csv.Error):
+            continue
+        if not fieldnames:
+            continue
+
+        changed = False
+        for row in rows:
+            if (
+                row.get("seal_id") == str(packet["seal_id"])
+                and row.get("event_sequence") == str(packet["event_sequence"])
+            ):
+                row["image_path"] = image_filename or ""
+                safe_analysis = ai_analysis or ""
+                if safe_analysis.lstrip().startswith(("=", "+", "-", "@")):
+                    safe_analysis = "'" + safe_analysis
+                row["ai_analysis"] = safe_analysis
+                changed = True
+        if not changed:
+            continue
+
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w", newline="", encoding="utf-8", dir=archive_path.parent,
+                prefix=f".{archive_path.name}.", suffix=".tmp", delete=False,
+            ) as temporary_file:
+                temporary_path = Path(temporary_file.name)
+                writer = csv.DictWriter(
+                    temporary_file, fieldnames=fieldnames, extrasaction="ignore"
+                )
+                writer.writeheader()
+                writer.writerows(rows)
+            os.replace(temporary_path, archive_path)
+            if os.name == "posix":
+                archive_path.chmod(0o600)
+        finally:
+            if temporary_path is not None and temporary_path.exists():
+                temporary_path.unlink()
+
+
+def complete_artifact_job(job_id, packet, image_filename, ai_analysis):
+    """Persist results to live/archive history before removing the job."""
+    update_event_artifacts(packet, image_filename, ai_analysis)
+    _update_archived_event_artifacts(packet, image_filename, ai_analysis)
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        with conn:
+            conn.execute("DELETE FROM artifact_jobs WHERE job_id = ?", (job_id,))
+    finally:
+        conn.close()
 
 
 def record_seen(packet):
