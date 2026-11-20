@@ -383,4 +383,13 @@ def images(filename):
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", debug=False)
+    # Listen on all Pi network interfaces so other devices on the same LAN
+    # can open the dashboard. Keep the port configurable for local setups.
+    app.run(
+        host=os.getenv(
+            "SMARTSEAL_DASHBOARD_HOST",
+            "0.0.0.0" if os.name == "posix" else "127.0.0.1",
+        ),
+        port=int(os.getenv("SMARTSEAL_DASHBOARD_PORT", "5000")),
+        debug=False,
+    )

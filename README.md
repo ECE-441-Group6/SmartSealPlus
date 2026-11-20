@@ -269,9 +269,25 @@ dashboard before the gateway, passes through the current environment settings,
 and stops both when you press Ctrl+C. It gives the gateway time to finish its
 normal shutdown and archive the current session.
 
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000). Visitors can view the
-dashboard, events, archives, and captured images without signing in. Sign in
-to enable archive deletion. The server listens on localhost by default.
+On the Raspberry Pi, the dashboard listens on all network interfaces at port
+5000. Find the Pi's LAN address with `hostname -I`, then open
+`http://<pi-ip-address>:5000` from a device on the same network. Visitors can
+view the dashboard, events, archives, and captured images without signing in.
+Sign in to enable archive deletion. This makes read-only dashboard data
+available to devices on the local network; do not forward port 5000 to the
+public internet.
+
+To start the dashboard and gateway automatically when Raspberry Pi OS boots,
+from the repository root run:
+
+```bash
+sudo bash install_smartseal_service.sh
+```
+
+The installer creates and enables a systemd service under the current Pi user.
+Check it with `systemctl status smartseal.service`; stop it with
+`sudo systemctl stop smartseal.service`, or disable boot startup with
+`sudo systemctl disable smartseal.service`.
 Select **Show temperature graph** to view readings over time. The graph can
 show all seal IDs or one selected seal, follows the selected live/archive event
 history, and marks the 2 °C and 8 °C limits.
