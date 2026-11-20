@@ -69,16 +69,34 @@ def _delete_unreferenced_images():
 
 def apply_retention_policy():
     cutoff = _utc_cutoff()
-    database_cutoff = cutoff.strftime("%Y-%m-%d %H:%M:%S")
     conn = sqlite3.connect(DB_NAME)
     try:
-        conn.execute(
-            """
-            DELETE FROM events
-            WHERE timestamp < ?
-            """,
-            (database_cutoff,),
-        )
+        # Compare parsed timestamps instead of relying on SQLite's lexical
+        # ordering. Legacy/manual rows may use another ISO-8601 timezone
+        # format, and missing or malformed timestamps must not bypass the
+        # fixed retention period indefinitely.
+        last_id = None
+        while True:
+            if last_id is None:
+                rows = conn.execute(
+                    "SELECT id, timestamp FROM events ORDER BY id LIMIT 1000"
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id, timestamp FROM events WHERE id > ? ORDER BY id LIMIT 1000",
+                    (last_id,),
+                ).fetchall()
+            if not rows:
+                break
+
+            expired_ids = []
+            for event_id, timestamp in rows:
+                last_id = event_id
+                event_time = _parse_timestamp(timestamp)
+                if event_time is None or event_time < cutoff:
+                    expired_ids.append((event_id,))
+            if expired_ids:
+                conn.executemany("DELETE FROM events WHERE id = ?", expired_ids)
         conn.commit()
     finally:
         conn.close()
@@ -93,13 +111,13 @@ def apply_retention_policy():
         except (OSError, csv.Error):
             continue
 
-        # Unknown or malformed timestamps are retained so a damaged or
-        # hand-edited archive is never silently discarded.
+        # Every record must expire. A missing or malformed timestamp cannot
+        # prove that a row is still within the retention period, so purge it.
         retained_rows = [
             row for row in rows
             if (
-                (event_time := _parse_timestamp(row.get("timestamp"))) is None
-                or event_time >= cutoff
+                (event_time := _parse_timestamp(row.get("timestamp"))) is not None
+                and event_time >= cutoff
             )
         ]
         if len(retained_rows) == len(rows):
