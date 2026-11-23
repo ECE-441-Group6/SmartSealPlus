@@ -544,6 +544,12 @@ function refreshLocationMap(events) {
             `Approx. location: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
         popup.append(title, coordinates);
         marker.bindPopup(popup);
+        // Show precise coordinates on hover; the clicked popup contains the
+        // seal and event time.
+        marker.bindTooltip(
+            `Coordinates: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`,
+            { sticky: true }
+        );
         locationLayers.addLayer(marker);
     }
 
@@ -573,6 +579,8 @@ function appendLocationCell(row, event) {
         link.href = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
         link.target = "_blank";
         link.rel = "noopener noreferrer";
+        link.title = `Coordinates: ${lat}, ${lon}`;
+        link.setAttribute("aria-label", `Approximate location; coordinates ${lat}, ${lon}`);
         link.textContent = `${lat}, ${lon}`;
         cell.appendChild(link);
     } else {
