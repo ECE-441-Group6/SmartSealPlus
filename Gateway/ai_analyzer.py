@@ -54,7 +54,7 @@ def _analyze_with_ollama(filename, packet):
             "3. Visible physical damage to the seal or its enclosure.\n"
             "4. Anything unusual that could indicate unauthorized access.\n\n"
             "5. If the image is unclear or does not show enough detail, classify it as INCONCLUSIVE.\n\n"
-            "6. If presence of human presence is visible, note it but do not assume tampering occurred.\n\n"
+            "6. Note if a person is visible, but do not assume their presence alone means tampering.\n\n"
             "Return a concise assessment with one of these classifications:\n"
             "- INTACT: No visible physical damage or tampering.\n"
             "- POSSIBLE DAMAGE: Something suspicious is visible, but not conclusive.\n"

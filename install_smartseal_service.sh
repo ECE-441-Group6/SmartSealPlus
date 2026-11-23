@@ -26,6 +26,9 @@ cat > "${unit_file}" <<EOF
 Description=SmartSeal dashboard and BLE gateway
 After=network-online.target bluetooth.target
 Wants=network-online.target bluetooth.target
+# Stop a broken deployment from restarting forever and filling the system log.
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
