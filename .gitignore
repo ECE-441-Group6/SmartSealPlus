@@ -30,6 +30,7 @@ images/
 camera_test/
 *.jpg
 *.png
+!Dashboard/static/smartseal-cold-chain-guardian.png
 events/
 archives/
 
