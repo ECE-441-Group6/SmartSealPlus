@@ -7,7 +7,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}"
           data-can-delete="{{ 'true' if session.get('username') else 'false' }}">
     <title>SmartSeal+ Monitoring Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='dashboard-brand-1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='dashboard-brand-2') }}">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin="anonymous">
@@ -18,10 +18,6 @@
     <img class="dashboard-brand-logo"
          src="{{ url_for('static', filename='smartseal-cold-chain-guardian.png') }}"
          alt="SmartSeal+ Cold-Chain Guardian logo">
-    <div class="dashboard-brand-copy">
-        <h1>SmartSeal+ Dashboard</h1>
-        <p>Cold-chain shipment monitoring</p>
-    </div>
 </header>
 {% if session.get('username') %}
 <form action="{{ url_for('logout') }}" method="post">

@@ -23,27 +23,28 @@ h1 {
 .dashboard-brand {
     display: flex;
     align-items: center;
-    gap: 22px;
+    justify-content: center;
     margin: 0 0 18px;
 }
 
 .dashboard-brand-logo {
     display: block;
-    width: min(30vw, 300px);
-    max-height: 200px;
+    width: min(40vw, 360px);
+    max-height: 240px;
+    margin: 0 auto;
     height: auto;
     object-fit: contain;
     border-radius: 8px;
 }
 
-.dashboard-brand-copy h1 {
-    margin: 0 0 6px;
-}
-
-.dashboard-brand-copy p {
-    margin: 0;
-    color: #536273;
-    font-size: 16px;
+.login-logo {
+    display: block;
+    width: min(100%, 300px);
+    max-height: 200px;
+    height: auto;
+    object-fit: contain;
+    margin: 0 auto 16px;
+    border-radius: 8px;
 }
 
 .login-panel {
@@ -333,14 +334,8 @@ a:hover {
 /* Responsive layout */
 
 @media (max-width: 480px) {
-    .dashboard-brand {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
     .dashboard-brand-logo {
-        width: min(200px, 60vw);
-        min-width: 0;
+        width: min(80vw, 300px);
     }
 }
 
@@ -354,17 +349,7 @@ a:hover {
     }
 
     .dashboard-brand-logo {
-        width: 34vw;
-        min-width: 112px;
-        max-width: 220px;
-    }
-
-    .dashboard-brand-copy h1 {
-        font-size: 24px;
-    }
-
-    .dashboard-brand-copy p {
-        font-size: 14px;
+        width: min(80vw, 300px);
     }
 
     .modal-overlay {

@@ -4,11 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign in · SmartSeal+</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='dashboard-brand-2') }}">
 </head>
 <body>
 <main class="login-panel">
-    <h1>SmartSeal+ Dashboard</h1>
+    <img class="login-logo"
+         src="{{ url_for('static', filename='smartseal-cold-chain-guardian.png') }}"
+         alt="SmartSeal+ Cold-Chain Guardian logo">
     <p>Sign in with your dashboard account.</p>
     {% if error %}<p class="login-error" role="alert">{{ error }}</p>{% endif %}
     <form method="post" action="{{ url_for('login') }}">
