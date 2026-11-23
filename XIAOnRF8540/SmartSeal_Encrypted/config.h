@@ -13,7 +13,8 @@
 constexpr uint16_t MANUFACTURER_ID = 0x5353;
 // Wire protocol identifiers; these must match Gateway/ble_scanner.py.
 constexpr uint8_t MAGIC = 0xA5;
-constexpr uint8_t PROTOCOL_VERSION = 4;
+constexpr uint8_t PROTOCOL_VERSION = 5;
+// Vibration magnitude is encoded in whole millivolts in protocol version 5.
 // Sensor readings are encrypted and broadcast every five seconds while armed.
 constexpr uint32_t ADVERTISEMENT_INTERVAL_MS = 5000;
 constexpr uint32_t BUTTON_DEBOUNCE_MS = 40;

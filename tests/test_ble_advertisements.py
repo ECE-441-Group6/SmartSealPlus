@@ -14,7 +14,7 @@ def sensor_packet(seal_id=1, sequence=1, temperature=5.2, tamper=False, vibratio
         + sequence.to_bytes(4, "little")
         + round(temperature * 10).to_bytes(2, "little", signed=True)
         + bytes([int(tamper)])
-        + int(round(vibration * 100)).to_bytes(2, "little")
+        + int(round(vibration * 1000)).to_bytes(2, "little")
     )
 
 
@@ -42,6 +42,7 @@ class TestBleAdvertisements(unittest.TestCase):
         packet = sensor_packet()
         self.assertIsNone(parse_advertisement(bytes([0xA4]) + packet[1:]))
         self.assertIsNone(parse_advertisement(packet[:1] + bytes([2]) + packet[2:]))
+        self.assertIsNone(parse_advertisement(packet[:1] + bytes([4]) + packet[2:]))
         self.assertIsNone(parse_advertisement(packet[:-1]))
         self.assertIsNone(parse_advertisement(packet + b"\x00"))
 

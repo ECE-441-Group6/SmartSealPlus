@@ -58,7 +58,7 @@ function vibrationStatus(value) {
 
     return detected
         ? `<span class="sensor-status sensor-warning">
-            DETECTED (${magnitude.toFixed(2)} V)
+            DETECTED (${Math.round(magnitude * 1000)} mV)
         </span>`
         : '<span class="sensor-status sensor-normal">NORMAL</span>';
 }
@@ -330,7 +330,7 @@ function vibrationChartRows(events) {
         sealId: Number(event[2]),
         magnitude: event[6] === null || event[6] === ""
             ? null
-            : Number(event[6]),
+            : Number(event[6]) * 1000,
     })).filter((event) => (
         event.timestamp !== null &&
         event.magnitude !== null &&
@@ -400,7 +400,7 @@ function renderVibrationChart() {
         (maximum, point) => Math.max(maximum, point.magnitude),
         0.1
     );
-    const maxY = Math.ceil(maxMagnitude * 10) / 10 || 0.1;
+    const maxY = Math.ceil(maxMagnitude / 100) * 100 || 100;
     const timeRange = Math.max(maxTime - minTime, 1000);
     const x = (timestamp) => margin.left + ((timestamp - minTime) / timeRange) * plotWidth;
     const y = (magnitude) => margin.top + ((maxY - magnitude) / maxY) * plotHeight;
@@ -418,7 +418,7 @@ function renderVibrationChart() {
         context.lineTo(width - margin.right, tickY);
         context.stroke();
         context.fillStyle = "#526174";
-        context.fillText(`${value.toFixed(2)} V`, margin.left - 8, tickY);
+        context.fillText(`${Math.round(value)} mV`, margin.left - 8, tickY);
     }
     context.strokeStyle = "#66788a";
     context.beginPath();

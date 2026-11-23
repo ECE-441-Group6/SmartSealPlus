@@ -40,7 +40,7 @@ class ReliabilityTests(unittest.TestCase):
             + sequence.to_bytes(4, "little")
             + temperature_tenths.to_bytes(2, "little", signed=True)
             + bytes([int(tamper)])
-            + int(vibration * 100).to_bytes(2, "little")
+            + int(vibration * 1000).to_bytes(2, "little")
         )
         return parse_packet(parse_advertisement(payload))
 

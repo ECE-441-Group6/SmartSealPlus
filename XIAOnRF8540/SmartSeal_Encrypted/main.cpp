@@ -105,8 +105,8 @@ void publishSensorData() {
 
     Serial.print("Vibration: ");
     Serial.print(vibration.detected ? "DETECTED, peak magnitude: " : "NONE, magnitude: ");
-    Serial.print(vibration.magnitudeVolts, 3);
-    Serial.println(" V");
+    Serial.print(vibration.magnitudeVolts * 1000.0f, 0);
+    Serial.println(" mV");
     Serial.print("Movement type: ");
     Serial.println(movementCode);
 

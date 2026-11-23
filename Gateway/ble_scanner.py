@@ -40,7 +40,7 @@ SEAL_KEYS = {} if SIMULATION_MODE else load_seal_keys()
 AES_TAG_LENGTH = 8
 
 MAGIC = 0xA5
-PROTOCOL_VERSION = 4
+PROTOCOL_VERSION = 5
 
 EXPECTED_PACKET_LENGTH = 21
 AUTH_FAILURE_LOG_INTERVAL = 30.0
@@ -145,7 +145,7 @@ def parse_advertisement(payload):
     # Expected plaintext:
     # Bytes 0-1: temperature * 10 (signed little-endian)
     # Byte 2:    tamper (0 or 1)
-    # Bytes 3-4: peak vibration deviation in hundredths of a volt
+    # Bytes 3-4: peak vibration deviation in whole millivolts
     # Byte 5: movement type
 
     if len(plaintext) != 6:
@@ -175,7 +175,7 @@ def parse_advertisement(payload):
         return None
 
     temperature = temperature_raw / 10.0
-    vibration_magnitude_volts = vibration_raw / 100.0
+    vibration_magnitude_volts = vibration_raw / 1000.0
 
     print(
         f"Decryption successful: seal={seal_id}, "

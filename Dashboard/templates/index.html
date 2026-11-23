@@ -75,7 +75,7 @@
                aria-labelledby="vibration-chart-title" tabindex="-1">
         <button class="modal-close" type="button" aria-label="Close vibration graph">×</button>
         <div id="vibration-chart-panel">
-        <h2 id="vibration-chart-title">Vibration magnitude history</h2>
+        <h2 id="vibration-chart-title">Vibration magnitude history (mV)</h2>
         <label for="vibration-seal-filter">Seal:</label>
         <select id="vibration-seal-filter">
             <option value="all">All seals</option>
@@ -85,8 +85,8 @@
         </p>
         <p class="chart-help">Peak sensor deviation from baseline, in volts.</p>
         <canvas id="vibration-chart" height="320"
-                role="img" aria-label="Vibration magnitude history chart">
-            Vibration magnitude history chart. Use the event table for the readings.
+                role="img" aria-label="Vibration magnitude history in millivolts">
+            Vibration magnitude history in millivolts. Use the event table for the readings.
         </canvas>
         <div id="vibration-chart-legend" class="chart-legend"
              aria-label="Seal graph legend"></div>
@@ -169,11 +169,11 @@
                 {% endif %}
             </td>
 
-            <!-- Vibration magnitude; zero means no detected event. -->
+            <!-- Vibration is stored in volts and displayed in millivolts; zero means no detected event. -->
             <td>
                 {% if event[6] is not none and event[6]|float > 0 %}
                     <span class="sensor-status sensor-warning">
-                        DETECTED ({{ "%.2f"|format(event[6]|float) }} V)
+                        DETECTED ({{ "%.0f"|format((event[6]|float) * 1000) }} mV)
                     </span>
                 {% else %}
                     <span class="sensor-status sensor-normal">

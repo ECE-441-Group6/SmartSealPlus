@@ -54,7 +54,7 @@ def parse_packet(packet):
             or not isfinite(vibration)
             or (not isinstance(vibration, bool) and vibration < 0)
         ):
-            raise ValueError("Invalid vibration voltage")
+            raise ValueError("Invalid vibration magnitude in volts")
 
         if (
             not isinstance(movement_type, int)

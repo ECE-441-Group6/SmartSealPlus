@@ -92,13 +92,13 @@ bool createEncryptedPacket(
 
     if (!isfinite(vibrationMagnitudeVolts) ||
         vibrationMagnitudeVolts < 0.0f ||
-        vibrationMagnitudeVolts > 655.35f) {
+        vibrationMagnitudeVolts > 65.535f) {
         return false;
     }
 
-    // Store the peak sensor deviation in hundredths of a volt.
+    // Encode the peak sensor deviation as whole millivolts in the BLE packet.
     const uint16_t vibrationMagnitude = static_cast<uint16_t>(
-        lroundf(vibrationMagnitudeVolts * 100.0f)
+        lroundf(vibrationMagnitudeVolts * 1000.0f)
     );
 
     if (movementCode > MOVEMENT_SHAKE) {

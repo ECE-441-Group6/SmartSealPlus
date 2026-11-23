@@ -198,7 +198,7 @@ a 21-byte packet:
 | Packet bytes | Contents |
 |---|---|
 | 0 | Magic value `0xA5` |
-| 1 | Protocol version `4` |
+| 1 | Protocol version `5` |
 | 2 | Seal ID, configured per seal (`1`–`255`) |
 | 3–6 | 32-bit little-endian sequence number |
 | 7–12 | AES-128-CCM ciphertext |
@@ -208,10 +208,10 @@ The nonce is the 9-byte configured prefix followed by the 4 transmitted
 sequence bytes. The first 7 packet bytes are authenticated as additional data.
 The encrypted plaintext contains signed temperature in tenths of a degree C,
 a tamper byte, peak vibration-sensor deviation from the calibrated baseline
-in hundredths of a volt (zero means no detected event), and a movement type.
-Protocol version 4 marks this measured-magnitude value; the gateway rejects
-version 3 packets so fixed placeholder vibration values are not mistaken for
-sensor measurements.
+as an unsigned millivolt value (zero means no detected event), and a movement
+type.
+Protocol version 5 uses millivolts; the gateway rejects version 4 and older
+packets so readings encoded in the previous unit scale are not misinterpreted.
 
 The firmware stores its sequence counter in internal flash and reserves ranges
 before using them so a normal restart does not reuse a nonce. The gateway

@@ -20,7 +20,7 @@ namespace {
 // Raspberry Pi's encrypted advertisement parser.
 constexpr uint16_t MANUFACTURER_ID = 0x5353;
 constexpr uint8_t MAGIC = 0xA5;
-constexpr uint8_t PROTOCOL_VERSION = 4;
+constexpr uint8_t PROTOCOL_VERSION = 5;
 constexpr uint8_t NONCE_LENGTH = 13;
 constexpr uint8_t TAG_LENGTH = 8;
 constexpr uint8_t HEADER_LENGTH = 7;
@@ -62,10 +62,10 @@ bool makeTestPacket(uint8_t *packet) {
   }
 
   // Synthetic values let the gateway's event handling be exercised without
-  // sensors. Temperature is tenths of a degree C; vibration is hundredths
-  // of a volt. Movement codes match the production firmware.
+  // sensors. Temperature is tenths of a degree C; vibration is whole
+  // millivolts. Movement codes match the production firmware.
   static const int16_t temperatures[] = {40, 90, 200, -10};
-  static const uint16_t vibrationValues[] = {0, 100, 0, 250};
+  static const uint16_t vibrationValues[] = {0, 1000, 0, 2500};
   static const uint8_t tamperValues[] = {0, 1, 0, 1};
   static const uint8_t movements[] = {0, 0, 1, 4};
   const uint8_t sample = scenario++ % 4;

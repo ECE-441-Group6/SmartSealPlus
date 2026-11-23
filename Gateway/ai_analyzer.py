@@ -67,7 +67,7 @@ def _analyze_with_ollama(filename, packet):
             f"Additional sensor context: "
             f"Temperature={packet.get('temperature')} C, "
             f"Tamper={packet.get('tamper')}, "
-            f"Vibration magnitude={packet.get('vibration')} V, "
+            f"Vibration magnitude={round((packet.get('vibration') or 0) * 1000)} mV, "
             f"Movement type={packet.get('movement_type', 0)}."
         )
 
