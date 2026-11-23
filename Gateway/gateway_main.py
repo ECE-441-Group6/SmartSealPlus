@@ -88,6 +88,7 @@ def _artifact_worker(stop_event):
 
 
 def run_gateway(interval=5, scanner=scan_ble):
+    simulation_mode = os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
     init_database()
     recover_artifact_jobs()
     gps_tracker = None
@@ -127,6 +128,10 @@ def run_gateway(interval=5, scanner=scan_ble):
                 scan_result = scanner()
                 if scan_result is None:
                     print("No sensor packet received; retrying BLE scan.")
+                    # A real scanner has already spent its scan window waiting.
+                    # Keep a brief backoff for adapter errors, but don't add the
+                    # simulation interval after every empty BLE scan.
+                    time.sleep(interval if simulation_mode else 0.25)
                     continue
 
                 raw_packets = (
@@ -210,10 +215,17 @@ def run_gateway(interval=5, scanner=scan_ble):
                         print("Analysis:", ai_analysis)
                     except Exception as error:
                         print(f"Packet processing error: {error}")
-                time.sleep(interval)
+                # The real BLE scanner blocks for SCAN_TIMEOUT. Sleeping again
+                # here left a five-second blind period after each five-second
+                # scan and caused the gateway to miss seal sequence updates.
+                # Simulation scanners return immediately, so preserve their
+                # configured pacing to avoid generating synthetic events in a
+                # tight loop.
+                if simulation_mode:
+                    time.sleep(interval)
             except Exception as error:
                 print(f"Gateway processing error: {error}")
-                time.sleep(interval)
+                time.sleep(interval if simulation_mode else 0.5)
     except KeyboardInterrupt:
         print("\nSmartSeal+ gateway stopped.")
     finally:

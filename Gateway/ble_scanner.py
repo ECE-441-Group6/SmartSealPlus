@@ -25,7 +25,9 @@ MANUFACTURER_ID = 0x5353
 XIAO_DEVICE_NAME = "SmartSeal-XIAO"
 ESP_DEVICE_NAMES = {"SmartSeal-01"}
 
-SCAN_TIMEOUT = 5.0
+# Keep each real scan shorter than the seal's five-second advertisement refresh.
+# The gateway immediately opens another scan window after processing results.
+SCAN_TIMEOUT = 2.0
 
 SIMULATION_MODE = (
     os.getenv("SMARTSEAL_SIMULATION", "0") == "1"
@@ -59,7 +61,7 @@ def parse_advertisement(payload):
 
     Expected packet:
         Byte 0:       Magic (0xA5)
-        Byte 1:       Protocol version (4)
+        Byte 1:       Protocol version (5)
         Byte 2:       Seal ID
         Bytes 3-6:    Sequence number (little-endian)
         Bytes 7-12:   Encrypted sensor data

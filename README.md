@@ -235,9 +235,11 @@ The default model is `moondream`.
 Press D6 on the seal to start recording, then wait for an advertisement. If no
 packet arrives, check that Bluetooth is enabled, the adapter is available to
 the account running Python, and the seal has the matching encrypted firmware
-and keys. During each scan window, the gateway collects one latest valid
-packet per configured seal ID and processes every collected seal packet; it no
-longer selects just one seal when multiple seals are advertising nearby.
+and keys. The real gateway scans in consecutive two-second windows without an
+extra five-second idle delay. Since each seal refreshes its advertisement every
+five seconds, this reduces missed sequence updates. The dashboard polls the
+gateway independently every two seconds. Each window collects the latest valid
+packet per configured seal ID and processes all seals heard.
 
 ## Run the dashboard
 
