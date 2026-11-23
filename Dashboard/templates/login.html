@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign in · SmartSeal+</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='dashboard-brand-2') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='dashboard-brand-3') }}">
 </head>
 <body>
 <main class="login-panel">
@@ -21,6 +21,9 @@
         <input id="password" name="password" type="password" autocomplete="current-password" required>
         <button type="submit">Sign in</button>
     </form>
+    <a class="login-dashboard-link" href="{{ url_for('home') }}">
+        View dashboard without signing in
+    </a>
 </main>
 </body>
 </html>

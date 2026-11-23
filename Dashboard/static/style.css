@@ -71,6 +71,24 @@ h1 {
     color: #a31515;
 }
 
+.login-dashboard-link {
+    display: block;
+    margin-top: 16px;
+    padding: 10px 12px;
+    border: 1px solid #164b78;
+    border-radius: 5px;
+    background: #f4f7fb;
+    color: #164b78;
+    font-weight: bold;
+    text-align: center;
+}
+
+.login-dashboard-link:hover,
+.login-dashboard-link:focus-visible {
+    background: #eaf3ff;
+    text-decoration: underline;
+}
+
 /* Event history table */
 
 table {
