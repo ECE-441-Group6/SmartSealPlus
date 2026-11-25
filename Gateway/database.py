@@ -617,32 +617,57 @@ def archive_events():
 
     archive_dir = DB_NAME.parent / "archives"
     archive_dir.mkdir(parents=True, exist_ok=True)
-    archive_path = archive_dir / (
-        f"SmartSeal_Events_{datetime.now().strftime('%m-%d-%y_%I-%M-%S-%p')}.csv"
-    )
+    # Use microseconds so rapid stop/restart cycles do not reuse archive names.
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            newline="",
+            encoding="utf-8",
+            dir=archive_dir,
+            prefix=".SmartSeal_Events.",
+            suffix=".tmp",
+            delete=False,
+        ) as archive_file:
+            temporary_path = Path(archive_file.name)
+            writer = csv.writer(archive_file)
+            writer.writerow((
+                "id",
+                "timestamp",
+                "seal_id",
+                "event_sequence",
+                "temperature",
+                "tamper",
+                "vibration",
+                "movement_type",
+                "image_path",
+                "ai_analysis",
+                "gps_latitude",
+                "gps_longitude",
+            ))
+            writer.writerows(_spreadsheet_safe_row(row) for row in rows)
+            archive_file.flush()
+            os.fsync(archive_file.fileno())
 
-    with archive_path.open("w", newline="", encoding="utf-8") as archive_file:
-        writer = csv.writer(archive_file)
-        writer.writerow((
-            "id",
-            "timestamp",
-            "seal_id",
-            "event_sequence",
-            "temperature",
-            "tamper",
-            "vibration",
-            "movement_type",
-            "image_path",
-            "ai_analysis",
-            "gps_latitude",
-            "gps_longitude",
-        ))
-        writer.writerows(_spreadsheet_safe_row(row) for row in rows)
+        if os.name == "posix":
+            temporary_path.chmod(0o600)
 
-    if os.name == "posix":
-        archive_path.chmod(0o600)
-
-    return archive_path
+        # A hard link publishes the completed CSV atomically and fails if the
+        # target already exists, avoiding overwrite even with concurrent calls.
+        archive_time = datetime.now()
+        while True:
+            archive_path = archive_dir / (
+                "SmartSeal_Events_"
+                f"{archive_time.strftime('%m-%d-%y_%I-%M-%S-%f-%p')}.csv"
+            )
+            try:
+                os.link(temporary_path, archive_path)
+                return archive_path
+            except FileExistsError:
+                archive_time += timedelta(microseconds=1)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
 
 
 def _spreadsheet_safe_row(row):

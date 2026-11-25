@@ -116,7 +116,7 @@ init_database()
 _last_retention_check = 0.0
 ARCHIVE_FILENAME = re.compile(
     r"SmartSeal_Events_(?:"
-    r"\d{2}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-[AP]M"
+    r"\d{2}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d{6})?-[AP]M"
     r"|\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d+"
     r")\.csv"
 )
